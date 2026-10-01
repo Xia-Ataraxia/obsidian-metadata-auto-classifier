@@ -120,7 +120,7 @@ This plugin is built with a few principles:
 
 This is an open-source project. Contributions are welcome:
 
-- **Bug reports**: [GitHub Issues](https://github.com/GoBeromsu/Metadata-Auto-Classifier/issues)
+- **Bug reports**: [GitHub Issues](https://github.com/Xia-Ataraxia/obsidian-metadata-auto-classifier/issues)
 - **Feature requests**: What would make this more useful for you?
 - **Code contributions**: PRs welcome, see contribution guidelines
 

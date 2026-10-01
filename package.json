@@ -65,5 +65,13 @@
       "eslint --fix",
       "prettier --write"
     ]
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xia-Ataraxia/obsidian-metadata-auto-classifier.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Xia-Ataraxia/obsidian-metadata-auto-classifier/issues"
+  },
+  "homepage": "https://github.com/Xia-Ataraxia/obsidian-metadata-auto-classifier#readme"
 }
