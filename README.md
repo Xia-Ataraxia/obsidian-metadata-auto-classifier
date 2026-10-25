@@ -70,14 +70,10 @@ More background: [docs/Why I made this plugin.md](docs/Why%20I%20made%20this%20p
 ## Development
 
 ```bash
-pnpm install
-pnpm dev              # vault selection + esbuild watch + hot reload
-pnpm build            # tsc type-check + production build
-pnpm test             # Vitest unit tests
-pnpm test:watch       # Vitest watch mode
-pnpm lint             # ESLint
-pnpm run ci           # build + lint + test
-pnpm release:patch    # also release:minor / release:major
+bun install
+bun run dev        # esbuild watch -> dist/
+bun run build      # production build -> dist/
+bun run ci         # build + typecheck + lint + test
 ```
 
 ### Tech Stack
