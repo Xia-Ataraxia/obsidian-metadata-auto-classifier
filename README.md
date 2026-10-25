@@ -2,7 +2,7 @@
 
 Automatically classifies and applies metadata to your notes.
 
-![Running the Fetch tags command on a note with no AI provider configured shows the notice "No provider selected". Classification results are not shown because no API key was used.](https://raw.githubusercontent.com/Xia-Ataraxia/obsidian-metadata-auto-classifier/main/docs/assets/demo.webp)
+![The Auto Classifier settings: the classification rule, the provider editor with an empty API key field, the model list and the tags frontmatter rule. No API key is entered, so no classification result is shown.](https://raw.githubusercontent.com/Xia-Ataraxia/obsidian-metadata-auto-classifier/main/docs/assets/demo.webp)
 
 ## Features
 
