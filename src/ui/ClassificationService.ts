@@ -167,14 +167,20 @@ export class ClassificationService {
 			this.context.classificationRule
 		);
 
-		return Notice.withProgress(currentFile.name, frontmatter.name, () =>
-			processAPIRequest(
-				DEFAULT_SYSTEM_ROLE,
-				promptTemplate,
-				this.context.provider,
-				this.context.model
-			)
-		);
+		try {
+			return await Notice.withProgress(currentFile.name, frontmatter.name, () =>
+				processAPIRequest(
+					DEFAULT_SYSTEM_ROLE,
+					promptTemplate,
+					this.context.provider,
+					this.context.model
+				)
+			);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			this.context.notices.show('api_error', { message });
+			return null;
+		}
 	}
 
 	private async processClassificationResult(
