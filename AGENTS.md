@@ -42,7 +42,6 @@ Metadata Auto Classifier — Obsidian plugin that uses AI (OpenAI/Gemini/Ollama/
 - `UnifiedProvider.ts` is the extension point for new LLM providers — add there, not in services
 - `isDesktopOnly: false` — use `requestUrl` (Obsidian API), not `fetch` or Node `http`
 - this repo keeps implementation local; do not reintroduce a default `src/shared/` implementation surface
-- Test files in `__tests__/` use Jest-style mocks in `__mocks__/`
 
 ### Testing Requirements
 ```bash

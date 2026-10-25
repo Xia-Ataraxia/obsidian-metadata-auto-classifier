@@ -1,4 +1,4 @@
-import { getPromptTemplate } from 'provider/prompt';
+import { getPromptTemplate } from '../../src/domain/prompt';
 
 describe('api/prompt', () => {
 	describe('getPromptTemplate', () => {

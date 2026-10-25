@@ -2,7 +2,7 @@ import {
 	generateId,
 	getProviderPreset,
 	findMatchingPreset,
-} from 'lib';
+} from '../../src/utils/lib-utils';
 
 // -------------------- generateId Tests --------------------
 describe('generateId', () => {
