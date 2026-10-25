@@ -1,5 +1,5 @@
 import esbuild from "esbuild";
-import builtins from "builtin-modules";
+import { builtinModules } from "node:module";
 import { copyFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 
@@ -18,7 +18,8 @@ const context = await esbuild.context({
 		"electron",
 		"@codemirror/*",
 		"@lezer/*",
-		...builtins,
+		...builtinModules,
+		...builtinModules.map((m) => `node:${m}`),
 	],
 	format: "cjs",
 	target: "es2018",
