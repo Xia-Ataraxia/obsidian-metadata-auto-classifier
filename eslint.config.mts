@@ -93,18 +93,6 @@ export default tseslint.config(
 			'import/no-nodejs-modules': 'off',
 		},
 	},
-	// Script files (.mjs): run in Node.js, need node globals.
-	{
-		files: ['scripts/**/*.mjs', 'tooling/**/*.mjs', '*.mjs'],
-		languageOptions: {
-			globals: { ...globals.node },
-		},
-		rules: {
-			'import/no-nodejs-modules': 'off',
-			// Node has no `window`; the autofix would break these scripts.
-			'obsidianmd/prefer-window-timers': 'off',
-		},
-	},
 	// Test files: relax rules that don't apply to test code.
 	{
 		files: ['test/**/*.ts', '__tests__/**/*.ts'],
