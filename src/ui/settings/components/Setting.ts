@@ -158,7 +158,9 @@ export class Setting {
 		this.setting.addButton((btn) => {
 			if (props.text) btn.setButtonText(props.text);
 			if (props.icon) btn.setIcon(props.icon);
-			if (props.tooltip) btn.setTooltip(props.tooltip);
+			// setIcon replaces the button text, so keep it as the accessible label
+			const tooltip = props.tooltip ?? (props.icon ? props.text : undefined);
+			if (tooltip) btn.setTooltip(tooltip);
 			if (props.cta) btn.setCta();
 			if (props.warning) btn.buttonEl.addClass('mod-warning');
 			if (props.disabled) btn.setDisabled(props.disabled);
