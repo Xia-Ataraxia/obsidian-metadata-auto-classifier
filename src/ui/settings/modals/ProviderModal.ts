@@ -235,7 +235,9 @@ export class ProviderModal extends Modal {
 			if (message.includes('timeout') || message.includes('cancelled')) {
 				this.notices.show('oauth_cancelled');
 			} else {
-				this.notices.show('oauth_failed', { message });
+				this.notices.show('oauth_failed', {
+					message: 'Authentication could not be completed. Check the account configuration.',
+				});
 			}
 		}
 	}

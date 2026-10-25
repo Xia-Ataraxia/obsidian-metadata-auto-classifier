@@ -79,9 +79,10 @@ export class ModelSection {
 									} else {
 										this.plugin.notices.show('model_test_failed', { name: config.name });
 									}
-								} catch (error) {
-									const message = error instanceof Error ? error.message : 'Test failed';
-									this.plugin.notices.show('model_test_error', { message });
+								} catch {
+									this.plugin.notices.show('model_test_error', {
+										message: 'The connection test failed. Check the provider configuration.',
+									});
 								}
 							},
 						},

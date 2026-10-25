@@ -1,497 +1,372 @@
-// Mock HttpError class - must use vi.hoisted() since vi.mock is hoisted
-const { MockHttpError } = vi.hoisted(() => {
-	class MockHttpError extends Error {
-		status: number;
-		responseText: string;
+import { PROVIDER_NAMES } from '../../src/utils/lib-utils';
+import type { ProviderConfig } from '../../src/types';
+import { TAG_GENERATION_SCHEMA } from '../../src/domain/constants';
+import { HttpError, sendRequest } from '../../src/ui/request';
+import { sendStreamingRequest } from '../../src/ui/streaming-request';
+import { UnifiedProvider } from '../../src/ui/UnifiedProvider';
+import { CODEX_OAUTH } from '../../src/domain/auth/oauth-constants';
+import { CodexOAuth } from '../../src/ui/auth/oauth';
 
-		constructor(message: string, status: number, responseText: string) {
-			super(message);
-			this.name = 'HttpError';
-			this.status = status;
-			this.responseText = responseText;
-		}
-	}
-	return { MockHttpError };
+vi.mock('../../src/ui/request', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../../src/ui/request')>();
+	return { ...actual, sendRequest: vi.fn() };
 });
 
-// Mock the request module
-vi.mock('provider/request', () => ({
-	sendRequest: vi.fn(),
+vi.mock('../../src/ui/streaming-request', () => ({
 	sendStreamingRequest: vi.fn(),
-	HttpError: MockHttpError,
 }));
 
-// Mock the oauth module
-vi.mock('provider/auth/oauth', () => ({
-	CodexOAuth: vi.fn(function (this: any) {
-		this.refreshTokens = vi.fn();
+vi.mock('../../src/ui/auth/oauth', () => ({
+	CodexOAuth: vi.fn(function () {
+		return { refreshTokens: vi.fn() };
 	}),
 }));
-
-import { UnifiedProvider } from 'provider/UnifiedProvider';
-import { sendRequest, sendStreamingRequest } from 'provider/request';
-import { CodexOAuth } from 'provider/auth/oauth';
-import { ProviderConfig } from 'types';
-import { requestUrl } from 'obsidian';
-import { PROVIDER_NAMES } from 'lib';
-
-vi.mock('obsidian');
 
 const mockSendRequest = vi.mocked(sendRequest);
 const mockSendStreamingRequest = vi.mocked(sendStreamingRequest);
 const mockCodexOAuth = vi.mocked(CodexOAuth);
+const generated = { tags: ['new/tag'] };
+const generatedJson = JSON.stringify(generated);
+const deadline = Date.now() + 30_000;
 
-// Use MockHttpError for creating test errors
-const HttpError = MockHttpError;
-
-describe('UnifiedProvider Tests', () => {
-	const unifiedProvider = new UnifiedProvider();
-
-	const mockConfig: ProviderConfig = {
-		name: '',
-		apiKey: 'test-key',
-		baseUrl: 'https://api.test.com',
-		models: [{ id: 'test-model', name: 'Test Model' }],
-		temperature: 0.7
+function config(name: string): ProviderConfig {
+	return {
+		name,
+		apiKey: 'api-key-secret',
+		baseUrl: 'https://provider.example.test/v1/chat/completions',
+		models: [],
+		auth:
+			name === PROVIDER_NAMES.CODEX
+				? {
+						type: 'oauth',
+						oauth: {
+							accessToken: 'codex-token-secret',
+							refreshToken: 'refresh-token-secret',
+							expiresAt: Date.now() / 1000 + 3600,
+							accountId: 'account-id',
+						},
+					}
+				: undefined,
 	};
+}
 
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
+function chatResponse(content: string): unknown {
+	return { choices: [{ finish_reason: 'stop', message: { content, refusal: null } }] };
+}
 
-	describe('Response parsing', () => {
-		it('should parse OpenAI format with nested JSON content', () => {
-			const openAIResponse = {
-				choices: [{
-					message: {
-						content: '{"output":["tag1"],"reliability":0.9}'
-					}
-				}]
-			};
-			expect(unifiedProvider.processApiResponse(openAIResponse)).toEqual({
-				output: ['tag1'],
-				reliability: 0.9
-			});
-		});
+const providerCases: Array<{ name: string; response: unknown; mode: string }> = [
+	{ name: PROVIDER_NAMES.OPENAI, response: chatResponse(generatedJson), mode: 'openai' },
+	{
+		name: PROVIDER_NAMES.ANTHROPIC,
+		response: {
+			stop_reason: 'tool_use',
+			content: [{ type: 'tool_use', name: 'generate_tags', input: generated }],
+		},
+		mode: 'anthropic',
+	},
+	{
+		name: PROVIDER_NAMES.GEMINI,
+		response: {
+			candidates: [{ finishReason: 'STOP', content: { parts: [{ text: generatedJson }] } }],
+		},
+		mode: 'gemini',
+	},
+	{ name: PROVIDER_NAMES.OPENROUTER, response: chatResponse(generatedJson), mode: 'openai' },
+	{ name: PROVIDER_NAMES.DEEPSEEK, response: chatResponse(generatedJson), mode: 'openai' },
+	{ name: PROVIDER_NAMES.LMSTUDIO, response: chatResponse(generatedJson), mode: 'openai' },
+	{
+		name: PROVIDER_NAMES.OLLAMA,
+		response: { done: true, done_reason: 'stop', message: { content: generatedJson } },
+		mode: 'ollama',
+	},
+	{ name: PROVIDER_NAMES.CODEX, response: generatedJson, mode: 'codex' },
+	{ name: PROVIDER_NAMES.CUSTOM, response: chatResponse(generatedJson), mode: 'openai' },
+];
 
-		it('should parse Anthropic tool_use format', () => {
-			const anthropicResponse = {
-				content: [{
-					type: 'tool_use',
-					input: { output: ['tag2'], reliability: 0.8 }
-				}]
-			};
-			expect(unifiedProvider.processApiResponse(anthropicResponse, PROVIDER_NAMES.ANTHROPIC)).toEqual({
-				output: ['tag2'],
-				reliability: 0.8
-			});
-		});
+describe('UnifiedProvider generated-tags contract', () => {
+	const provider = new UnifiedProvider();
 
-		it('should parse Gemini nested content format', () => {
-			const geminiResponse = {
-				candidates: [{
-					content: {
-						parts: [{
-							text: '{"output":["tag3"],"reliability":0.7}'
-						}]
-					}
-				}]
-			};
-			expect(unifiedProvider.processApiResponse(geminiResponse, PROVIDER_NAMES.GEMINI)).toEqual({
-				output: ['tag3'],
-				reliability: 0.7
-			});
-		});
+	beforeEach(() => vi.clearAllMocks());
 
-		it('should parse Ollama message format', () => {
-			const ollamaResponse = {
-				message: {
-					content: '{"output":["tag4"],"reliability":0.6}'
-				}
-			};
-			expect(unifiedProvider.processApiResponse(ollamaResponse, PROVIDER_NAMES.OLLAMA)).toEqual({
-				output: ['tag4'],
-				reliability: 0.6
-			});
-		});
-
-		it('should throw error for missing content in Gemini response', () => {
-			const invalidResponse = { candidates: [] };
-			expect(() => unifiedProvider.processApiResponse(invalidResponse, PROVIDER_NAMES.GEMINI))
-				.toThrow('Gemini response missing content');
-		});
-
-		it('should throw error for missing content in Ollama response', () => {
-			const invalidResponse = { message: {} };
-			expect(() => unifiedProvider.processApiResponse(invalidResponse, PROVIDER_NAMES.OLLAMA))
-				.toThrow('Ollama response missing content');
-		});
-
-		it('should throw error for invalid JSON structure in response', () => {
-			const invalidJsonResponse = {
-				choices: [{
-					message: {
-						content: '{"invalid":"structure"}'
-					}
-				}]
-			};
-			expect(() => unifiedProvider.processApiResponse(invalidJsonResponse))
-				.toThrow('Invalid response structure: missing output array or reliability number');
-		});
-
-		it('should throw error for malformed JSON in response', () => {
-			const malformedJsonResponse = {
-				choices: [{
-					message: {
-						content: 'not valid json'
-					}
-				}]
-			};
-			expect(() => unifiedProvider.processApiResponse(malformedJsonResponse))
-				.toThrow(/Failed to parse API response/);
-		});
-	});
-
-	describe('API routing integration', () => {
-		it('should handle Anthropic provider end-to-end', async () => {
-			const config: ProviderConfig = {
-				...mockConfig,
-				name: PROVIDER_NAMES.ANTHROPIC
-			};
-
-			const mockApiResponse = {
-				content: [{
-					type: 'tool_use',
-					input: { output: ['test'], reliability: 1.0 }
-				}]
-			};
-
-			mockSendRequest.mockResolvedValueOnce(mockApiResponse);
-
-			const result = await unifiedProvider.callAPI('system', 'user', config, 'model');
-
-			expect(mockSendRequest).toHaveBeenCalledWith(
-				config.baseUrl,
-				expect.objectContaining({
-					'x-api-key': 'test-key',
-					'anthropic-version': '2023-06-01'
-				}),
-				expect.any(Object)
-			);
-			expect(result).toEqual({ output: ['test'], reliability: 1.0 });
-		});
-
-		it('should handle Gemini provider with API key in URL', async () => {
-			const config: ProviderConfig = {
-				...mockConfig,
-				name: PROVIDER_NAMES.GEMINI
-			};
-
-			const mockApiResponse = {
-				candidates: [{
-					content: {
-						parts: [{
-							text: '{"output":["test"],"reliability":0.95}'
-						}]
-					}
-				}]
-			};
-
-			mockSendRequest.mockResolvedValueOnce(mockApiResponse);
-
-			await unifiedProvider.callAPI('system', 'user', config, 'gemini-pro');
-
-			expect(mockSendRequest).toHaveBeenCalledWith(
-				expect.stringContaining('models/gemini-pro:generateContent?key=test-key'),
-				expect.any(Object),
-				expect.any(Object)
-			);
-		});
-
-		it('should handle temperature override in provider config', async () => {
-			const config: ProviderConfig = {
-				...mockConfig,
-				name: PROVIDER_NAMES.OPENAI,
-				temperature: 0.3
-			};
-
-			const mockApiResponse = {
-				choices: [{
-					message: { content: '{"output":["test"],"reliability":1.0}' }
-				}]
-			};
-
-			mockSendRequest.mockResolvedValueOnce(mockApiResponse);
-
-			await unifiedProvider.callAPI('system', 'user', config, 'model', 0.9);
-
-			const callArgs = mockSendRequest.mock.calls[0];
-			const bodyData = callArgs[2] as Record<string, unknown>;
-			expect(bodyData.temperature).toBe(0.3);
-		});
-	});
-
-	describe('getApiKey', () => {
-		it('should extract API key from new auth field', async () => {
-			const config: ProviderConfig = {
-				...mockConfig,
-				name: PROVIDER_NAMES.OPENAI,
-				auth: { type: 'apiKey', apiKey: 'new-format-key' },
-				apiKey: 'legacy-key', // Should be ignored
-			};
-
-			const mockApiResponse = {
-				choices: [{
-					message: { content: '{"output":["test"],"reliability":1.0}' }
-				}]
-			};
-
-			mockSendRequest.mockResolvedValueOnce(mockApiResponse);
-
-			await unifiedProvider.callAPI('system', 'user', config, 'model');
-
-			const callArgs = mockSendRequest.mock.calls[0];
-			const headers = callArgs[1] as Record<string, string>;
-			expect(headers.Authorization).toBe('Bearer new-format-key');
-		});
-
-		it('should fall back to legacy apiKey field', async () => {
-			const config: ProviderConfig = {
-				...mockConfig,
-				name: PROVIDER_NAMES.OPENAI,
-				apiKey: 'legacy-api-key',
-			};
-
-			const mockApiResponse = {
-				choices: [{
-					message: { content: '{"output":["test"],"reliability":1.0}' }
-				}]
-			};
-
-			mockSendRequest.mockResolvedValueOnce(mockApiResponse);
-
-			await unifiedProvider.callAPI('system', 'user', config, 'model');
-
-			const callArgs = mockSendRequest.mock.calls[0];
-			const headers = callArgs[1] as Record<string, string>;
-			expect(headers.Authorization).toBe('Bearer legacy-api-key');
-		});
-	});
-
-	describe('Codex provider with OAuth', () => {
-		it('should use OAuth tokens from new auth field for Codex', async () => {
-			const config: ProviderConfig = {
-				name: PROVIDER_NAMES.CODEX,
-				baseUrl: 'https://codex.api',
-				models: [],
-				auth: {
-					type: 'oauth',
-					oauth: {
-						accessToken: 'new-oauth-token',
-						refreshToken: 'refresh',
-						expiresAt: Date.now() / 1000 + 3600,
-						accountId: 'new-account-id',
+	it('requires completed chat output while accepting an explicit null refusal', () => {
+		expect(provider.processApiResponse(chatResponse(generatedJson), PROVIDER_NAMES.OPENAI)).toEqual(
+			generated
+		);
+		for (const finish_reason of [undefined, 'length', 'content_filter']) {
+			expect(() =>
+				provider.processApiResponse(
+					{
+						choices: [{ finish_reason, message: { content: generatedJson, refusal: null } }],
 					},
-				},
-			};
-
-			// Codex uses streaming, so mock returns accumulated text
-			const mockStreamedText = '{"output":["test"],"reliability":1.0}';
-			mockSendStreamingRequest.mockResolvedValueOnce(mockStreamedText);
-
-			await unifiedProvider.callAPI('system', 'user', config, 'model');
-
-			// Verify sendStreamingRequest was called with correct headers
-			const callArgs = mockSendStreamingRequest.mock.calls[0];
-			const headers = callArgs[1] as Record<string, string>;
-			expect(headers.Authorization).toBe('Bearer new-oauth-token');
-			expect(headers['ChatGPT-Account-Id']).toBe('new-account-id');
-		});
-
-		it('should fall back to legacy oauth field for Codex', async () => {
-			const config: ProviderConfig = {
-				name: PROVIDER_NAMES.CODEX,
-				baseUrl: 'https://codex.api',
-				models: [],
-				oauth: {
-					accessToken: 'legacy-oauth-token',
-					refreshToken: 'refresh',
-					expiresAt: Date.now() / 1000 + 3600,
-					accountId: 'legacy-account-id',
-				},
-			};
-
-			// Codex uses streaming, so mock returns accumulated text
-			const mockStreamedText = '{"output":["test"],"reliability":1.0}';
-			mockSendStreamingRequest.mockResolvedValueOnce(mockStreamedText);
-
-			await unifiedProvider.callAPI('system', 'user', config, 'model');
-
-			// Verify sendStreamingRequest was called with correct headers
-			const callArgs = mockSendStreamingRequest.mock.calls[0];
-			const headers = callArgs[1] as Record<string, string>;
-			expect(headers.Authorization).toBe('Bearer legacy-oauth-token');
-			expect(headers['ChatGPT-Account-Id']).toBe('legacy-account-id');
-		});
-
-		it('should throw error when Codex OAuth is not configured', async () => {
-			const config: ProviderConfig = {
-				name: PROVIDER_NAMES.CODEX,
-				baseUrl: 'https://codex.api',
-				models: [],
-				// No oauth configured
-			};
-
-			await expect(unifiedProvider.callAPI('system', 'user', config, 'model'))
-				.rejects.toThrow('Codex OAuth tokens incomplete');
-		});
-
-		it('should parse Codex response format correctly', () => {
-			const codexResponse = {
-				output: [{
-					type: 'message',
-					content: [{
-						type: 'output_text',
-						text: '{"output":["category1","category2"],"reliability":0.85}'
-					}]
-				}]
-			};
-
-			const result = unifiedProvider.processApiResponse(codexResponse, PROVIDER_NAMES.CODEX);
-
-			expect(result).toEqual({
-				output: ['category1', 'category2'],
-				reliability: 0.85
-			});
-		});
-
-		it('should throw error for invalid Codex response without output array', () => {
-			const invalidResponse = { notOutput: [] };
-			expect(() => unifiedProvider.processApiResponse(invalidResponse, PROVIDER_NAMES.CODEX))
-				.toThrow('Codex response missing output array');
-		});
-
-		it('should throw error for Codex response without message content', () => {
-			const invalidResponse = {
-				output: [{
-					type: 'other',
-					content: []
-				}]
-			};
-			expect(() => unifiedProvider.processApiResponse(invalidResponse, PROVIDER_NAMES.CODEX))
-				.toThrow('Codex response missing message content');
-		});
+					PROVIDER_NAMES.OPENAI
+				)
+			).toThrow();
+		}
 	});
 
-	describe('Codex 401 token refresh', () => {
-		const codexConfig: ProviderConfig = {
-			name: PROVIDER_NAMES.CODEX,
-			baseUrl: 'https://codex.api',
-			models: [],
-			auth: {
-				type: 'oauth',
-				oauth: {
-					accessToken: 'expired-token',
-					refreshToken: 'refresh-token',
-					expiresAt: Date.now() / 1000 + 3600,
-					accountId: 'account-123',
+	it('requires one named completed Anthropic tool result', () => {
+		for (const [stop_reason, name] of [
+			['max_tokens', 'generate_tags'],
+			['tool_use', 'unrequested_tool'],
+			[undefined, 'generate_tags'],
+		]) {
+			expect(() =>
+				provider.processApiResponse(
+					{
+						stop_reason,
+						content: [{ type: 'tool_use', name, input: generated }],
+					},
+					PROVIDER_NAMES.ANTHROPIC
+				)
+			).toThrow();
+		}
+	});
+
+	it('parses Gemini answer text separately from optional reasoning parts', () => {
+		expect(
+			provider.processApiResponse(
+				{
+					candidates: [
+						{
+							finishReason: 'STOP',
+							content: {
+								parts: [
+									{ thought: true, text: 'Synthetic reasoning, not output' },
+									{ text: '{\"tags\":' },
+									{ text: '[\"new/tag\"]}' },
+								],
+							},
+						},
+					],
+				},
+				PROVIDER_NAMES.GEMINI
+			)
+		).toEqual(generated);
+	});
+
+	it('rejects truncated Ollama responses even when buffered JSON happens to parse', () => {
+		expect(() =>
+			provider.processApiResponse(
+				{
+					done: true,
+					done_reason: 'length',
+					message: { content: generatedJson },
+				},
+				PROVIDER_NAMES.OLLAMA
+			)
+		).toThrow();
+	});
+
+	it.each(providerCases)(
+		'$name returns strict generated tags with its native schema placement',
+		async ({ name, response, mode }) => {
+			const providerConfig = config(name);
+			if (name === PROVIDER_NAMES.CODEX) {
+				mockSendStreamingRequest.mockResolvedValueOnce(response as string);
+			} else {
+				mockSendRequest.mockResolvedValueOnce(response);
+			}
+
+			await expect(
+				provider.callAPI(
+					'tag system',
+					'tag prompt',
+					providerConfig,
+					'model',
+					undefined,
+					undefined,
+					{ deadline }
+				)
+			).resolves.toEqual(generated);
+
+			const call =
+				name === PROVIDER_NAMES.CODEX
+					? mockSendStreamingRequest.mock.calls[0]
+					: mockSendRequest.mock.calls[0];
+			const requestBody = call?.[2] as Record<string, unknown>;
+			if (mode === 'openai') {
+				const responseFormat = requestBody.response_format as Record<string, unknown>;
+				const schemaConfig = responseFormat.json_schema as Record<string, unknown>;
+				expect(schemaConfig).toMatchObject({ strict: true, schema: TAG_GENERATION_SCHEMA });
+			} else if (mode === 'anthropic') {
+				const tools = requestBody.tools as Array<Record<string, unknown>>;
+				expect(tools[0].input_schema).toEqual(TAG_GENERATION_SCHEMA);
+			} else if (mode === 'gemini') {
+				const generationConfig = requestBody.generationConfig as Record<string, unknown>;
+				expect(generationConfig.responseSchema).toEqual(TAG_GENERATION_SCHEMA);
+			} else if (mode === 'ollama') {
+				expect(requestBody.format).toEqual(TAG_GENERATION_SCHEMA);
+			} else {
+				const text = requestBody.text as Record<string, unknown>;
+				expect(text.format).toMatchObject({
+					type: 'json_schema',
+					strict: true,
+					schema: TAG_GENERATION_SCHEMA,
+				});
+				expect(mockSendStreamingRequest.mock.calls[0]?.[4]).toEqual({ deadline });
+			}
+			if (name !== PROVIDER_NAMES.CODEX) {
+				expect(mockSendRequest.mock.calls[0]?.[3]).toEqual({ deadline });
+			}
+		}
+	);
+
+	it('keeps official provider headers and endpoints', async () => {
+		mockSendRequest.mockResolvedValueOnce({
+			stop_reason: 'tool_use',
+			content: [{ type: 'tool_use', name: 'generate_tags', input: generated }],
+		});
+		const anthropic = config(PROVIDER_NAMES.ANTHROPIC);
+		await provider.callAPI('sys', 'prompt', anthropic, 'claude');
+		expect(mockSendRequest.mock.calls[0]?.[0]).toBe(anthropic.baseUrl);
+		expect(mockSendRequest.mock.calls[0]?.[1]).toMatchObject({
+			'x-api-key': 'api-key-secret',
+			'anthropic-version': '2023-06-01',
+		});
+
+		mockSendRequest.mockResolvedValueOnce({
+			candidates: [{ finishReason: 'STOP', content: { parts: [{ text: generatedJson }] } }],
+		});
+		await provider.callAPI('sys', 'prompt', config(PROVIDER_NAMES.GEMINI), 'gemini-pro');
+		expect(mockSendRequest.mock.calls[1]?.[0]).toBe(
+			'https://provider.example.test/v1/chat/completions/models/gemini-pro:generateContent?key=api-key-secret'
+		);
+		expect(mockSendRequest.mock.calls[1]?.[1]).toEqual({ 'Content-Type': 'application/json' });
+	});
+
+	it('rejects unknown names instead of falling back to OpenAI-compatible parsing', async () => {
+		await expect(
+			provider.callAPI('system', 'prompt', config('Unsupported secret name'), 'model')
+		).rejects.toThrow('Unsupported provider');
+		expect(mockSendRequest).not.toHaveBeenCalled();
+	});
+
+	it('rejects legacy schemas and extra fields without echoing response data', () => {
+		for (const content of [
+			'{"output":["old"],"reliability":0.9}',
+			'{"tags":["new"],"secret":"response-secret"}',
+			'{ malformed response-secret',
+		]) {
+			let thrown: unknown;
+			try {
+				provider.processApiResponse(chatResponse(content));
+			} catch (error) {
+				thrown = error;
+			}
+			expect(thrown).toBeInstanceOf(Error);
+			expect((thrown as Error).message).not.toContain('response-secret');
+			expect((thrown as Error).message).not.toContain(content);
+		}
+	});
+
+	it('rejects refusal and incomplete provider results without exposing response data', () => {
+		const cases: Array<[unknown, string?]> = [
+			[
+				{ choices: [{ message: { refusal: 'private refusal', content: null } }] },
+				PROVIDER_NAMES.OPENAI,
+			],
+			[{ content: [{ type: 'refusal', refusal: 'private refusal' }] }, PROVIDER_NAMES.ANTHROPIC],
+			[
+				{ candidates: [{ finishReason: 'SAFETY', content: { parts: [{ text: generatedJson }] } }] },
+				PROVIDER_NAMES.GEMINI,
+			],
+			[{ done: false, message: { content: generatedJson } }, PROVIDER_NAMES.OLLAMA],
+			[
+				{
+					status: 'completed',
+					output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'private refusal' }] }],
+				},
+				PROVIDER_NAMES.CODEX,
+			],
+		];
+		for (const [response, name] of cases) {
+			let thrown: unknown;
+			try {
+				provider.processApiResponse(response, name);
+			} catch (error) {
+				thrown = error;
+			}
+			expect(thrown).toBeInstanceOf(Error);
+			expect((thrown as Error).message).not.toContain('private refusal');
+		}
+	});
+
+	it('accepts only Codex completed terminal events and rejects failed, incomplete, and refusal events', async () => {
+		mockSendStreamingRequest.mockResolvedValueOnce(generatedJson);
+		await provider.callAPI('system', 'prompt', config(PROVIDER_NAMES.CODEX), 'model');
+		const parseEvent = mockSendStreamingRequest.mock.calls[0]?.[3];
+		expect(parseEvent).toBeDefined();
+		expect(
+			parseEvent?.({ type: 'response.completed', response: { status: 'completed', output: [] } })
+		).toEqual({ type: 'complete' });
+		for (const event of [
+			{ type: 'response.failed' },
+			{ type: 'response.incomplete' },
+			{ type: 'response.refusal.delta' },
+			{
+				type: 'response.completed',
+				response: {
+					status: 'completed',
+					output: [{ type: 'message', content: [{ type: 'refusal', refusal: 'response-secret' }] }],
 				},
 			},
+		]) {
+			expect(parseEvent?.(event)).toEqual({ type: 'error' });
+		}
+	});
+
+	it('preserves HttpError identity and shares deadline through awaited Codex refresh', async () => {
+		const unauthorized = new HttpError('HTTP_ERROR', 401);
+		let refreshCallbackCompleted = false;
+		mockSendStreamingRequest.mockRejectedValueOnce(unauthorized);
+		mockSendStreamingRequest.mockImplementationOnce(async () => {
+			expect(refreshCallbackCompleted).toBe(true);
+			return generatedJson;
+		});
+		const tokens = {
+			accessToken: 'new-codex-token',
+			refreshToken: 'new-refresh-token',
+			expiresAt: Date.now() / 1000 + 7200,
+			accountId: 'account-id',
 		};
-
-		beforeEach(() => {
-			mockCodexOAuth.mockClear();
+		const refreshTokens = vi.fn().mockResolvedValue(tokens);
+		mockCodexOAuth.mockImplementation(function () {
+			return { refreshTokens } as unknown as CodexOAuth;
+		});
+		const onTokenRefresh = vi.fn(async () => {
+			await Promise.resolve();
+			refreshCallbackCompleted = true;
 		});
 
-		it('should refresh tokens and retry on 401 error', async () => {
-			// First call throws 401
-			const http401Error = new HttpError('Authentication failed', 401, 'Unauthorized');
-			mockSendStreamingRequest
-				.mockRejectedValueOnce(http401Error)
-				.mockResolvedValueOnce('{"output":["test"],"reliability":1.0}');
-
-			// Mock token refresh
-			const newTokens = {
-				accessToken: 'new-token',
-				refreshToken: 'new-refresh-token',
-				expiresAt: Date.now() / 1000 + 7200,
-				accountId: 'account-123',
-			};
-			const mockRefreshTokens = vi.fn().mockResolvedValue(newTokens);
-			mockCodexOAuth.mockImplementation(function (this: any) {
-				this.refreshTokens = mockRefreshTokens;
-			});
-
-			const result = await unifiedProvider.callAPI(
+		await expect(
+			provider.callAPI(
 				'system',
-				'user',
-				codexConfig,
-				'model'
-			);
-
-			expect(result).toEqual({ output: ['test'], reliability: 1.0 });
-			expect(mockSendStreamingRequest).toHaveBeenCalledTimes(2);
-			expect(mockRefreshTokens).toHaveBeenCalledWith(codexConfig.auth?.type === 'oauth' ? codexConfig.auth.oauth : undefined);
-		});
-
-		it('should call onTokenRefresh callback after token refresh', async () => {
-			const http401Error = new HttpError('Authentication failed', 401, 'Unauthorized');
-			mockSendStreamingRequest
-				.mockRejectedValueOnce(http401Error)
-				.mockResolvedValueOnce('{"output":["test"],"reliability":1.0}');
-
-			const newTokens = {
-				accessToken: 'new-token',
-				refreshToken: 'new-refresh-token',
-				expiresAt: Date.now() / 1000 + 7200,
-				accountId: 'account-123',
-			};
-			mockCodexOAuth.mockImplementation(function (this: any) {
-				this.refreshTokens = vi.fn().mockResolvedValue(newTokens);
-			});
-
-			const onTokenRefresh = vi.fn();
-
-			await unifiedProvider.callAPI(
-				'system',
-				'user',
-				codexConfig,
+				'prompt',
+				config(PROVIDER_NAMES.CODEX),
 				'model',
 				undefined,
-				onTokenRefresh
-			);
-
-			expect(onTokenRefresh).toHaveBeenCalledWith(newTokens);
+				onTokenRefresh,
+				{ deadline }
+			)
+		).resolves.toEqual(generated);
+		expect(mockSendStreamingRequest).toHaveBeenCalledTimes(2);
+		expect(mockSendStreamingRequest.mock.calls[0]?.[4]).toEqual({ deadline });
+		expect(mockSendStreamingRequest.mock.calls[1]?.[4]).toEqual({ deadline });
+		expect(mockSendStreamingRequest.mock.calls[1]?.[1]).toMatchObject({
+			Authorization: 'Bearer new-codex-token',
+			'ChatGPT-Account-Id': 'account-id',
 		});
+		expect(onTokenRefresh).toHaveBeenCalledWith(tokens);
+		expect(CODEX_OAUTH.API_ENDPOINT).toBe(mockSendStreamingRequest.mock.calls[0]?.[0]);
+	});
 
-		it('should throw error if token refresh fails', async () => {
-			const http401Error = new HttpError('Authentication failed', 401, 'Unauthorized');
-			mockSendStreamingRequest.mockRejectedValueOnce(http401Error);
+	it('does not replace a safe non-401 transport error', async () => {
+		const error = new HttpError('TRANSPORT_ERROR');
+		mockSendRequest.mockRejectedValueOnce(error);
 
-			mockCodexOAuth.mockImplementation(function (this: any) {
-				this.refreshTokens = vi.fn().mockRejectedValue(new Error('Refresh failed'));
-			});
-
-			await expect(
-				unifiedProvider.callAPI('system', 'user', codexConfig, 'model')
-			).rejects.toThrow('Refresh failed');
-		});
-
-		it('should throw error if OAuth tokens are not configured', async () => {
-			const configWithoutOAuth: ProviderConfig = {
-				name: PROVIDER_NAMES.CODEX,
-				baseUrl: 'https://codex.api',
-				models: [],
-				// No oauth configured
-			};
-
-			const http401Error = new HttpError('Authentication failed', 401, 'Unauthorized');
-			mockSendStreamingRequest.mockRejectedValueOnce(http401Error);
-
-			await expect(
-				unifiedProvider.callAPI('system', 'user', configWithoutOAuth, 'model')
-			).rejects.toThrow('Codex OAuth tokens');
-		});
-
+		await expect(
+			provider.callAPI('system', 'prompt', config(PROVIDER_NAMES.OPENAI), 'model')
+		).rejects.toBe(error);
+		expect(mockSendStreamingRequest).not.toHaveBeenCalled();
 	});
 });

@@ -16,17 +16,34 @@ export const Platform = {
 
 // Obsidian API functions
 export const getFrontMatterInfo = vi.fn((content: string) => {
-	const match = content.match(/^---\n[\s\S]*?\n---\n/);
-	if (match) {
-		return {
-			exists: true,
-			frontmatter: match[0],
-			contentStart: match[0].length,
-		};
+	const opening = content.match(/^---(?:\r\n|\r|\n)/);
+	if (opening) {
+		const from = opening[0].length;
+		let lineStart = from;
+		while (lineStart <= content.length) {
+			const newline = content.indexOf('\n', lineStart);
+			const lineEnd = newline < 0 ? content.length : newline;
+			const contentEnd =
+				lineEnd > lineStart && content.charAt(lineEnd - 1) === '\r' ? lineEnd - 1 : lineEnd;
+			if (content.slice(lineStart, contentEnd) === '---') {
+				const to = lineStart;
+				return {
+					exists: true,
+					frontmatter: content.slice(from, to),
+					from,
+					to,
+					contentStart: newline < 0 ? lineEnd : newline + 1,
+				};
+			}
+			if (newline < 0) break;
+			lineStart = newline + 1;
+		}
 	}
 	return {
 		exists: false,
 		frontmatter: '',
+		from: 0,
+		to: 0,
 		contentStart: 0,
 	};
 });
@@ -105,6 +122,12 @@ export class App {
 		getMarkdownFiles: vi.fn().mockReturnValue([]),
 		read: vi.fn().mockResolvedValue(''),
 		modify: vi.fn().mockResolvedValue(undefined),
+		process: vi.fn(async (file: any, transform: (content: string) => string) => {
+			const current = await this.vault.read(file);
+			const updated = transform(current);
+			await this.vault.modify(file, updated);
+			return updated;
+		}),
 		create: vi.fn().mockResolvedValue(undefined),
 		delete: vi.fn().mockResolvedValue(undefined),
 	} as any;
@@ -141,7 +164,7 @@ export class ButtonComponent {
 	setIcon = vi.fn().mockReturnThis();
 	setTooltip = vi.fn().mockReturnThis();
 	setCta = vi.fn().mockReturnThis();
-	setWarning = vi.fn().mockReturnThis();
+	setDestructive = vi.fn().mockReturnThis();
 	setDisabled = vi.fn().mockReturnThis();
 	onClick = vi.fn();
 	constructor(public containerEl: HTMLElement) {}
@@ -249,7 +272,6 @@ export class Plugin {
 	saveData = vi.fn().mockResolvedValue(undefined);
 	addCommand = vi.fn();
 	addSettingTab = vi.fn();
-	registerCommand = vi.fn();
 
 	onload(): Promise<void> | void {}
 	onunload(): void {}
@@ -280,6 +302,11 @@ export class Vault {
 	getMarkdownFiles = vi.fn().mockReturnValue([]);
 	read = vi.fn().mockResolvedValue('');
 	modify = vi.fn().mockResolvedValue(undefined);
+	process = vi.fn(async (file: any, transform: (content: string) => string) => {
+		const updated = transform(await this.read(file));
+		await this.modify(file, updated);
+		return updated;
+	});
 	create = vi.fn().mockResolvedValue(undefined);
 	delete = vi.fn().mockResolvedValue(undefined);
 }

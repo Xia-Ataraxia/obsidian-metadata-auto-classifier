@@ -1,27 +1,7 @@
 import type { MetadataCache, TFile } from 'obsidian';
-import { getAllTags, getFrontMatterInfo, parseFrontMatterStringArray } from 'obsidian';
+import { getAllTags, parseFrontMatterStringArray } from 'obsidian';
 
-import type { FrontMatter, FrontmatterField } from '../types';
-
-type ProcessFrontMatterFn = (file: TFile, fn: (frontmatter: FrontMatter) => void) => Promise<void>;
-
-interface InsertFrontMatterParams extends Pick<
-	FrontmatterField,
-	'name' | 'overwrite' | 'linkType'
-> {
-	file: TFile;
-	value: string[];
-}
-
-/**
- * Extracts the content of a markdown file excluding frontmatter
- * @param content - The full content of the markdown file
- * @returns The content without frontmatter
- */
-export function getContentWithoutFrontmatter(content: string): string {
-	const { contentStart } = getFrontMatterInfo(content);
-	return content.slice(contentStart);
-}
+import type { FrontmatterField } from '../types';
 
 /**
  * Collects all unique values for a specific frontmatter field from the vault.
@@ -56,41 +36,6 @@ export function getFieldValues(
 }
 
 /**
- * Gets a frontmatter setting by ID from the settings array.
- */
-export function getFrontmatterSetting(id: number, settings: FrontmatterField[]): FrontmatterField {
-	const setting = settings?.find((f) => f.id === id);
-	if (!setting) {
-		throw new Error('Setting not found');
-	}
-	return setting;
-}
-
-/**
- * Inserts values into frontmatter with optional WikiLink formatting.
- */
-export async function insertToFrontMatter(
-	processFrontMatter: ProcessFrontMatterFn,
-	params: InsertFrontMatterParams
-): Promise<void> {
-	await processFrontMatter(params.file, (frontmatter: FrontMatter) => {
-		// Ensure values are in raw format for processing (API context)
-		const rawValues =
-			params.linkType === 'WikiLink' ? params.value.map((item) => `[[${item}]]`) : params.value;
-
-		const existingRawValues = frontmatter[params.name] || [];
-		// Combine values based on overwrite setting
-		let combinedRawValues = params.overwrite ? rawValues : [...existingRawValues, ...rawValues];
-
-		// Remove duplicates and empty strings
-		combinedRawValues = [...new Set(combinedRawValues)].filter(Boolean);
-
-		// Format back for storage context
-		frontmatter[params.name] = combinedRawValues;
-	});
-}
-
-/**
  * Creates a deep copy of a FrontmatterField to prevent input mutation.
  * Used when editing frontmatter settings in modals.
  */
@@ -103,5 +48,6 @@ export function deepCloneFrontmatterField(field: FrontmatterField): FrontmatterF
 		overwrite: field.overwrite,
 		linkType: field.linkType,
 		customQuery: field.customQuery,
+		generateNewTags: field.name === 'tags' && field.generateNewTags === true,
 	};
 }

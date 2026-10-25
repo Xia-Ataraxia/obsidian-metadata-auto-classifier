@@ -172,7 +172,7 @@ export class Setting {
 			if (props.icon) btn.setIcon(props.icon);
 			if (props.tooltip) btn.setTooltip(props.tooltip);
 			if (props.cta) btn.setCta();
-			if (props.warning) btn.setWarning();
+			if (props.warning) btn.setDestructive();
 			if (props.disabled) btn.setDisabled(props.disabled);
 			btn.onClick(props.onClick);
 		});

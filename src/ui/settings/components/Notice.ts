@@ -8,27 +8,28 @@ export class Notice {
 		new ObsidianNotice(message, duration);
 	}
 
-	/**
-	 * Format a validation error message with component context
-	 * @param component - The component name (e.g., 'Provider', 'Model')
-	 * @param message - The error message
-	 * @returns Formatted error message: [Component] Message
-	 */
-	static formatValidationError(component: string, message: string): string {
-		return `[${component}] ${message}`;
+	private static showError(message: string): void {
+		this.show(`❌ ${message}`, 5000);
 	}
 
 	/**
-	 * Show a validation error with component context
+	 * Return a validation category without exposing caller-provided details.
+	 */
+	static formatValidationError(_component: string, _message: string): string {
+		return '[Validation] Validation failed.';
+	}
+
+	/**
+	 * Show a validation error without exposing caller-provided details.
 	 */
 	static validationError(component: string, message: string): void {
-		const formattedMessage = this.formatValidationError(component, message);
-		this.error(new Error(formattedMessage));
+		this.showError(this.formatValidationError(component, message));
+		console.error('[MAC] [Validation] Validation failed.');
 	}
 
-	static error(error: Error): void {
-		this.show(`❌ ${error.message}`, 5000);
-		console.error(error);
+	static error(_error: unknown): void {
+		this.showError('An error occurred.');
+		console.error('[MAC] An error occurred.');
 	}
 
 	static success(message: string): void {

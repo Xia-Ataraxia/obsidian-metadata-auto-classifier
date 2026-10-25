@@ -2,7 +2,7 @@
 	"id": "metadata-auto-classifier",
 	"name": "Metadata Auto Classifier",
 	"version": "1.12.10",
-	"minAppVersion": "0.15.0",
+	"minAppVersion": "1.13.0",
 	"description": "Automatically classifies and applies metadata to your notes.",
 	"author": "Beomsu Koh",
 	"authorUrl": "https://medium.com/@beromkoh",

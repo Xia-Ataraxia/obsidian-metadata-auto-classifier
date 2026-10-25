@@ -73,7 +73,7 @@ export class OAuthCallbackServer {
 			});
 
 			this.server.listen(CODEX_OAUTH.REDIRECT_PORT, '127.0.0.1', () => {
-				macLogger.info(`OAuth callback server listening on port ${CODEX_OAUTH.REDIRECT_PORT}`);
+				macLogger.info('oauth-server-started');
 			});
 		});
 	}
@@ -160,7 +160,7 @@ export class OAuthCallbackServer {
 		if (this.server) {
 			this.server.close();
 			this.server = null;
-			macLogger.info('OAuth callback server stopped');
+			macLogger.info('oauth-server-stopped');
 		}
 	}
 }

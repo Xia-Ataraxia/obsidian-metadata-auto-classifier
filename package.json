@@ -1,69 +1,67 @@
 {
-  "name": "metadata-auto-classifier",
-  "version": "1.12.10",
-  "description": "Metadata Auto Classifier is an innovative Obsidian plugin that harnesses the power of AI to revolutionize your note-taking experience. By automatically generating and classifying metadata for your notes, this plugin streamlines your workflow and enhances the organization of your knowledge base.",
-  "main": "main.js",
-  "packageManager": "pnpm@10.28.2",
-  "scripts": {
-    "dev": "node scripts/dev.mjs",
-    "dev:build": "node esbuild.config.mjs",
-    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "ci": "pnpm run build && pnpm run lint && pnpm run test",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "lint": "eslint . --ignore-pattern 'coverage/**' --ignore-pattern '__tests__/**' --ignore-pattern '__mocks__/**'",
-    "lint:fix": "eslint . --fix --ignore-pattern 'coverage/**' --ignore-pattern '__tests__/**' --ignore-pattern '__mocks__/**'",
-    "version": "node scripts/version.mjs",
-    "postversion": "git push && git push --tags",
-    "release:patch": "node scripts/release.mjs patch",
-    "release:minor": "node scripts/release.mjs minor",
-    "release:major": "node scripts/release.mjs major",
-    "prepare": "husky"
-  },
-  "keywords": [
-    "obsidian",
-    "plugin",
-    "AI",
-    "metadata",
-    "note-taking"
-  ],
-  "author": "Beomsu Koh",
-  "license": "MIT",
-  "devDependencies": {
-    "@codemirror/state": "^6.0.0",
-    "@codemirror/view": "^6.0.0",
-    "@commitlint/cli": "^19.0.0",
-    "@commitlint/config-conventional": "^19.0.0",
-    "@eslint/js": "9.30.1",
-    "@types/node": "^20.0.0",
-    "@vitest/coverage-v8": "^4.0.18",
-    "builtin-modules": "3.3.0",
-    "esbuild": "0.25.5",
-    "eslint": "9.30.1",
-    "eslint-config-prettier": "^10.1.5",
-    "eslint-plugin-import": "^2.31.0",
-    "eslint-plugin-obsidianmd": "^0.1.9",
-    "globals": "14.0.0",
-    "jiti": "2.6.1",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
-    "obsidian": "latest",
-    "prettier": "^3.5.3",
-    "tslib": "2.6.2",
-    "typescript": "5.8.3",
-    "typescript-eslint": "8.35.1",
-    "vitest": "^4.0.18"
-  },
-  "pnpm": {
-    "overrides": {
-      "@eslint/plugin-kit": "^0.3.4"
-    }
-  },
-  "lint-staged": {
-    "src/**/*.ts": [
-      "eslint --fix",
-      "prettier --write"
-    ]
-  }
+	"name": "metadata-auto-classifier",
+	"version": "1.12.10",
+	"description": "Metadata Auto Classifier is an innovative Obsidian plugin that harnesses the power of AI to revolutionize your note-taking experience. By automatically generating and classifying metadata for your notes, this plugin streamlines your workflow and enhances the organization of your knowledge base.",
+	"main": "main.js",
+	"packageManager": "pnpm@10.28.2",
+	"scripts": {
+		"dev": "node scripts/dev.mjs",
+		"dev:build": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"ci": "pnpm run build && pnpm run lint && pnpm run test",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"lint": "eslint . --ignore-pattern 'coverage/**' --ignore-pattern '__tests__/**' --ignore-pattern '__mocks__/**'",
+		"lint:fix": "eslint . --fix --ignore-pattern 'coverage/**' --ignore-pattern '__tests__/**' --ignore-pattern '__mocks__/**'",
+		"version": "node scripts/version.mjs",
+		"postversion": "git push && git push --tags",
+		"release:patch": "node scripts/release.mjs patch",
+		"release:minor": "node scripts/release.mjs minor",
+		"release:major": "node scripts/release.mjs major",
+		"prepare": "husky"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"AI",
+		"metadata",
+		"note-taking"
+	],
+	"author": "Beomsu Koh",
+	"license": "MIT",
+	"devDependencies": {
+		"@codemirror/state": "6.7.6",
+		"@codemirror/view": "6.43.13",
+		"@commitlint/cli": "^19.0.0",
+		"@commitlint/config-conventional": "^19.0.0",
+		"@eslint/js": "9.30.1",
+		"@types/node": "^20.0.0",
+		"@vitest/coverage-v8": "^4.0.18",
+		"builtin-modules": "3.3.0",
+		"esbuild": "0.25.5",
+		"eslint": "9.30.1",
+		"eslint-config-prettier": "^10.1.5",
+		"eslint-plugin-import": "^2.31.0",
+		"eslint-plugin-obsidianmd": "^0.1.9",
+		"globals": "14.0.0",
+		"jiti": "2.6.1",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.2.7",
+		"obsidian": "1.14.4",
+		"prettier": "^3.5.3",
+		"tslib": "2.6.2",
+		"typescript": "5.8.3",
+		"typescript-eslint": "8.35.1",
+		"vitest": "^4.0.18"
+	},
+	"dependencies": {
+		"yaml": "2.9.1"
+	},
+	"lint-staged": {
+		"src/**/*.ts": [
+			"eslint --fix",
+			"prettier --write"
+		]
+	}
 }

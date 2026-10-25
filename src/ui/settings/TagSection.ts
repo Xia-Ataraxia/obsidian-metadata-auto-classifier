@@ -26,6 +26,8 @@ export class Tag extends BaseSettingsComponent {
 
 	private handleEdit(frontmatterSetting: FrontmatterField): void {
 		this.openEditModal(frontmatterSetting, async (updatedFrontmatter) => {
+			updatedFrontmatter.generateNewTags =
+				updatedFrontmatter.name === 'tags' && updatedFrontmatter.generateNewTags === true;
 			const tagSettingIndex = this.plugin.settings.frontmatter.findIndex((f) => f.id === 0);
 			if (tagSettingIndex !== -1) {
 				this.plugin.settings.frontmatter[tagSettingIndex] = updatedFrontmatter;

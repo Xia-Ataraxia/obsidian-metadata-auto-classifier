@@ -1,116 +1,362 @@
-vi.mock('settings/modals/FrontmatterEditorModal', () => ({
-	ConfigurableSettingModal: class {},
+interface SyntheticElement {
+	children: unknown[];
+	empty(): void;
+	createDiv(...args: unknown[]): SyntheticElement;
+	createEl(...args: unknown[]): SyntheticElement;
+	addClass(...args: unknown[]): void;
+	setAttribute(...args: unknown[]): void;
+}
+
+interface SyntheticTextInput {
+	inputEl: { type: string; disabled?: boolean; classList: { add(...args: unknown[]): void } };
+	value: string;
+	placeholder: string;
+	setPlaceholder(value: string): this;
+	setValue(value: string): this;
+	onChange(callback: (value: string) => unknown): this;
+	callback?: (value: string) => unknown;
+}
+
+interface SyntheticToggle {
+	value: boolean;
+	setValue(value: boolean): this;
+	onChange(callback: (value: boolean) => unknown): this;
+	callback?: (value: boolean) => unknown;
+}
+
+interface SyntheticButton {
+	text: string;
+	buttonEl: { setAttribute(...args: unknown[]): void };
+	setButtonText(value: string): this;
+	setCta(): this;
+	setDisabled(value: boolean): this;
+	setIcon(value: string): this;
+	setTooltip(value: string): this;
+	onClick(callback: () => unknown): this;
+	callback?: () => unknown;
+}
+
+interface SyntheticSlider {
+	setLimits(...args: unknown[]): this;
+	setValue(...args: unknown[]): this;
+	onChange(...args: unknown[]): this;
+}
+
+const settingHarness = vi.hoisted(() => ({
+	textInputs: [] as { name: string; component: SyntheticTextInput }[],
+	toggles: [] as {
+		name: string;
+		container: SyntheticElement;
+		setting: object;
+		component: SyntheticToggle;
+	}[],
+	buttons: [] as { component: SyntheticButton }[],
+	modals: [] as unknown[],
 }));
 
-import type { Mock } from 'vitest';
-import type { FrontmatterField } from 'types';
-import { Tag } from 'settings/TagSection';
+vi.mock('obsidian', () => {
+	function createElement(): SyntheticElement {
+		const children: unknown[] = [];
+		return {
+			children,
+			empty: () => (children.length = 0),
+			createDiv: () => {
+				const child = createElement();
+				children.push(child);
+				return child;
+			},
+			createEl: () => {
+				const child = createElement();
+				children.push(child);
+				return child;
+			},
+			addClass: () => {},
+			setAttribute: () => {},
+		};
+	}
+
+	const makeTextInput = (): SyntheticTextInput => ({
+		inputEl: { type: 'text', classList: { add: () => {} } },
+		value: '',
+		setPlaceholder(value) {
+			this.placeholder = value;
+			return this;
+		},
+		setValue(value) {
+			this.value = value;
+			return this;
+		},
+		onChange(callback) {
+			this.callback = callback;
+			return this;
+		},
+		placeholder: '',
+	});
+
+	const makeToggle = (): SyntheticToggle => ({
+		value: false,
+		setValue(value) {
+			this.value = value;
+			return this;
+		},
+		onChange(callback) {
+			this.callback = callback;
+			return this;
+		},
+	});
+
+	const makeButton = (): SyntheticButton => ({
+		text: '',
+		buttonEl: { setAttribute: () => {} },
+		setButtonText(value) {
+			this.text = value;
+			return this;
+		},
+		setCta() {
+			return this;
+		},
+		setDisabled() {
+			return this;
+		},
+		setIcon() {
+			return this;
+		},
+		setTooltip() {
+			return this;
+		},
+		onClick(callback) {
+			this.callback = callback;
+			return this;
+		},
+	});
+
+	class Setting {
+		settingEl = { addClass: () => {}, createDiv: () => createElement() };
+		controlEl = { createSpan: () => createElement() };
+		name = '';
+
+		constructor(private readonly container: SyntheticElement) {
+			container.children.push(this);
+		}
+
+		setName(name: string) {
+			this.name = name;
+			return this;
+		}
+
+		setDesc() {
+			return this;
+		}
+
+		setHeading() {
+			return this;
+		}
+
+		addText(callback: (input: SyntheticTextInput) => void) {
+			const component = makeTextInput();
+			settingHarness.textInputs.push({ name: this.name, component });
+			callback(component);
+			return this;
+		}
+
+		addToggle(callback: (input: SyntheticToggle) => void) {
+			const component = makeToggle();
+			settingHarness.toggles.push({
+				name: this.name,
+				container: this.container,
+				setting: this,
+				component,
+			});
+			callback(component);
+			return this;
+		}
+
+		addSlider(callback: (input: SyntheticSlider) => void) {
+			const input: SyntheticSlider = {
+				setLimits: () => input,
+				setValue: () => input,
+				onChange: () => input,
+			};
+			callback(input);
+			return this;
+		}
+
+		addButton(callback: (button: SyntheticButton) => void) {
+			const component = makeButton();
+			settingHarness.buttons.push({ component });
+			callback(component);
+			return this;
+		}
+
+		addExtraButton(callback: (button: SyntheticButton) => void) {
+			callback(makeButton());
+			return this;
+		}
+	}
+
+	class Modal {
+		contentEl = createElement();
+		close = vi.fn();
+		open = vi.fn();
+
+		constructor(_app: unknown) {
+			settingHarness.modals.push(this);
+		}
+
+		setTitle() {}
+	}
+
+	class TextAreaComponent {
+		inputEl = { rows: 0, setCssStyles: () => {} };
+		setPlaceholder() {
+			return this;
+		}
+		setValue() {
+			return this;
+		}
+		onChange() {
+			return this;
+		}
+	}
+
+	return {
+		Modal,
+		Setting,
+		TextAreaComponent,
+		TextComponent: class {},
+		ExtraButtonComponent: class {},
+	};
+});
+
+vi.mock('../../src/ui/settings/components/Notice', () => ({
+	Notice: { startProgress: vi.fn(() => ({})), endProgress: vi.fn() },
+}));
+vi.mock('../../src/ui/settings/components/WikiLinkSelector', () => ({
+	WikiLinkSelector: class {},
+}));
+
+import type { FrontmatterField } from '../../src/types';
 import { DEFAULT_TAG_SETTING } from '../../src/domain/constants';
+import { deepCloneFrontmatterField } from '../../src/ui/frontmatter';
+import { Tag } from '../../src/ui/settings/TagSection';
+import { ConfigurableSettingModal } from '../../src/ui/settings/modals/FrontmatterEditorModal';
 
-interface MockPlugin {
-	app: { vault: { getMarkdownFiles: Mock } };
-	settings: { frontmatter: FrontmatterField[] };
-	saveSettings: Mock;
-}
-
-interface MockContainer {
-	empty: Mock;
-	createEl: Mock;
-	createDiv: Mock;
-}
-
-const createMockPlugin = (): MockPlugin => ({
-	app: { vault: { getMarkdownFiles: vi.fn() } },
-	settings: {
-		frontmatter: [{ ...DEFAULT_TAG_SETTING }],
-	},
-	saveSettings: vi.fn().mockResolvedValue(undefined),
+const createField = (name: string, flag: unknown, id = 0): FrontmatterField => ({
+	...DEFAULT_TAG_SETTING,
+	id,
+	name,
+	generateNewTags: flag as boolean,
 });
 
-const createMockContainer = (): MockContainer => ({
-	empty: vi.fn(),
-	createEl: vi.fn(),
-	createDiv: vi.fn().mockReturnValue({
-		createEl: vi.fn(),
-	}),
+const createModal = (field: FrontmatterField): ConfigurableSettingModal =>
+	new ConfigurableSettingModal({} as never, {
+		frontmatterSetting: field,
+		options: { showLinkType: false, showOptions: false, showTextArea: false },
+		onSave: vi.fn().mockResolvedValue(undefined),
+	});
+
+const activeGenerationToggles = () =>
+	settingHarness.toggles.filter(
+		({ name, container, setting }) =>
+			name === 'Generate new tags' && container.children.includes(setting)
+	);
+
+const createTagContainer = () => {
+	const createElement = () => {
+		const children: unknown[] = [];
+		return {
+			children,
+			empty: () => (children.length = 0),
+			createEl: () => createElement(),
+			createDiv: () => createElement(),
+		};
+	};
+	return createElement();
+};
+
+beforeEach(() => {
+	settingHarness.textInputs.length = 0;
+	settingHarness.toggles.length = 0;
+	settingHarness.buttons.length = 0;
+	settingHarness.modals.length = 0;
 });
 
-describe('Tag Container - Regression Tests', () => {
-	let mockPlugin: MockPlugin;
-	let mockContainer: MockContainer;
-	let tag: Tag;
+describe('Tag generation eligibility', () => {
+	test.each([
+		{ name: 'tags', id: 42, flag: true, expected: true, visible: true },
+		{ name: 'tags', id: 0, flag: false, expected: false, visible: true },
+		{ name: 'tags', id: 0, flag: 'true', expected: false, visible: true },
+		{ name: 'kind', id: 0, flag: true, expected: false, visible: false },
+		{ name: 'Tags', id: 0, flag: true, expected: false, visible: false },
+		{ name: 'tags ', id: 0, flag: true, expected: false, visible: false },
+	])(
+		'honors only exact tags name and boolean true: $name / $flag',
+		({ name, id, flag, expected, visible }) => {
+			const field = createField(name, flag, id);
+			expect(deepCloneFrontmatterField(field).generateNewTags).toBe(expected);
 
-	beforeEach(() => {
-		mockPlugin = createMockPlugin();
-		mockContainer = createMockContainer();
-		tag = new (Tag as any)(mockPlugin, mockContainer as unknown as HTMLElement);
-		vi.clearAllMocks();
+			createModal(field).onOpen();
+			const toggles = activeGenerationToggles();
+			expect(toggles).toHaveLength(visible ? 1 : 0);
+			if (visible) expect(toggles[0].component.value).toBe(expected);
+		}
+	);
+
+	test('toggle saves through the existing tag modal', async () => {
+		const tagField = createField('tags', false);
+		const plugin = {
+			app: { vault: { getMarkdownFiles: vi.fn() } },
+			settings: { frontmatter: [tagField] },
+			saveSettings: vi.fn().mockResolvedValue(undefined),
+		};
+		const tagSection = new Tag(plugin as never, createTagContainer() as never);
+		(tagSection as any).handleEdit(tagField);
+		const modal = settingHarness.modals[0] as ConfigurableSettingModal;
+		modal.onOpen();
+
+		activeGenerationToggles()[0].component.callback?.(true);
+		const saveButton = settingHarness.buttons.find(({ component }) => component.text === 'Save');
+		await saveButton?.component.callback?.();
+		expect(plugin.settings.frontmatter[0].generateNewTags).toBe(true);
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 	});
 
-	describe('Basic Rendering', () => {
-		test('renders DEFAULT_TAG_SETTING without delete button', () => {
-			// When: display is called (should not throw)
-			expect(() => tag.display()).not.toThrow();
+	test('renaming away from exact tags removes and clears generation permission', async () => {
+		const tagField = createField('tags', true);
+		const plugin = {
+			app: { vault: { getMarkdownFiles: vi.fn() } },
+			settings: { frontmatter: [tagField] },
+			saveSettings: vi.fn().mockResolvedValue(undefined),
+		};
+		const tagSection = new Tag(plugin as never, createTagContainer() as never);
+		(tagSection as any).handleEdit(tagField);
+		const modal = settingHarness.modals[0] as ConfigurableSettingModal;
+		modal.onOpen();
 
-			// Verify the DEFAULT_TAG_SETTING properties are valid for display
-			expect(DEFAULT_TAG_SETTING.name).toBeDefined();
-			expect(DEFAULT_TAG_SETTING.id).toBe(0); // Reserved id for Tag
-
-			// Verify the tag setting structure is correct
-			expect(DEFAULT_TAG_SETTING.linkType).toBeDefined();
-			expect(DEFAULT_TAG_SETTING.count).toBeDefined();
-			expect(DEFAULT_TAG_SETTING.refs).toBeDefined();
-		});
+		settingHarness.textInputs.find(({ name }) => name === 'Name')?.component.callback?.('Tags');
+		expect(activeGenerationToggles()).toHaveLength(0);
+		const saveButton = settingHarness.buttons.find(({ component }) => component.text === 'Save');
+		await saveButton?.component.callback?.();
+		expect(plugin.settings.frontmatter[0].name).toBe('Tags');
+		expect(plugin.settings.frontmatter[0].generateNewTags).toBe(false);
+		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 	});
 
-	describe('Tag Setting Management', () => {
-		test('updates id=0 template in handleEdit (Critical Regression)', async () => {
-			// Given: DEFAULT_TAG_SETTING (id=0)
-			const updatedSetting = { ...DEFAULT_TAG_SETTING, name: 'Updated Tag Name' };
+	test('ordinary id-zero fields never persist a stored true flag', async () => {
+		const field = createField('kind', true, 0);
+		const plugin = {
+			app: { vault: { getMarkdownFiles: vi.fn() } },
+			settings: { frontmatter: [field] },
+			saveSettings: vi.fn().mockResolvedValue(undefined),
+		};
+		const tagSection = new Tag(plugin as never, createTagContainer() as never);
+		(tagSection as any).handleEdit(field);
+		const modal = settingHarness.modals[0] as ConfigurableSettingModal;
+		modal.onOpen();
 
-			// Mock openEditModal
-			(tag as any).openEditModal = vi
-				.fn()
-				.mockImplementation(
-					(_: FrontmatterField, onSave: (s: FrontmatterField) => Promise<void>) =>
-						onSave(updatedSetting)
-				);
-
-			// When: tag setting is edited
-			await (tag as any).handleEdit(DEFAULT_TAG_SETTING);
-
-			// Then: id=0 template should be updated
-			expect(mockPlugin.settings.frontmatter[0].name).toBe('Updated Tag Name');
-			expect(mockPlugin.saveSettings).toHaveBeenCalled();
-		});
-
-		test('handles id=0 not found without errors', async () => {
-			// Given: frontmatter array without id=0
-			mockPlugin.settings.frontmatter = [
-				{
-					id: 1,
-					name: 'other',
-					count: { min: 1, max: 1 },
-					refs: [],
-					overwrite: false,
-					linkType: 'WikiLink',
-					customQuery: '',
-				},
-			];
-			const updatedSetting = { ...DEFAULT_TAG_SETTING, name: 'Updated' };
-
-			(tag as any).openEditModal = vi
-				.fn()
-				.mockImplementation(
-					(_: FrontmatterField, onSave: (s: FrontmatterField) => Promise<void>) =>
-						onSave(updatedSetting)
-				);
-
-			// When: handleEdit is called
-			await (tag as any).handleEdit(DEFAULT_TAG_SETTING);
-
-			// Then: should handle without errors
-			expect(mockPlugin.saveSettings).toHaveBeenCalled();
-		});
+		expect(activeGenerationToggles()).toHaveLength(0);
+		const saveButton = settingHarness.buttons.find(({ component }) => component.text === 'Save');
+		await saveButton?.component.callback?.();
+		expect(plugin.settings.frontmatter[0].generateNewTags).toBe(false);
 	});
 });

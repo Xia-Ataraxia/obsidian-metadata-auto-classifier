@@ -12,11 +12,11 @@ describe('deepCloneFrontmatterField', () => {
 		customQuery: 'custom query',
 	});
 
-	it('should create a copy with identical values', () => {
+	it('preserves field values and defaults generation permission to false', () => {
 		const original = createTestField();
 		const cloned = deepCloneFrontmatterField(original);
 
-		expect(cloned).toEqual(original);
+		expect(cloned).toEqual({ ...original, generateNewTags: false });
 	});
 
 	it('should not be the same reference as original', () => {

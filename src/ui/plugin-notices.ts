@@ -189,8 +189,8 @@ export class PluginNotices {
 					this.remove(id);
 					this.show('notice_muted', {}, { timeout: 2000 });
 				})
-				.catch((err: unknown) => {
-					console.error(`[${this.prefix}] Failed to mute notice:`, err);
+				.catch(() => {
+					console.error('[MAC] Failed to mute notice.');
 				});
 		});
 		return button;

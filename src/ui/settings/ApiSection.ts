@@ -26,9 +26,12 @@ export class Api {
 	display(): void {
 		const { classificationRule, providers, selectedModel } = this.plugin.settings;
 		this.containerEl.empty();
-		this.containerEl.createEl('h2', { text: 'API configuration' });
-
 		this.classificationRuleSection.render(this.containerEl, classificationRule);
+
+		this.containerEl.createEl('h2', {
+			text: 'Optional provider for explicitly enabled new-tag generation',
+		});
+
 		this.providerSection.render(this.containerEl, providers);
 		this.modelSection.render(this.containerEl, providers, selectedModel);
 	}

@@ -1,214 +1,200 @@
-import type { TFile, App } from 'obsidian';
-
-import { COMMON_CONSTANTS } from '../domain/constants';
-import { getContentWithoutFrontmatter, getFieldValues, insertToFrontMatter } from './frontmatter';
-import { processAPIRequest } from './provider-api';
-import { DEFAULT_SYSTEM_ROLE, getPromptTemplate } from '../domain/prompt';
-import { Notice } from './settings/components/Notice';
-import type { FrontmatterField, FrontMatter, ProviderConfig, StructuredOutput } from '../types';
+import type { App, TFile } from 'obsidian';
+import type { AutoClassifierSettings } from '../types';
+import {
+	ClassificationState,
+	ClassificationStateError,
+	classificationCandidates,
+	existingStringValues,
+	findField,
+	sameFieldSnapshot,
+	readFieldSnapshot,
+	validateCount,
+} from '../domain/classification-state';
+import type { FieldSnapshot } from '../domain/classification-state';
+import { resolveClassificationValues } from '../domain/classification-result';
+import { isTagGenerationAllowed } from '../domain/tag-generation';
+import { commitField, captureFieldBaseline } from './frontmatter-commit';
+import { getFieldValues } from './frontmatter';
+import { JevClassifier } from './JevClassifier';
+import { createGenerationStage } from './classification-generation';
+import {
+	CLASSIFICATION_MESSAGES,
+	ClassificationIssue,
+	classificationErrorStatus,
+} from './classification-status';
+import type { ClassificationStatus } from './classification-status';
 import type { PluginNotices } from './plugin-notices';
 
 export interface ClassificationContext {
 	app: App;
-	provider: ProviderConfig;
-	model: string;
-	classificationRule: string;
+	getSettings: () => AutoClassifierSettings;
+	isActive: () => boolean;
 	saveSettings: () => Promise<void>;
 	notices: PluginNotices;
 }
 
-interface ValidationResult {
-	isValid: boolean;
-	processedValues: string[];
-	errorMessage?: string;
-	noticeId?: string;
-	noticeParams?: Record<string, unknown>;
-}
+const DEADLINE_MS = 60_000;
 
 export class ClassificationService {
+	private readonly state = new ClassificationState();
+	private readonly jev = new JevClassifier();
+
 	constructor(private readonly context: ClassificationContext) {}
 
-	/**
-	 * Check if the provider has valid authentication configured
-	 * Supports both new auth field and legacy apiKey/oauth fields
-	 */
-	private hasValidAuth(provider: ProviderConfig): boolean {
-		// New unified auth format
-		if (provider.auth) {
-			if (provider.auth.type === 'apiKey') {
-				return Boolean(provider.auth.apiKey);
-			}
-			if (provider.auth.type === 'oauth') {
-				return Boolean(provider.auth.oauth?.accessToken);
-			}
-		}
-
-		// Legacy format
-		if (provider.authType === 'oauth') {
-			return Boolean(provider.oauth?.accessToken);
-		}
-		return Boolean(provider.apiKey);
+	deactivate(): void {
+		this.state.deactivate();
 	}
 
-	async classify(currentFile: TFile, frontmatter: FrontmatterField): Promise<void> {
-		const fileNameWithoutExt = currentFile.name.replace(/\.[^/.]+$/, '');
-
-		// Step 1: Prepare and validate input
-		await this.ensureRefsExist(frontmatter);
-		const validation = this.validateClassificationInput(frontmatter, fileNameWithoutExt);
-		if (!validation.isValid) {
-			if (validation.noticeId) {
-				this.context.notices.show(validation.noticeId, validation.noticeParams);
-			}
-			return;
+	async classify(file: TFile, fieldId: number): Promise<void> {
+		if (!this.context.isActive() || !this.state.isActive()) return;
+		if (!findField(this.context.getSettings(), fieldId)) return this.show('invalid_settings');
+		const token = this.state.acquire(file, fieldId);
+		if (!token) return this.show('busy');
+		try {
+			await this.run(file, fieldId, token);
+		} catch (error) {
+			if (this.context.isActive()) this.show(classificationErrorStatus(error));
+		} finally {
+			this.state.release(file, fieldId, token);
 		}
+	}
 
-		// Step 2: Call API
-		const currentContent = await this.context.app.vault.read(currentFile);
-		const apiResponse = await this.callClassificationAPI(
-			currentFile,
-			frontmatter,
-			currentContent,
-			validation.processedValues
-		);
-
-		// Step 3: Process result
-		if (apiResponse) {
-			await this.processClassificationResult(
-				currentFile,
-				frontmatter,
-				apiResponse,
-				fileNameWithoutExt
+	private async run(file: TFile, fieldId: number, token: symbol): Promise<void> {
+		const path = file.path;
+		const deadline = Date.now() + DEADLINE_MS;
+		const before = this.context.getSettings();
+		const field = findField(before, fieldId);
+		if (!field) throw new ClassificationIssue('invalid_settings');
+		let snapshot = readFieldSnapshot(field, before.classificationRule);
+		validateCount(field);
+		if (snapshot.refs.length === 0)
+			snapshot = await this.prepareRefs(file, path, fieldId, token, snapshot, deadline);
+		const assertBase = () => this.assertBase(file, path, fieldId, token, snapshot, deadline);
+		assertBase();
+		const candidates = classificationCandidates(snapshot);
+		const mayGenerate = isTagGenerationAllowed({
+			name: snapshot.name,
+			generateNewTags: snapshot.generateNewTags,
+		});
+		if (candidates.length === 0 && !mayGenerate) throw new ClassificationIssue('no_refs');
+		const content = await this.context.app.vault.cachedRead(file);
+		assertBase();
+		const baseline = captureFieldBaseline(content, snapshot.name);
+		let jevConfig: AutoClassifierSettings['jev'] | undefined;
+		const assertSelection = () => {
+			assertBase();
+			if (!jevConfig) return;
+			const live = this.context.getSettings().jev;
+			if (!live || live.apiKey !== jevConfig.apiKey || live.model !== jevConfig.model)
+				throw new ClassificationStateError('settings-changed');
+		};
+		const select = async () => {
+			const current = this.context.getSettings().jev;
+			if (!current) throw new ClassificationIssue('selection_failed');
+			jevConfig = { ...current };
+			const result = await this.jev.classify(
+				{
+					body: baseline.body,
+					fieldName: snapshot.name,
+					instructions: [snapshot.instructions, snapshot.fieldInstructions]
+						.filter(Boolean)
+						.join('\n\n'),
+					candidates,
+					max: snapshot.maximum,
+				},
+				jevConfig,
+				{ deadline, assertCurrent: assertSelection }
 			);
-		}
+			assertSelection();
+			return result;
+		};
+		const generation = createGenerationStage({
+			getSettings: () => this.context.getSettings(),
+			saveSettings: () => this.context.saveSettings(),
+			snapshot,
+			body: baseline.body,
+			deadline,
+			assertCurrent: assertSelection,
+		});
+		const resolution = await resolveClassificationValues({
+			snapshot,
+			candidates,
+			existing: existingStringValues(baseline.target),
+			mayGenerate,
+			select,
+			generate: generation.generate,
+		});
+		if (resolution.status !== 'ready') throw new ClassificationIssue(resolution.status);
+		await commitField(this.context.app, file, baseline, {
+			fieldName: snapshot.name,
+			values: resolution.values,
+			overwrite: snapshot.overwrite,
+			linkType: snapshot.linkType,
+			assertCurrent: generation.assertCurrent,
+		});
+		this.show('completed');
 	}
 
-	private async ensureRefsExist(frontmatter: FrontmatterField): Promise<void> {
-		if (!frontmatter.refs || frontmatter.refs.length === 0) {
-			frontmatter.refs = getFieldValues(
-				frontmatter.name,
+	private async prepareRefs(
+		file: TFile,
+		path: string,
+		id: number,
+		token: symbol,
+		initial: FieldSnapshot,
+		deadline: number
+	): Promise<FieldSnapshot> {
+		let values: string[];
+		try {
+			values = getFieldValues(
+				initial.name,
 				this.context.app.vault.getMarkdownFiles(),
 				this.context.app.metadataCache
 			);
+		} catch {
+			throw new ClassificationIssue('preparation_failed');
+		}
+		this.assertBase(file, path, id, token, initial, deadline);
+		const beforeSave = this.context.getSettings();
+		const liveField = findField(beforeSave, id);
+		if (!liveField || !sameFieldSnapshot(liveField, initial, beforeSave.classificationRule))
+			throw new ClassificationStateError('field-changed');
+		liveField.refs = [...values];
+		const prepared = readFieldSnapshot(liveField, beforeSave.classificationRule);
+		this.assertBase(file, path, id, token, prepared, deadline);
+		try {
 			await this.context.saveSettings();
+		} catch {
+			const failed = this.context.getSettings();
+			const failedField = findField(failed, id);
+			if (failedField && sameFieldSnapshot(failedField, prepared, failed.classificationRule))
+				failedField.refs = [...initial.refs];
+			throw new ClassificationIssue('preparation_failed');
 		}
+		this.assertBase(file, path, id, token, prepared, deadline);
+		return prepared;
 	}
 
-	private validateClassificationInput(
-		frontmatter: FrontmatterField,
-		fileNameWithoutExt: string
-	): ValidationResult {
-		const currentValues = frontmatter.refs;
-		const processedValues =
-			frontmatter.linkType === 'WikiLink'
-				? currentValues.map((value) =>
-						value.startsWith('[[') && value.endsWith(']]') ? value.slice(2, -2) : value
-					)
-				: currentValues;
-
-		if (processedValues.length === 0) {
-			return {
-				isValid: false,
-				processedValues: [],
-				noticeId: 'no_refs',
-				noticeParams: { file: fileNameWithoutExt, frontmatter: frontmatter.name },
-			};
-		}
-
-		// Validate authentication based on provider auth type
-		if (!this.hasValidAuth(this.context.provider)) {
-			const authType = this.context.provider.authType ?? 'apiKey';
-			const errorMessage =
-				authType === 'oauth'
-					? `OAuth not configured for provider ${this.context.provider.name}. Please connect your account in settings.`
-					: `API key not configured for provider ${this.context.provider.name}. Please check your settings.`;
-			return {
-				isValid: false,
-				processedValues: [],
-				noticeId: 'no_auth',
-				noticeParams: { message: errorMessage },
-			};
-		}
-
-		if (!this.context.model) {
-			return {
-				isValid: false,
-				processedValues: [],
-				noticeId: 'no_model',
-			};
-		}
-
-		// Validate model belongs to selected provider
-		const providerModels = this.context.provider.models.map((m) => m.id);
-		if (!providerModels.includes(this.context.model)) {
-			return {
-				isValid: false,
-				processedValues: [],
-				noticeId: 'model_not_for_provider',
-				noticeParams: { model: this.context.model, provider: this.context.provider.name },
-			};
-		}
-
-		return { isValid: true, processedValues };
+	private assertBase(
+		file: TFile,
+		path: string,
+		id: number,
+		token: symbol,
+		snapshot: FieldSnapshot,
+		deadline: number
+	): void {
+		if (Date.now() >= deadline) throw new ClassificationStateError('operation-expired');
+		if (!this.context.isActive() || !this.state.owns(file, id, token))
+			throw new ClassificationStateError('operation-revoked');
+		if (file.path !== path || this.context.app.vault.getAbstractFileByPath(path) !== file)
+			throw new ClassificationStateError('file-changed');
+		const settings = this.context.getSettings();
+		if (!sameFieldSnapshot(findField(settings, id), snapshot, settings.classificationRule))
+			throw new ClassificationStateError('field-changed');
 	}
 
-	private async callClassificationAPI(
-		currentFile: TFile,
-		frontmatter: FrontmatterField,
-		currentContent: string,
-		processedValues: string[]
-	): Promise<StructuredOutput | null> {
-		const content = getContentWithoutFrontmatter(currentContent);
-		const promptTemplate = getPromptTemplate(
-			frontmatter.count,
-			content,
-			processedValues,
-			frontmatter.customQuery,
-			this.context.classificationRule
-		);
-
-		return Notice.withProgress(currentFile.name, frontmatter.name, () =>
-			processAPIRequest(
-				DEFAULT_SYSTEM_ROLE,
-				promptTemplate,
-				this.context.provider,
-				this.context.model
-			)
-		);
-	}
-
-	private async processClassificationResult(
-		currentFile: TFile,
-		frontmatter: FrontmatterField,
-		apiResponse: StructuredOutput,
-		fileNameWithoutExt: string
-	): Promise<void> {
-		if (apiResponse.reliability > COMMON_CONSTANTS.MIN_RELIABILITY_THRESHOLD) {
-			const processFrontMatter = (file: TFile, fn: (fm: FrontMatter) => void) =>
-				this.context.app.fileManager.processFrontMatter(file, fn);
-
-			await insertToFrontMatter(processFrontMatter, {
-				file: currentFile,
-				name: frontmatter.name,
-				value: apiResponse.output,
-				overwrite: frontmatter.overwrite,
-				linkType: frontmatter.linkType,
-			});
-
-			const successMessage = [
-				`✓ ${fileNameWithoutExt} (${frontmatter.name})`,
-				`Reliability: ${apiResponse.reliability}`,
-				'Added:',
-				...apiResponse.output.map((tag) => `- ${tag}`),
-			].join('\n');
-
-			this.context.notices.show('classify_success', { message: successMessage });
-		} else {
-			this.context.notices.show('low_reliability', {
-				file: fileNameWithoutExt,
-				frontmatter: frontmatter.name,
-				reliability: apiResponse.reliability,
-			});
-		}
+	private show(status: ClassificationStatus): void {
+		this.context.notices.show('classification_status', {
+			message: CLASSIFICATION_MESSAGES[status],
+		});
 	}
 }

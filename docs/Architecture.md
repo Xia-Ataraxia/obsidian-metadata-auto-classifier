@@ -1,450 +1,62 @@
 # Architecture
 
-## Grand Principles
-
-These non-negotiable principles guide every architectural and implementation decision.
-
-### 1. Functional Core, Imperative Shell
-
-> **Pure logic at the center. Side effects at the edges.**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    IMPERATIVE SHELL                         │
-│                                                             │
-│   • Obsidian API calls                                     │
-│   • File I/O                                               │
-│   • Network requests                                       │
-│   • User notifications                                     │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                 FUNCTIONAL CORE                      │   │
-│  │                                                      │   │
-│  │   • Pure functions: f(input) → output               │   │
-│  │   • No side effects                                 │   │
-│  │   • No hidden state mutations                       │   │
-│  │   • Deterministic: same input → same output         │   │
-│  │   • Trivially testable                              │   │
-│  │                                                      │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Why this matters:**
-- Pure functions are easy to test (no mocks needed)
-- Bugs are localized (side effects are contained)
-- Reasoning about code is simpler
-
-**Where we apply this:**
-
-| Layer | Role |
-|-------|------|
-| `frontmatter/` | Pure transformations (extract, format, validate) |
-| `api/prompt.ts` | Pure string generation |
-| `main.ts` | Orchestrates all side effects |
-| `ui/` | Imperative (DOM manipulation is inherently side-effectful) |
-
----
-
-### 2. Functions Own Only Their Return Values
-
-> **Never mutate inputs. Never touch global state. Only modify what you return.**
-
-```typescript
-// ❌ FORBIDDEN: Mutating input parameter
-function processData(data: Data): void {
-  data.processed = true;  // Mutating input!
-}
-
-// ✅ REQUIRED: Return new value
-function processData(data: Data): Data {
-  return { ...data, processed: true };  // New object
-}
-```
-
-```typescript
-// ❌ FORBIDDEN: Hidden state modification
-class Processor {
-  private cache: Map<string, Result>;
-
-  process(input: string): Result {
-    const result = compute(input);
-    this.cache.set(input, result);  // Hidden side effect!
-    return result;
-  }
-}
-
-// ✅ REQUIRED: Explicit about what changes
-function process(input: string, cache: Map<string, Result>): { result: Result; cache: Map<string, Result> } {
-  const result = compute(input);
-  const newCache = new Map(cache);
-  newCache.set(input, result);
-  return { result, cache: newCache };  // Caller sees everything
-}
-```
-
-**The rule:** If a function needs to "change" something, that something must be in the return type.
-
----
-
-### 3. Fail Fast, Fail Loud
-
-> **Errors are not optional. They demand immediate attention.**
-
-```typescript
-// ❌ FORBIDDEN: Silent failure
-function getProvider(name: string): Provider | undefined {
-  return providers.find(p => p.name === name);
-  // Caller might forget to check undefined
-}
-
-// ✅ REQUIRED: Explicit failure
-function getProvider(name: string): Provider {
-  const provider = providers.find(p => p.name === name);
-  if (!provider) {
-    throw new Error(`Provider not found: ${name}`);
-  }
-  return provider;
-}
-```
-
-**Error handling rules:**
-1. Never swallow exceptions silently
-2. Error messages must include context (what failed, with what input)
-3. Prefer throwing over returning `null`/`undefined` for exceptional cases
-4. Log errors with context before re-throwing
-
----
-
-### 4. Explicit Over Implicit
-
-> **Make everything visible. No magic. No hidden knowledge.**
-
-| Implicit (Avoid) | Explicit (Prefer) |
-|------------------|-------------------|
-| `any` type | Defined interfaces |
-| `0.2` (magic number) | `MIN_RELIABILITY_THRESHOLD` |
-| Default parameter values | Required parameters |
-| Implicit type coercion | Explicit type guards |
-| `require()` | ES module `import` |
-| Mutable shared state | Immutable data + explicit passing |
-
-**Why:** Code is read 10x more than written. Every implicit assumption is a future bug.
-
----
-
-### 5. Dependency Direction: Inward Only
-
-> **Core logic has zero external dependencies. Adapters wrap the outside world.**
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                     EXTERNAL WORLD                          │
-│   Obsidian API, AI Providers, File System, DOM             │
-└────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────────┐
-│                      ADAPTERS                               │
-│   main.ts, UnifiedProvider, UI components                  │
-│   (Translate external APIs to internal interfaces)          │
-└────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────────┐
-│                     CORE LOGIC                              │
-│   frontmatter/, api/prompt.ts, pure utilities              │
-│   (Zero imports from Obsidian, zero network calls)          │
-└────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────────┐
-│                    TYPE DEFINITIONS                         │
-│   */types.ts files                                         │
-│   (The innermost layer, depended upon by everything)        │
-└────────────────────────────────────────────────────────────┘
-```
-
-**Practical implication:** You should be able to test `frontmatter/index.ts` without mocking Obsidian.
-
----
-
-### 6. Single Responsibility, Single Location
-
-> **One concept, one place. DRY is not optional.**
-
-```typescript
-// ❌ FORBIDDEN: Same interface in two files
-// api/types.ts
-export interface Range { min: number; max: number; }
-
-// frontmatter/types.ts
-export interface Range { min: number; max: number; }  // Duplicate!
-
-// ✅ REQUIRED: Single source of truth
-// types/common.ts
-export interface Range { min: number; max: number; }
-// Other files import from here
-```
-
-**When you find yourself copying code, stop and extract.**
-
----
-
-## Current Folder Structure
-
-```
-src/
-├── main.ts                    # Plugin entry point & orchestrator (IMPERATIVE SHELL)
-│
-├── api/                       # External AI service integration
-│   ├── index.ts              # Public API (processAPIRequest, testModel)
-│   ├── UnifiedProvider.ts    # Multi-provider adapter
-│   ├── prompt.ts             # Prompt template generation (PURE)
-│   ├── constants.ts          # API-related constants
-│   ├── types.ts              # API type definitions
-│   └── providerPreset.json   # Provider configurations
-│
-├── frontmatter/              # Frontmatter domain logic (FUNCTIONAL CORE)
-│   ├── index.ts              # Core functions (insert, extract, getTags)
-│   └── types.ts              # Domain type definitions
-│
-├── ui/                       # User interface layer (IMPERATIVE SHELL)
-│   ├── index.ts              # Settings tab & exports
-│   ├── types.ts              # UI-specific types
-│   │
-│   ├── components/           # Reusable UI building blocks
-│   │   ├── BaseSettings.ts   # Abstract settings component
-│   │   ├── WikiLinkSelector.ts
-│   │   └── common/           # Primitive UI elements
-│   │       ├── CommonButton.ts
-│   │       ├── CommonNotice.ts
-│   │       └── CommonSetting.ts
-│   │
-│   ├── containers/           # Feature-specific UI sections
-│   │   ├── Api.ts            # API configuration section
-│   │   ├── Frontmatter.ts    # Frontmatter settings section
-│   │   └── Tag.ts            # Tag settings section
-│   │
-│   └── modals/               # Dialog windows
-│       ├── FrontmatterEditorModal.ts
-│       ├── FrontmatterSelectModal.ts
-│       ├── ModelModal.ts
-│       ├── ProviderModal.ts
-│       └── WikiLinkSuggestModal.ts
-│
-└── utils/                    # Shared utilities
-    ├── index.ts              # Utility functions (generateId, etc.)
-    └── constants.ts          # Global constants & defaults
-```
-
----
-
-## Layer Responsibilities
-
-### Entry Point (`main.ts`)
-
-**Role:** Lifecycle management & workflow orchestration
-
-| Method | Responsibility |
-|--------|----------------|
-| `onload()` | Initialize plugin, register commands |
-| `loadSettings()` | Load persisted settings |
-| `saveSettings()` | Persist settings to disk |
-| `processFrontmatter()` | Orchestrate single classification workflow |
-| `processAllFrontmatter()` | Orchestrate batch classification |
-
-**This is the imperative shell.** All side effects (API calls, file writes, notifications) are coordinated here.
-
-### API Layer (`api/`)
-
-**Role:** Adapter between external AI services and internal interfaces
-
-| File | Responsibility | Purity |
-|------|----------------|--------|
-| `index.ts` | Public interface, HTTP communication | Imperative |
-| `UnifiedProvider.ts` | Multi-provider adapter | Imperative |
-| `prompt.ts` | Prompt template generation | **Pure** |
-| `constants.ts` | Configuration values | Data |
-| `types.ts` | Type definitions | Data |
-
-**Key pattern:** UnifiedProvider uses the **Strategy pattern** via spec objects. Provider-specific logic is *data*, not code.
-
-### Frontmatter Layer (`frontmatter/`)
-
-**Role:** Domain logic for frontmatter manipulation
-
-| Function | Purpose | Purity |
-|----------|---------|--------|
-| `getContentWithoutFrontmatter()` | Extract note body | **Pure** |
-| `getTags()` | Collect all vault tags | Imperative (reads metadata) |
-| `insertToFrontMatter()` | Update frontmatter | Imperative (writes file) |
-| `getFrontmatterSetting()` | Retrieve setting by ID | **Pure** |
-
-**Goal:** Maximize pure functions. Obsidian API access is injected as a parameter, not imported directly.
-
-### UI Layer (`ui/`)
-
-**Role:** User interface rendering and interaction
-
-```
-ui/
-├── components/     # Stateless, reusable, receive props
-├── containers/     # Stateful, feature-specific, connect to plugin
-└── modals/         # Self-contained dialogs
-```
-
-**Pattern:** Presentation/Container separation
-- Components: "How things look"
-- Containers: "How things work"
-
-### Utils Layer (`utils/`)
-
-**Role:** Shared utilities with no domain knowledge
-
-| File | Content |
-|------|---------|
-| `index.ts` | ID generation, provider preset helpers |
-| `constants.ts` | Default settings, default configurations |
-
----
-
-## Data Flow
-
-### Classification Workflow
-
-```
-User Command
-     │
-     ▼
-┌─────────────────┐
-│    main.ts      │  1. Validate: file exists? provider configured?
-│  (Orchestrator) │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  frontmatter/   │  2. Extract content (pure transformation)
-│                 │     Collect reference values
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   api/prompt    │  3. Generate prompt (pure string building)
-│                 │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│      api/       │  4. Call AI provider (side effect)
-│ UnifiedProvider │     Parse response (with error handling)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  frontmatter/   │  5. Insert to frontmatter (side effect)
-│                 │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  CommonNotice   │  6. Notify user (side effect)
-└─────────────────┘
-```
-
----
-
-## Design Patterns
-
-| Pattern | Location | Purpose |
-|---------|----------|---------|
-| **Adapter** | `UnifiedProvider` | Normalize different API formats to one interface |
-| **Strategy** | Provider specs | Swap provider behavior via configuration objects |
-| **Template Method** | `BaseSettings` | Shared behavior with customization hooks |
-| **Facade** | `api/index.ts` | Simple interface to complex API subsystem |
-| **Dependency Injection** | `insertToFrontMatter(processFn, ...)` | Inject Obsidian API for testability |
-
----
-
-## Architectural Debt & Improvement Areas
-
-### Current Violations of Grand Principles
-
-| Violation | Location | Improvement |
-|-----------|----------|-------------|
-| Input mutation | `FrontmatterEditorModal` | Clone props, modify clone |
-| `any` types | `UnifiedProvider.processApiResponse` | Define response types per provider |
-| Magic numbers | ~~`main.ts:133`~~ | ✅ Fixed: `MIN_RELIABILITY_THRESHOLD` |
-| Inline styles | Various modals | Extract to CSS |
-
-### Future Improvements
-
-| Improvement | Benefit |
-|-------------|---------|
-| Result types (`Result<T, E>`) | Type-safe error handling |
-| Event-driven architecture | Plugin extensibility |
-| Caching layer | Reduced API calls |
-| Classification service class | Better separation of concerns |
-
----
-
-## Dependency Graph
-
-```mermaid
-graph TD
-    subgraph Entry
-        main[main.ts]
-    end
-
-    subgraph API
-        api_index[api/index.ts]
-        unified[api/UnifiedProvider.ts]
-        prompt[api/prompt.ts]
-        api_const[api/constants.ts]
-        api_types[api/types.ts]
-    end
-
-    subgraph Frontmatter
-        fm_index[frontmatter/index.ts]
-        fm_types[frontmatter/types.ts]
-    end
-
-    subgraph UI
-        ui_index[ui/index.ts]
-        containers[ui/containers/*]
-        modals[ui/modals/*]
-        components[ui/components/*]
-    end
-
-    subgraph Utils
-        utils_index[utils/index.ts]
-        utils_const[utils/constants.ts]
-    end
-
-    main --> api_index
-    main --> fm_index
-    main --> ui_index
-    main --> utils_const
-
-    api_index --> unified
-    unified --> api_const
-    unified --> utils_index
-    api_index --> api_types
-
-    fm_index --> fm_types
-
-    ui_index --> containers
-    ui_index --> components
-    containers --> modals
-    containers --> components
-
-    utils_const --> api_const
-    utils_const --> fm_types
-```
-
----
-
-## Related Documents
-
-- [Why I Built This Plugin](./Why%20I%20made%20this%20plugin.md) - Motivation and problem statement
-- [Best Practice Violations Fix](./best-practice-violations-fix.md) - Code quality improvements
+## Principles
+
+- Keep deterministic parsing, selection, generation validation, and source-range editing separate from Obsidian, network, DOM, and storage effects.
+- Use explicit typed contracts. Validate external responses as `unknown`; do not accept legacy response aliases or silently downgrade failed inference.
+- Preserve user instructions and unrelated note bytes. Do not replace stored templates, serialize an entire YAML document, or introduce a fallback write path.
+- Capture operation identity and meaningful settings before inference; revalidate them where the effect happens.
+- Error reporting must identify a safe category, not disclose the input that failed. Never log arbitrary exceptions, note text, candidates, responses, credentials, or file paths. Diagnostics use fixed event codes and numeric metrics.
+- Keep implementation local to this repository. Barrel files expose named implementations rather than becoming another shared implementation layer.
+
+## Layers
+
+| Layer | Responsibility |
+|---|---|
+| `src/types/` | Provider, field, settings, and Jev contracts |
+| `src/domain/` | Pure Jev request construction and decisions, generated-tag validation, YAML range editing and target snapshots, explicit operation-state transitions |
+| `src/ui/` | Obsidian-dependent classification orchestration, native atomic commits, provider adapters, transport, authentication, and settings UI |
+| `src/utils/` | Repository-local utilities and diagnostic boundary |
+| `src/main.ts` | Composition root, lifecycle, persisted settings, and command entry points |
+
+Domain classification and YAML modules must not import Obsidian. The `yaml` library supplies parsing and source ranges; the plugin does not implement a competing YAML parser. Stateful operation tokens have an explicit owner and lifetime rather than an implicit module-global lock.
+
+## Classification modules
+
+| Module | Responsibility |
+|---|---|
+| `domain/jev-questions.ts` | Build stable named Noul questions and conservatively bounded request chunks |
+| `domain/jev-selection.ts` | Validate exact response keys, probabilities, model and usage; distinguish yes, all-no, and abstention |
+| `domain/tag-generation.ts` | Exact `tags` permission gate, remaining-slot calculation, generation prompt and strict tag-result validation |
+| `domain/classification-state.ts` | Related settings snapshots, token ownership, and conflict checks |
+| `domain/classification-result.ts` | All-or-nothing selection/generation decisions and combined operation counts |
+| `domain/frontmatter-snapshot.ts` | Typed target-field presence/value snapshots |
+| `domain/frontmatter-edit.ts` | Edit only a target YAML source range; reject unsafe or unsupported structures |
+| `ui/JevClassifier.ts` | Send all Jev chunks through the native transport and reject partial or stale results |
+| `ui/ClassificationService.ts` | Coordinate preparation, selection, optional generation, and the final guarded commit |
+| `ui/classification-generation.ts` | Capture only the used provider, guard refresh persistence, and preserve live generation validity |
+| `ui/classification-status.ts` | Map outcomes and failures to static, disclosure-safe messages |
+| `ui/frontmatter-commit.ts` | Use native frontmatter boundaries and one synchronous `Vault.process` compare-and-transform |
+| `ui/frontmatter.ts` | Collect reference values through metadata APIs and clone field settings for editing |
+
+A batch captures one original note. All entry points share the same classification service and per-note/per-field operation ownership. Tab switching does not retarget an in-flight operation; field or file changes, permission revocation, unload, and expiry invalidate its result. Changes to unrelated fields need not invalidate a safe commit.
+
+## Optional generation and transport
+
+`ui/provider-api.ts` exposes explicit model connection testing and permission-gated new-tag generation. `UnifiedProvider` coordinates provider specs in `provider-chat-specs.ts` and `provider-native-specs.ts`. The generation result is only `{ tags: string[] }`; it is not the Jev classification response.
+
+`ui/request.ts` owns JSON/native HTTP behavior, safe HTTP errors, bounded explicit retries, and logical deadlines. `ui/streaming-request.ts` consumes buffered native responses as strict SSE frames and requires successful terminal completion. Neither path uses a Node HTTP fallback. A shared deadline and synchronous live-operation check are forwarded across generation requests and retries.
+
+Authentication is a separate concern from candidate selection. Ordinary classification must not require generation credentials. Actual device authentication, mobile runtime validation, and provider service eligibility are separate verification obligations; requestUrl-based inference alone does not prove them.
+
+## Settings and diagnostics
+
+The named settings tab implementation is `ui/settings/AutoClassifierSettingTab.ts`; `ui/settings/index.ts` is a barrel. Jev configuration is independent of optional generation-provider configuration. Native field controls expose generation only for the exact `tags` name, defaulting to false.
+
+`PluginLogger` admits only closed event codes and finite numeric metrics. It has no arbitrary-error or compatibility logging alias. Shared error notices use static categories; remote exception messages are not user-facing diagnostics.
+
+## Verification
+
+Pure contract tests exercise thresholds, ties, exact response shapes, malformed inputs, tag exclusions, and byte preservation. Orchestration tests exercise concurrency, lifecycle, settings changes, and callback-time revocation. Native isolated tests establish API feasibility separately from mocks. Full CI, independent reviews, real-device checks, and approved protected quality evaluation remain distinct gates.
+
+See [Classification workflow](./Classification-Workflow.md) for the decision and commit sequence.

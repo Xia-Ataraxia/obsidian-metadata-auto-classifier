@@ -1,6 +1,6 @@
 # Metadata Auto Classifier
 
-AI-powered metadata classification for Obsidian. Analyzes your notes and automatically generates context-aware tags and frontmatter using configurable AI providers.
+Metadata classification for Obsidian using Jev to select existing tags and frontmatter values. New tags can optionally be generated through a separately configured provider.
 
 > The more context you give, the more accurate the classification.
 
@@ -9,13 +9,13 @@ AI-powered metadata classification for Obsidian. Analyzes your notes and automat
 
 ## Features
 
-- **Automatic tag generation** -- AI analyzes note content and generates contextually relevant tags
-- **Custom frontmatter fields** -- define any frontmatter fields and let AI populate them automatically
+- **Candidate classification** -- Jev selects relevant existing values without inventing categories
+- **Optional new tags** -- enable generation explicitly for the exact `tags` field; disabled by default
+- **Custom frontmatter fields** -- select values from configured or collected references
 - **Classification rules** -- set custom rules, tag categories, and field-specific guidelines for accurate metadata
 - **Per-field context prompts** -- provide additional context per metadata field to guide AI classification
-- **Test and preview** -- built-in testing tools with preview mode and quality assessment before applying changes
-- **Multi-provider support** -- works with OpenAI, Gemini, Ollama, and other AI providers via a unified interface
-- **Custom model configuration** -- add and configure custom AI providers and models freely
+- **Source-preserving writes** -- recheck concurrent changes and edit only the target YAML entry
+- **Optional generation providers** -- use OpenAI, Gemini, Ollama, or other supported providers for new tags, not ordinary candidate selection
 
 ## Installation
 
@@ -39,18 +39,20 @@ Using [BRAT](https://github.com/TfTHacker/obsidian42-brat):
 
 ## Usage
 
+Configure the Jev API key and model first. A generation provider is unnecessary unless **Generate new tags** is enabled and additional slots remain.
+
 1. Open any note you want to classify
 2. Access commands via the Command Palette (Cmd/Ctrl + P):
-   - **Fetch tags using current provider** -- generate relevant tags
+   - **Fetch tags using current provider** -- classify existing tags, with optional new-tag generation
    - **Fetch all frontmatter using current provider** -- populate all custom frontmatter fields
    - **Individual field commands** -- update specific frontmatter fields one at a time
-3. Review and refine AI-generated suggestions as needed
+3. Review the resulting metadata. Uncertain results, insufficient counts, generation failures, or conflicting edits leave the note unchanged.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| Fetch tags using current provider | Generate tags for the active note |
+| Fetch tags using current provider | Classify tags for the captured active note |
 | Fetch all frontmatter using current provider | Populate all configured frontmatter fields |
 | Fetch [field] using current provider | Update a specific frontmatter field |
 
@@ -58,22 +60,25 @@ Using [BRAT](https://github.com/TfTHacker/obsidian42-brat):
 
 | Setting | Description |
 |---------|-------------|
-| AI Provider | Select from OpenAI, Gemini, Ollama, or custom providers |
-| Model | Choose or configure the model used for classification |
-| Custom frontmatter fields | Define which frontmatter fields AI should generate |
-| Classification rules | Set rules and categories for how tags/fields are generated |
+| Jev API key and model | Configure candidate classification independently of generation |
+| Optional provider and model | Configure generation of new tags only |
+| Generate new tags | Opt in for the exact `tags` field; ordinary fields cannot generate values |
+| Custom frontmatter fields | Define candidate fields, references, count limits, append/overwrite, and WikiLink formatting |
+| Classification rules | Set semantic guidance; existing instructions are preserved |
 | Field-specific prompts | Provide per-field context to guide AI output |
+
+Jev accepts yes probabilities at or above 0.7 and no probabilities at or below 0.3. Zero yes results with any abstention stop without generation or writing. The maximum count limits the current operation, not the total existing values in append mode. See [Classification workflow](./docs/Classification-Workflow.md) for safety and verification boundaries.
 
 ## Tech Stack
 
 | Category | Technology |
 |----------|------------|
-| Platform | Obsidian Plugin API |
+| Platform | Obsidian 1.13.0 or later |
 | Language | TypeScript 5 |
 | Bundler | esbuild |
-| AI | OpenAI, Gemini, Ollama, custom providers |
+| AI | Jev classification; optional generation providers |
 | Testing | Vitest (with coverage) |
-| Linting | ESLint 9 (flat config) + Prettier + eslint-plugin-boundaries |
+| Linting | ESLint 9 (flat config) + Prettier |
 
 ## Project Structure
 
@@ -81,10 +86,10 @@ Using [BRAT](https://github.com/TfTHacker/obsidian42-brat):
 Metadata-Auto-Classifier/
 ├── src/
 │   ├── main.ts           # Plugin entry point (AutoClassifierPlugin)
-│   ├── provider/          # AI provider layer (HTTP, OAuth, prompt generation)
-│   ├── classifier/        # Business logic (ClassificationService, CommandService)
-│   ├── settings/          # Settings UI (tabs, modals, components)
-│   └── lib/               # Pure utilities (frontmatter, sanitizer, ErrorHandler)
+│   ├── domain/            # Pure classification, generation, and YAML rules
+│   ├── ui/                # Obsidian services, providers, atomic writes, settings
+│   ├── types/             # Type contracts
+│   └── utils/             # Local utilities and safe diagnostics
 ├── __tests__/             # Vitest tests (mirrors src/ structure)
 ├── __mocks__/             # Obsidian API mock
 ├── scripts/               # dev.mjs, version.mjs, release.mjs

@@ -5,29 +5,24 @@ import { macLogger } from './mac-logger';
  */
 export class ErrorHandler {
 	/**
-	 * Handle API-related errors with appropriate logging and user notification.
+	 * Record the API failure category without logging caller-provided details.
 	 */
-	static handleAPIError(error: Error, context?: string): void {
-		const message = context ? `[API] ${context}: ${error.message}` : `[API] ${error.message}`;
-		macLogger.error(message, error);
+	static handleAPIError(_error: unknown, _context?: string): void {
+		macLogger.error('api-error');
 	}
 
 	/**
-	 * Handle validation errors with component context.
+	 * Record the validation category without logging caller-provided details.
 	 */
-	static handleValidationError(component: string, message: string): void {
-		macLogger.warn(`[Validation] [${component}] ${message}`);
+	static handleValidationError(_component: string, _message: string): void {
+		macLogger.warn('validation-error');
 	}
 
 	/**
-	 * Handle unexpected errors with logging.
+	 * Record the unexpected-error category without inspecting the thrown value.
 	 */
-	static handleUnexpectedError(error: unknown, context?: string): void {
-		const errorObj = error instanceof Error ? error : new Error(String(error));
-		const message = context
-			? `[Unexpected] ${context}: ${errorObj.message}`
-			: `[Unexpected] ${errorObj.message}`;
-		macLogger.error(message, errorObj);
+	static handleUnexpectedError(_error: unknown, _context?: string): void {
+		macLogger.error('unexpected-error');
 	}
 
 	/**

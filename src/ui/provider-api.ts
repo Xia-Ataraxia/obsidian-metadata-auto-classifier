@@ -1,24 +1,40 @@
 import { COMMON_CONSTANTS } from '../domain/constants';
-import type { APIProvider, ProviderConfig, StructuredOutput } from '../types';
+import {
+	buildTagGenerationPrompt,
+	isTagGenerationAllowed,
+	validateGeneratedTags,
+} from '../domain/tag-generation';
+import { HttpError } from './request';
+import type { OnTokenRefreshCallback, ProviderConfig } from '../types';
 import { UnifiedProvider } from './UnifiedProvider';
 
-// Re-export for backward compatibility
-export { UnifiedProvider } from './UnifiedProvider';
-export { sendRequest } from './request';
+export interface GenerateTagsInput {
+	fieldName: string;
+	enabled: unknown;
+	body: string;
+	instructions: string;
+	excluded: string[];
+	minimum: number;
+	maximum: number;
+	deadline: number;
+	assertCurrent: () => void;
+}
 
-// Single instance of UnifiedProvider for all providers
-const unifiedProvider = new UnifiedProvider();
+const TAG_GENERATION_SYSTEM_ROLE =
+	'Generate new Obsidian tags and return only the required JSON object.';
 
-export const getProvider = (): APIProvider => {
-	return unifiedProvider;
-};
+function assertGenerationCurrent(input: GenerateTagsInput): void {
+	input.assertCurrent();
+	if (!Number.isFinite(input.deadline) || Date.now() >= input.deadline) {
+		throw new HttpError('TIMEOUT');
+	}
+}
 
 export const testModel = async (
 	providerConfig: ProviderConfig,
 	modelName: string
 ): Promise<boolean> => {
-	const apiProvider = getProvider();
-	await apiProvider.callAPI(
+	await new UnifiedProvider().callAPI(
 		COMMON_CONSTANTS.VERIFY_CONNECTION_SYSTEM_PROMPT,
 		COMMON_CONSTANTS.VERIFY_CONNECTION_USER_PROMPT,
 		providerConfig,
@@ -27,18 +43,37 @@ export const testModel = async (
 	return true;
 };
 
-export const processAPIRequest = async (
-	systemRole: string,
-	promptTemplate: string,
-	selectedProvider: ProviderConfig,
-	selectedModel: string
-): Promise<StructuredOutput> => {
-	const providerInstance = getProvider();
-	const response = await providerInstance.callAPI(
-		systemRole,
-		promptTemplate,
-		selectedProvider,
-		selectedModel
+export async function generateTags(
+	input: GenerateTagsInput,
+	providerConfig: ProviderConfig,
+	model: string,
+	onTokenRefresh?: OnTokenRefreshCallback
+): Promise<string[]> {
+	if (
+		!input ||
+		!isTagGenerationAllowed({ name: input.fieldName, generateNewTags: input.enabled })
+	) {
+		return [];
+	}
+	if (input.maximum === 0) return [];
+
+	const userPrompt = buildTagGenerationPrompt({
+		body: input.body,
+		instructions: input.instructions,
+		excluded: input.excluded,
+		minimum: input.minimum,
+		maximum: input.maximum,
+	});
+	assertGenerationCurrent(input);
+	const response = await new UnifiedProvider().callAPI(
+		TAG_GENERATION_SYSTEM_ROLE,
+		userPrompt,
+		providerConfig,
+		model,
+		undefined,
+		onTokenRefresh,
+		{ deadline: input.deadline, assertCurrent: input.assertCurrent }
 	);
-	return response;
-};
+	assertGenerationCurrent(input);
+	return validateGeneratedTags(response.tags, input.excluded, input.maximum);
+}

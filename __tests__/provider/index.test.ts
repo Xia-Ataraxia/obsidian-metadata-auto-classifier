@@ -1,88 +1,203 @@
-import { sendRequest } from 'provider';
+import type { RequestUrlResponse } from 'obsidian';
 import { requestUrl } from 'obsidian';
+import { HttpError, sendHttpRequest, sendRequest } from '../../src/ui/request';
 
-describe('sendRequest', () => {
-	const url = 'https://api.test.com';
-	const headers = { Authorization: 'token' };
-	const body = { foo: 'bar' };
+const url = 'https://api.test.com/v1?key=url-secret';
+const headers = { Authorization: 'Bearer header-secret' };
+const body = { content: 'body-secret' };
 
-	beforeEach(() => {
-		vi.clearAllMocks();
+function response(
+	status: number,
+	text = '{"ok":true}',
+	headers: Record<string, string> = {}
+): RequestUrlResponse {
+	return { status, text, headers, json: undefined } as RequestUrlResponse;
+}
+
+describe('HTTP provider requests', () => {
+	beforeEach(() => vi.clearAllMocks());
+	afterEach(() => vi.useRealTimers());
+
+	it('checks operation validity immediately before dispatch', async () => {
+		let current = true;
+		const revoked = new Error('Synthetic operation revoked');
+		const result = sendHttpRequest(url, headers, body, {
+			assertCurrent: () => {
+				if (!current) throw revoked;
+			},
+		});
+		current = false;
+		await expect(result).rejects.toBe(revoked);
+		expect(requestUrl).not.toHaveBeenCalled();
 	});
 
-	it('should return JSON for successful request', async () => {
-		const mockResponse = { status: 200, json: { ok: true } };
-		(requestUrl as any).mockResolvedValueOnce(mockResponse);
+	it('does not retry a POST after permission is revoked during backoff', async () => {
+		vi.useFakeTimers();
+		let current = true;
+		const revoked = new Error('Synthetic operation revoked');
+		vi.mocked(requestUrl).mockResolvedValueOnce(response(429));
+		const assertion = expect(
+			sendHttpRequest(url, headers, body, {
+				assertCurrent: () => {
+					if (!current) throw revoked;
+				},
+			})
+		).rejects.toBe(revoked);
+		await vi.advanceTimersByTimeAsync(0);
+		current = false;
+		await vi.advanceTimersByTimeAsync(1_000);
+		await assertion;
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+	});
 
-		const result = await sendRequest(url, headers, body);
+	it('rejects a successful response whose operation has been revoked', async () => {
+		let current = true;
+		const revoked = new Error('Synthetic operation revoked');
+		vi.mocked(requestUrl).mockImplementationOnce(async () => {
+			current = false;
+			return response(200);
+		});
+		await expect(
+			sendHttpRequest(url, headers, body, {
+				assertCurrent: () => {
+					if (!current) throw revoked;
+				},
+			})
+		).rejects.toBe(revoked);
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+	});
 
+	it('does not start a POST when the deadline expires before its dispatch microtask', async () => {
+		vi.useFakeTimers();
+		const deadline = Date.now() + 25;
+		const assertion = expect(
+			sendHttpRequest(url, headers, body, { deadline })
+		).rejects.toMatchObject({ code: 'TIMEOUT' });
+		vi.setSystemTime(deadline);
+		await assertion;
+		expect(requestUrl).not.toHaveBeenCalled();
+	});
+
+	it.each([101, 302, 399])('does not treat HTTP %i as successful inference', async (status) => {
+		vi.mocked(requestUrl).mockResolvedValueOnce(response(status));
+		await expect(sendHttpRequest(url, headers, body)).rejects.toMatchObject({
+			code: 'PROTOCOL_ERROR',
+		});
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+	});
+
+	it('sends a typed native RequestUrlParam with throw:false and returns the native response', async () => {
+		const nativeResponse = response(200);
+		vi.mocked(requestUrl).mockResolvedValueOnce(nativeResponse);
+
+		await expect(sendHttpRequest(url, headers, body)).resolves.toBe(nativeResponse);
 		expect(requestUrl).toHaveBeenCalledWith({
 			url,
 			method: 'POST',
 			headers,
 			body: JSON.stringify(body),
+			throw: false,
 		});
-		expect(result).toEqual(mockResponse.json);
 	});
 
-	it('should throw server error when status is 500', async () => {
-		(requestUrl as any).mockResolvedValueOnce({ status: 500, text: 'Internal Server Error' });
+	it('parses successful JSON through the sendRequest wrapper', async () => {
+		vi.mocked(requestUrl).mockResolvedValueOnce(response(200, '{"answer":42}'));
 
-		await expect(sendRequest(url, headers, body)).rejects.toThrow(
-			`Server error (HTTP 500) from ${url}: Internal Server Error`
+		await expect(sendRequest(url, headers, body)).resolves.toEqual({ answer: 42 });
+	});
+
+	it.each([400, 401, 403, 413, 415, 422, 500, 501, 502, 503, 504, 599])(
+		'rejects HTTP %i without exposing response content or retrying',
+		async (status) => {
+			vi.mocked(requestUrl).mockResolvedValueOnce(response(status, 'body-secret response-secret'));
+
+			const error = await sendHttpRequest(url, headers, body).catch((caught: unknown) => caught);
+			expect(error).toBeInstanceOf(HttpError);
+			expect(error).toMatchObject({ status, code: 'HTTP_ERROR' });
+			expect((error as Error).message).not.toContain('secret');
+			expect('responseText' in (error as object)).toBe(false);
+			expect(requestUrl).toHaveBeenCalledTimes(1);
+		}
+	);
+
+	it.each([429, 529])(
+		'retries explicit HTTP %i once and returns the successful response',
+		async (status) => {
+			const success = response(200);
+			vi.mocked(requestUrl)
+				.mockResolvedValueOnce(response(status, 'secret retry response', { 'Retry-After': '0' }))
+				.mockResolvedValueOnce(success);
+
+			await expect(sendHttpRequest(url, headers, body)).resolves.toBe(success);
+			expect(requestUrl).toHaveBeenCalledTimes(2);
+		}
+	);
+
+	it('bounds Retry-After and makes at most three total attempts', async () => {
+		vi.useFakeTimers();
+		vi.mocked(requestUrl)
+			.mockResolvedValueOnce(response(429, '', { 'Retry-After': '900' }))
+			.mockResolvedValueOnce(response(529, '', { 'Retry-After': '900' }))
+			.mockResolvedValueOnce(response(429, '', { 'Retry-After': '900' }));
+
+		const request = sendHttpRequest(url, headers, body);
+		const rejection = expect(request).rejects.toMatchObject({ status: 429, code: 'HTTP_ERROR' });
+		await vi.advanceTimersByTimeAsync(4_999);
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(requestUrl).toHaveBeenCalledTimes(2);
+		await vi.advanceTimersByTimeAsync(5_000);
+		await rejection;
+		expect(requestUrl).toHaveBeenCalledTimes(3);
+	});
+
+	it('does not retry when the shared deadline expires during backoff', async () => {
+		vi.useFakeTimers();
+		vi.mocked(requestUrl).mockResolvedValueOnce(response(429, '', { 'Retry-After': '5' }));
+		const deadline = Date.now() + 1_000;
+		const request = sendHttpRequest(url, headers, body, { deadline });
+		const rejection = expect(request).rejects.toMatchObject({ code: 'TIMEOUT' });
+
+		await vi.advanceTimersByTimeAsync(1_000);
+		await rejection;
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+	});
+
+	it('turns invalid JSON into a safe error', async () => {
+		vi.mocked(requestUrl).mockResolvedValueOnce(response(200, 'body-secret invalid-json'));
+
+		await expect(sendRequest(url, headers, body)).rejects.toMatchObject({ code: 'INVALID_JSON' });
+	});
+
+	it('sanitizes transport errors and never logs URL, headers, body, or response payload', async () => {
+		const consoleError = vi.spyOn(console, 'error');
+		vi.mocked(requestUrl).mockRejectedValueOnce(
+			new Error(`${url} ${headers.Authorization} ${body.content} transport-secret`)
 		);
+
+		const error = await sendRequest(url, headers, body).catch((caught: unknown) => caught);
+		expect(error).toBeInstanceOf(HttpError);
+		expect(error).toMatchObject({ code: 'TRANSPORT_ERROR' });
+		expect((error as Error).message).not.toContain('secret');
+		expect(consoleError).not.toHaveBeenCalled();
 	});
 
-	it('should throw server error when status is 503', async () => {
-		(requestUrl as any).mockResolvedValueOnce({ status: 503, text: 'Service Unavailable' });
-
-		await expect(sendRequest(url, headers, body)).rejects.toThrow(
-			`Server error (HTTP 503) from ${url}: Service Unavailable`
+	it('times out an in-flight POST without retrying and rejects a late response', async () => {
+		vi.useFakeTimers();
+		let resolveRequest!: (value: RequestUrlResponse) => void;
+		vi.mocked(requestUrl).mockReturnValueOnce(
+			new Promise((resolve) => {
+				resolveRequest = resolve;
+			})
 		);
-	});
+		const request = sendHttpRequest(url, headers, body, { deadline: Date.now() + 100 });
+		const rejection = expect(request).rejects.toMatchObject({ code: 'TIMEOUT' });
 
-	it('should throw client error when status is 400', async () => {
-		(requestUrl as any).mockResolvedValueOnce({ status: 400, text: 'Bad Request' });
-
-		await expect(sendRequest(url, headers, body)).rejects.toThrow(
-			`Client error (HTTP 400) from ${url}: Bad Request`
-		);
-	});
-
-	it('should throw client error when status is 401', async () => {
-		(requestUrl as any).mockResolvedValueOnce({ status: 401, text: 'Unauthorized' });
-
-		await expect(sendRequest(url, headers, body)).rejects.toThrow(
-			`Client error (HTTP 401) from ${url}: Unauthorized`
-		);
-	});
-
-	it('should throw client error when status is 404', async () => {
-		(requestUrl as any).mockResolvedValueOnce({ status: 404, text: 'Not Found' });
-
-		await expect(sendRequest(url, headers, body)).rejects.toThrow(
-			`Client error (HTTP 404) from ${url}: Not Found`
-		);
-	});
-
-	it('should throw client error when status is 429', async () => {
-		(requestUrl as any).mockResolvedValueOnce({ status: 429, text: 'Rate Limit Exceeded' });
-
-		await expect(sendRequest(url, headers, body)).rejects.toThrow(
-			`Client error (HTTP 429) from ${url}: Rate Limit Exceeded`
-		);
-	});
-
-	it('should rethrow native errors from requestUrl', async () => {
-		const networkError = new Error('Network connection failed');
-		(requestUrl as any).mockRejectedValueOnce(networkError);
-
-		await expect(sendRequest(url, headers, body)).rejects.toThrow('Network connection failed');
-	});
-
-	it('should convert non-Error exceptions to Error', async () => {
-		(requestUrl as any).mockRejectedValueOnce('string error');
-
-		await expect(sendRequest(url, headers, body)).rejects.toThrow('string error');
+		await vi.advanceTimersByTimeAsync(100);
+		await rejection;
+		resolveRequest(response(200));
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(requestUrl).toHaveBeenCalledTimes(1);
 	});
 });

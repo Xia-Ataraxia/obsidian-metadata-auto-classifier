@@ -1,695 +1,351 @@
-import AutoClassifierPlugin from 'main';
-import { App, TFile, createMockTFile } from 'obsidian';
-import { DEFAULT_SETTINGS, DEFAULT_FRONTMATTER_SETTING } from '../src/domain/constants';
-import type { ProviderConfig, FrontmatterField, OAuthTokens } from '../src/types/index';
-import { Notice as SettingsNotice } from 'settings/components/Notice';
-import { processAPIRequest } from 'provider';
-import { insertToFrontMatter, getFieldValues } from 'lib/frontmatter';
-import { isTokenExpired, CodexOAuth } from 'provider/auth';
+import { App, createMockTFile, type TFile } from 'obsidian';
+import AutoClassifierPlugin from '../src/main';
+import { DEFAULT_SETTINGS } from '../src/domain/constants';
+import type {
+	AutoClassifierSettings,
+	FrontmatterField,
+	OAuthTokens,
+	ProviderConfig,
+} from '../src/types';
 
-// Mock the provider/auth module
-vi.mock('provider/auth', () => ({
-	CodexOAuth: vi.fn(function (this: any) {
-		this.refreshTokens = vi.fn().mockResolvedValue({
-			accessToken: 'new-access-token',
-			refreshToken: 'new-refresh-token',
-			expiresAt: Math.floor(Date.now() / 1000) + 3600,
-			accountId: 'test-account-id',
-		});
-	}),
-	isTokenExpired: vi.fn().mockReturnValue(false),
+const mocks = vi.hoisted(() => ({
+	classify: vi.fn(),
+	deactivate: vi.fn(),
+	classificationContexts: [] as unknown[],
+	noticeHosts: [] as unknown[],
+	settingTabPlugins: [] as unknown[],
+	noticeShow: vi.fn(),
+	noticeUnload: vi.fn(),
+	loggerInfo: vi.fn(),
+	loggerError: vi.fn(),
+	isTokenExpired: vi.fn(),
+	refreshTokens: vi.fn(),
 }));
 
-// Mock the provider module
-vi.mock('provider', () => ({
-	processAPIRequest: vi.fn(),
-}));
+vi.mock('../src/ui/ClassificationService', () => ({
+	ClassificationService: class {
+		constructor(context: unknown) {
+			mocks.classificationContexts.push(context);
+		}
 
-// Mock the frontmatter module
-vi.mock('lib/frontmatter', () => ({
-	getContentWithoutFrontmatter: vi.fn().mockReturnValue('Test content'),
-	getFieldValues: vi.fn().mockReturnValue(['tag1', 'tag2', 'tag3']),
-	insertToFrontMatter: vi.fn().mockResolvedValue(undefined),
-}));
+		classify(...args: unknown[]) {
+			return mocks.classify(...args);
+		}
 
-// Mock Notice
-vi.mock('settings/components/Notice', () => ({
-	Notice: {
-		error: vi.fn(),
-		success: vi.fn(),
-		withProgress: vi.fn(async (fileName, fmName, fn) => await fn()),
+		deactivate() {
+			mocks.deactivate();
+		}
 	},
 }));
 
-// Mock AutoClassifierSettingTab
-vi.mock('settings', () => ({
-	AutoClassifierSettingTab: vi.fn().mockImplementation(() => ({
-		display: vi.fn(),
-	})),
+vi.mock('../src/ui/auth', () => ({
+	CodexOAuth: class {
+		refreshTokens(...args: unknown[]) {
+			return mocks.refreshTokens(...args);
+		}
+	},
+	isTokenExpired: mocks.isTokenExpired,
 }));
 
-describe('AutoClassifierPlugin', () => {
-	let plugin: AutoClassifierPlugin;
-	let mockApp: App;
+vi.mock('../src/ui/settings', () => ({
+	AutoClassifierSettingTab: class {
+		constructor(plugin: unknown) {
+			mocks.settingTabPlugins.push(plugin);
+		}
+	},
+}));
 
-	const mockProvider: ProviderConfig = {
-		name: 'TestProvider',
-		apiKey: 'test-api-key',
-		baseUrl: 'https://api.test.com',
-		models: [{ id: 'test-model', name: 'Test Model' }],
-		temperature: 0.7,
-	};
+vi.mock('../src/ui/plugin-notices', () => ({
+	PluginNotices: class {
+		constructor(host: unknown) {
+			mocks.noticeHosts.push(host);
+		}
 
-	const mockFrontmatter: FrontmatterField = {
-		id: 1,
-		name: 'category',
-		refs: ['tag1', 'tag2'],
-		count: { min: 1, max: 5 },
+		show(...args: unknown[]) {
+			return mocks.noticeShow(...args);
+		}
+
+		unload() {
+			mocks.noticeUnload();
+		}
+	},
+}));
+
+vi.mock('../src/utils/plugin-logger', () => ({
+	PluginLogger: class {
+		info(...args: unknown[]) {
+			mocks.loggerInfo(...args);
+		}
+
+		error(...args: unknown[]) {
+			mocks.loggerError(...args);
+		}
+	},
+}));
+
+function makeField(id: number): FrontmatterField {
+	return {
+		id,
+		name: `field-${id}`,
+		refs: ['reference'],
+		count: { min: 1, max: 1 },
 		overwrite: false,
-		linkType: 'Text',
+		linkType: 'Normal',
 		customQuery: '',
 	};
+}
+
+describe('AutoClassifierPlugin', () => {
+	let app: App;
+	let plugin: AutoClassifierPlugin;
+
+	function installClassificationService(): void {
+		(plugin as any).classificationService = {
+			classify: (file: TFile, id: number) => mocks.classify(file, id),
+			deactivate: () => mocks.deactivate(),
+		};
+	}
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		mocks.classificationContexts.length = 0;
+		mocks.noticeHosts.length = 0;
+		mocks.settingTabPlugins.length = 0;
+		mocks.classify.mockReset().mockResolvedValue(undefined);
+		mocks.deactivate.mockReset();
+		mocks.noticeShow.mockReset();
+		mocks.noticeUnload.mockReset();
+		mocks.loggerInfo.mockReset();
+		mocks.loggerError.mockReset();
+		mocks.isTokenExpired.mockReset().mockReturnValue(false);
+		mocks.refreshTokens.mockReset();
 
-		mockApp = new App();
-		plugin = new AutoClassifierPlugin(mockApp);
-
-		// Setup default settings
+		app = new App();
+		plugin = new AutoClassifierPlugin(app);
 		plugin.settings = {
 			...DEFAULT_SETTINGS,
-			providers: [mockProvider],
-			selectedProvider: 'TestProvider',
-			selectedModel: 'test-model',
-			frontmatter: [mockFrontmatter],
-			classificationRule: 'Test rule',
-		};
-
-		// Mock notices (initialized in loadSettings, but tests set settings directly)
+			jev: { ...DEFAULT_SETTINGS.jev },
+			providers: [],
+			frontmatter: [makeField(1)],
+			classificationRule: 'synthetic instructions',
+		} as AutoClassifierSettings;
 		plugin.notices = {
-			show: vi.fn(() => null),
-			remove: vi.fn(),
-			unload: vi.fn(),
+			show: mocks.noticeShow,
+			unload: mocks.noticeUnload,
 		} as any;
-
-		// Mock logger (initialized in onload, but tests bypass onload)
 		plugin.logger = {
-			debug: vi.fn(),
-			info: vi.fn(),
-			warn: vi.fn(),
-			error: vi.fn(),
-			noticeError: vi.fn(),
+			info: mocks.loggerInfo,
+			error: mocks.loggerError,
 		} as any;
 	});
 
-	describe('loadSettings', () => {
-		it('should load settings with default values when no saved data exists', async () => {
-			(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+	describe('settings persistence', () => {
+		it('merges stored settings with Jev defaults and repairs missing field counts', async () => {
+			(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue({
+				selectedProvider: 'Stored provider',
+				jev: { apiKey: 'stored-key' },
+				frontmatter: [{ ...makeField(1), count: undefined }],
+			});
 
 			await plugin.loadSettings();
 
-			expect(plugin.settings).toBeDefined();
-			expect(plugin.saveData).toHaveBeenCalled();
-		});
-
-		it('should merge saved data with default settings', async () => {
-			const savedData = {
-				selectedProvider: 'SavedProvider',
-				providers: [mockProvider],
-			};
-			(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue(savedData);
-
-			await plugin.loadSettings();
-
-			expect(plugin.settings.selectedProvider).toBe('SavedProvider');
-		});
-
-		it('should migrate frontmatter settings missing count property', async () => {
-			const savedData = {
-				frontmatter: [
-					{
-						id: 1,
-						name: 'test',
-						refs: [],
-						overwrite: false,
-						linkType: 'Text',
-						customQuery: '',
-						// count is missing
-					},
-				],
-			};
-			(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue(savedData);
-
-			await plugin.loadSettings();
-
-			// Should have migrated with default count
+			expect(plugin.settings.selectedProvider).toBe('Stored provider');
+			expect(plugin.settings.jev).toEqual({
+				apiKey: 'stored-key',
+				model: DEFAULT_SETTINGS.jev.model,
+			});
 			expect(plugin.settings.frontmatter[0].count).toEqual({ min: 1, max: 5 });
+			expect(plugin.saveData).toHaveBeenCalledWith(plugin.settings);
 		});
 
-		it('should preserve existing count property during migration', async () => {
-			const savedData = {
-				frontmatter: [
-					{
-						id: 1,
-						name: 'test',
-						refs: [],
-						count: { min: 2, max: 10 },
-						overwrite: false,
-						linkType: 'Text',
-						customQuery: '',
-					},
-				],
-			};
-			(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue(savedData);
-
-			await plugin.loadSettings();
-
-			expect(plugin.settings.frontmatter[0].count).toEqual({ min: 2, max: 10 });
-		});
-	});
-
-	describe('saveSettings', () => {
-		it('should call saveData with current settings', async () => {
+		it('saves the current settings object', async () => {
 			await plugin.saveSettings();
 
 			expect(plugin.saveData).toHaveBeenCalledWith(plugin.settings);
 		});
 	});
 
-	describe('getSelectedProvider', () => {
-		it('should return the selected provider', () => {
-			const result = plugin.getSelectedProvider();
-
-			expect(result).toEqual(mockProvider);
-		});
-
-		it('should throw error when selected provider not found', () => {
-			plugin.settings.selectedProvider = 'NonExistentProvider';
-
-			expect(() => plugin.getSelectedProvider()).toThrow('Selected provider not found');
-		});
-
-		it('should throw error when no providers configured', () => {
-			plugin.settings.providers = [];
-			plugin.settings.selectedProvider = 'TestProvider';
-
-			expect(() => plugin.getSelectedProvider()).toThrow('Selected provider not found');
-		});
-	});
-
-	describe('processFrontmatter', () => {
-		beforeEach(() => {
-			vi.clearAllMocks();
-			// Re-apply mocks cleared above
-			plugin.notices = {
-				show: vi.fn(() => null),
-				remove: vi.fn(),
-				unload: vi.fn(),
-			} as any;
-			plugin.logger = {
-				debug: vi.fn(),
-				info: vi.fn(),
-				warn: vi.fn(),
-				error: vi.fn(),
-				noticeError: vi.fn(),
-			} as any;
-		});
-
-		it('should show error when no active file', async () => {
-			mockApp.workspace.getActiveFile.mockReturnValue(null);
-
-			await plugin.processFrontmatter(1);
-
-			expect(plugin.notices.show).toHaveBeenCalledWith('no_active_file');
-		});
-
-		it('should show error when no provider selected', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-			plugin.settings.selectedProvider = 'NonExistentProvider';
-
-			await plugin.processFrontmatter(1);
-
-			expect(plugin.notices.show).toHaveBeenCalledWith('no_provider_selected');
-		});
-
-		it('should show error when frontmatter setting not found', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-
-			await plugin.processFrontmatter(999); // Non-existent ID
-
-			expect(plugin.notices.show).toHaveBeenCalledWith(
-				'no_frontmatter_setting',
-				expect.objectContaining({ id: 999 })
-			);
-		});
-
-		it('should process frontmatter when all conditions are met', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-
-			processAPIRequest.mockResolvedValue({
-				output: ['result-tag'],
-				reliability: 0.9,
-			});
-
-			await plugin.processFrontmatter(1);
-
-			// Should have called withProgress (still used in ClassificationService.callClassificationAPI)
-			expect(SettingsNotice.withProgress).toHaveBeenCalled();
-		});
-	});
-
-	describe('classifyFrontmatter (via classificationService)', () => {
-		beforeEach(() => {
-			vi.clearAllMocks();
-			// Re-apply mocks cleared above
-			plugin.notices = {
-				show: vi.fn(() => null),
-				remove: vi.fn(),
-				unload: vi.fn(),
-			} as any;
-			plugin.logger = {
-				debug: vi.fn(),
-				info: vi.fn(),
-				warn: vi.fn(),
-				error: vi.fn(),
-				noticeError: vi.fn(),
-			} as any;
-		});
-
-		it('should auto-collect refs from vault when refs is empty', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-
-			const frontmatterWithNoRefs: FrontmatterField = {
-				...mockFrontmatter,
-				refs: [],
-			};
-			plugin.settings.frontmatter = [frontmatterWithNoRefs];
-
-			getFieldValues.mockReturnValue(['collected-tag1', 'collected-tag2']);
-			processAPIRequest.mockResolvedValue({
-				output: ['result'],
-				reliability: 0.9,
-			});
-
-			await plugin.processFrontmatter(frontmatterWithNoRefs.id);
-
-			expect(getFieldValues).toHaveBeenCalled();
-		});
-
-		it('should show error when no reference values found', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-
-			const frontmatterWithNoRefs: FrontmatterField = {
-				...mockFrontmatter,
-				refs: [],
-			};
-			plugin.settings.frontmatter = [frontmatterWithNoRefs];
-
-			getFieldValues.mockReturnValue([]);
-
-			await plugin.processFrontmatter(frontmatterWithNoRefs.id);
-
-			expect(plugin.notices.show).toHaveBeenCalledWith(
-				'no_refs',
-				expect.any(Object)
-			);
-		});
-
-		it('should show error when API key is not configured', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-
-			const providerWithNoKey: ProviderConfig = {
-				...mockProvider,
-				apiKey: '',
-			};
-			plugin.settings.providers = [providerWithNoKey];
-			plugin.settings.selectedProvider = providerWithNoKey.name;
-
-			await plugin.processFrontmatter(mockFrontmatter.id);
-
-			expect(plugin.notices.show).toHaveBeenCalledWith(
-				'no_auth',
-				expect.objectContaining({
-					message: expect.stringContaining('API key not configured'),
-				})
-			);
-		});
-
-		it('should show error when no model is selected', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-			plugin.settings.selectedModel = '';
-
-			await plugin.processFrontmatter(mockFrontmatter.id);
-
-			const calls = (plugin.notices.show as ReturnType<typeof vi.fn>).mock.calls;
-			expect(calls.some((call) => call[0] === 'no_model')).toBe(true);
-		});
-
-		it('should strip WikiLink brackets when linkType is WikiLink', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-
-			const wikiLinkFrontmatter: FrontmatterField = {
-				...mockFrontmatter,
-				id: 99,
-				refs: ['[[tag1]]', '[[tag2]]', 'tag3'],
-				linkType: 'WikiLink',
-			};
-			plugin.settings.frontmatter = [wikiLinkFrontmatter];
-
-			processAPIRequest.mockResolvedValue({
-				output: ['result'],
-				reliability: 0.9,
-			});
-
-			await plugin.processFrontmatter(99);
-
-			// Should process values with brackets stripped
-			expect(SettingsNotice.withProgress).toHaveBeenCalled();
-		});
-
-		it('should show success message when API response has high reliability', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-
-			processAPIRequest.mockResolvedValue({
-				output: ['result-tag'],
-				reliability: 0.9,
-			});
-
-			await plugin.processFrontmatter(mockFrontmatter.id);
-
-			expect(insertToFrontMatter).toHaveBeenCalled();
-			expect(plugin.notices.show).toHaveBeenCalledWith(
-				'classify_success',
-				expect.any(Object)
-			);
-		});
-
-		it('should show error when API response has low reliability', async () => {
-			const mockFile = createMockTFile('test/path.md', 'test');
-			mockApp.workspace.getActiveFile.mockReturnValue(mockFile);
-
-			processAPIRequest.mockResolvedValue({
-				output: ['result-tag'],
-				reliability: 0.1, // Below MIN_RELIABILITY_THRESHOLD (0.2)
-			});
-
-			await plugin.processFrontmatter(mockFrontmatter.id);
-
-			expect(insertToFrontMatter).not.toHaveBeenCalled();
-			expect(plugin.notices.show).toHaveBeenCalledWith(
-				'low_reliability',
-				expect.any(Object)
-			);
-		});
-	});
-
-	describe('setupCommand', () => {
-		it('should setup command service with all frontmatter settings', () => {
-			// Mock addCommand to track calls
+	describe('commands', () => {
+		it('registers one command per field and the batch command', () => {
 			plugin.addCommand = vi.fn();
-
-			plugin.settings.frontmatter = [
-				{ ...mockFrontmatter, id: 1, name: 'category' },
-				{ ...mockFrontmatter, id: 2, name: 'tags' },
-			];
+			plugin.settings.frontmatter = [makeField(1), makeField(2)];
 
 			plugin.setupCommand();
 
-			// CommandService should call addCommand for each frontmatter + one for "all"
 			expect(plugin.addCommand).toHaveBeenCalledTimes(3);
-		});
-
-		it('should register "Fetch all frontmatter" command', () => {
-			plugin.addCommand = vi.fn();
-			plugin.settings.frontmatter = [mockFrontmatter];
-
-			plugin.setupCommand();
-
-			// Verify the "Fetch all" command was registered
 			expect(plugin.addCommand).toHaveBeenCalledWith(
 				expect.objectContaining({
 					id: 'fetch-frontmatter-Fetch all frontmatter using current provider',
-					name: 'Fetch frontmatter: Fetch all frontmatter using current provider',
 				})
 			);
 		});
-	});
 
-	describe('processAllFrontmatter', () => {
-		it('should process all frontmatter items sequentially', async () => {
-			const processFrontmatterSpy = vi
-				.spyOn(plugin, 'processFrontmatter')
-				.mockResolvedValue(undefined);
+		it('registers callbacks that invoke their command action', async () => {
+			plugin.addCommand = vi.fn();
+			const callback = vi.fn().mockResolvedValue(undefined);
 
-			plugin.settings.frontmatter = [
-				{ ...mockFrontmatter, id: 1 },
-				{ ...mockFrontmatter, id: 2 },
-				{ ...mockFrontmatter, id: 3 },
-			];
+			plugin.registerCommand('synthetic', callback);
+			const command = (plugin.addCommand as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			await command.callback();
 
-			await plugin.processAllFrontmatter();
-
-			expect(processFrontmatterSpy).toHaveBeenCalledTimes(3);
-			expect(processFrontmatterSpy).toHaveBeenNthCalledWith(1, 1);
-			expect(processFrontmatterSpy).toHaveBeenNthCalledWith(2, 2);
-			expect(processFrontmatterSpy).toHaveBeenNthCalledWith(3, 3);
-
-			processFrontmatterSpy.mockRestore();
+			expect(callback).toHaveBeenCalledOnce();
 		});
 	});
 
-	describe('registerCommand', () => {
-		it('should be callable and invoke addCommand internally', () => {
-			// Since we cannot easily mock the inherited addCommand,
-			// we verify registerCommand is properly defined and callable
-			const callback = vi.fn();
-
-			// registerCommand should not throw
-			expect(() => plugin.registerCommand('test-command', callback)).not.toThrow();
-
-			// Verify the method exists and has correct signature
-			expect(typeof plugin.registerCommand).toBe('function');
-		});
-	});
-
-	describe('migrateSettings', () => {
-		const mockOAuthTokens: OAuthTokens = {
-			accessToken: 'test-access-token',
-			refreshToken: 'test-refresh-token',
-			expiresAt: Math.floor(Date.now() / 1000) + 3600,
-			accountId: 'test-account-id',
+	it('keeps expired stored auth intact and never refreshes it on startup or ordinary classification', async () => {
+		const expiredTokens = {
+			accessToken: 'stored-expired-token',
+			refreshToken: 'stored-refresh-token',
+			expiresAt: 1,
+			accountId: 'synthetic-account',
 		};
-
-		it('should migrate codexConnection to Codex provider oauth field', async () => {
-			// Setup: Create a Codex provider without oauth and add legacy codexConnection
-			const codexProvider: ProviderConfig = {
-				name: 'Codex',
-				apiKey: '',
-				baseUrl: 'https://codex.api',
-				models: [],
-				temperature: 0.7,
-			};
-			plugin.settings.providers = [codexProvider];
-			(plugin.settings as any).codexConnection = mockOAuthTokens;
-
-			(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue({
-				providers: [codexProvider],
-				codexConnection: mockOAuthTokens,
-			});
-
-			await plugin.loadSettings();
-			// runMigrateSettings is called in onload, but we can simulate it
-			// by checking if the migration would work
-
-			// Access the private method via any
-			const runMigrateSettings = (plugin as any).runMigrateSettings.bind(plugin);
-			await runMigrateSettings();
-
-			// Check that codexConnection was migrated
-			expect(plugin.settings.providers[0].oauth).toEqual(mockOAuthTokens);
-			expect(plugin.settings.providers[0].authType).toBe('oauth');
-			expect((plugin.settings as any).codexConnection).toBeUndefined();
+		const provider: ProviderConfig = {
+			name: 'Codex',
+			apiKey: 'stored-user-key',
+			baseUrl: 'https://provider.invalid',
+			models: [{ id: 'model-1', name: 'Model 1' }],
+			auth: { type: 'oauth', oauth: expiredTokens },
+		};
+		(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue({
+			frontmatter: [makeField(1)],
+			providers: [provider],
+			selectedProvider: 'Codex',
+			selectedModel: 'model-1',
+			classificationRule: 'stored user instructions',
 		});
+		await plugin.onload();
 
-		it('should not overwrite existing oauth field in Codex provider', async () => {
-			const existingOAuth: OAuthTokens = {
-				accessToken: 'existing-token',
-				refreshToken: 'existing-refresh',
-				expiresAt: Math.floor(Date.now() / 1000) + 7200,
-				accountId: 'existing-account',
-			};
+		const file = createMockTFile('notes/one.md', 'one');
+		app.workspace.getActiveFile.mockReturnValue(file);
+		await plugin.processFrontmatter(1);
+		await plugin.processFrontmatter(1);
 
-			const codexProvider: ProviderConfig = {
-				name: 'Codex',
-				apiKey: '',
-				baseUrl: 'https://codex.api',
-				models: [],
-				temperature: 0.7,
-				authType: 'oauth',
-				oauth: existingOAuth,
-			};
-			plugin.settings.providers = [codexProvider];
-			(plugin.settings as any).codexConnection = mockOAuthTokens;
+		expect(mocks.classificationContexts).toHaveLength(1);
+		expect(mocks.classify).toHaveBeenNthCalledWith(1, file, 1);
+		expect(mocks.classify).toHaveBeenNthCalledWith(2, file, 1);
+		expect(mocks.isTokenExpired).not.toHaveBeenCalled();
+		expect(mocks.refreshTokens).not.toHaveBeenCalled();
+		expect(plugin.settings.providers[0].auth).toEqual({ type: 'oauth', oauth: expiredTokens });
+		expect(plugin.settings.providers[0].apiKey).toBe('stored-user-key');
+		expect(plugin.settings.classificationRule).toBe('stored user instructions');
+		expect(plugin.addSettingTab).toHaveBeenCalledOnce();
 
-			const runMigrateSettings = (plugin as any).runMigrateSettings.bind(plugin);
-			await runMigrateSettings();
+		plugin.onunload();
 
-			// Should keep existing oauth and still remove codexConnection
-			expect(plugin.settings.providers[0].oauth).toEqual(existingOAuth);
-			expect((plugin.settings as any).codexConnection).toBeUndefined();
-		});
-
-		it('should do nothing when no codexConnection exists', async () => {
-			plugin.settings.providers = [mockProvider];
-			delete (plugin.settings as any).codexConnection;
-
-			// migrateSettings helper always returns changed=true when migrations are provided,
-			// so saveSettings is always called — settings are preserved as-is
-			const originalProviders = plugin.settings.providers;
-
-			const runMigrateSettings = (plugin as any).runMigrateSettings.bind(plugin);
-			await runMigrateSettings();
-
-			// Providers should be unchanged
-			expect(plugin.settings.providers).toEqual(originalProviders);
-			// codexConnection should remain absent
-			expect((plugin.settings as any).codexConnection).toBeUndefined();
-		});
+		expect(mocks.deactivate).toHaveBeenCalledOnce();
+		expect(mocks.noticeUnload).toHaveBeenCalledOnce();
 	});
 
-	describe('refreshOAuthTokensIfNeeded', () => {
+	it('pins the active file at command invocation even if the user switches tabs while it is pending', async () => {
+		installClassificationService();
+		const originalFile = createMockTFile('notes/original.md', 'original');
+		const otherFile = createMockTFile('notes/other.md', 'other');
+		let finish!: () => void;
+		mocks.classify.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+		app.workspace.getActiveFile.mockReturnValue(originalFile);
 
-		beforeEach(() => {
-			vi.clearAllMocks();
-			// Re-apply mocks cleared above
-			plugin.notices = {
-				show: vi.fn(() => null),
-				remove: vi.fn(),
-				unload: vi.fn(),
-			} as any;
-			plugin.logger = {
-				debug: vi.fn(),
-				info: vi.fn(),
-				warn: vi.fn(),
-				error: vi.fn(),
-				noticeError: vi.fn(),
-			} as any;
+		const pending = plugin.processFrontmatter(1);
+		app.workspace.getActiveFile.mockReturnValue(otherFile);
+		finish();
+		await pending;
+
+		expect(mocks.classify).toHaveBeenCalledOnce();
+		expect(mocks.classify).toHaveBeenCalledWith(originalFile, 1);
+	});
+
+	it('pins the original file and field list for overlapping batches', async () => {
+		installClassificationService();
+		plugin.settings.frontmatter = [makeField(1), makeField(2)];
+		const originalFile = createMockTFile('notes/original.md', 'original');
+		const otherFile = createMockTFile('notes/other.md', 'other');
+		let finishFirst!: () => void;
+		let call = 0;
+		mocks.classify.mockImplementation((file: TFile, id: number) => {
+			call += 1;
+			if (call === 1) return new Promise<void>((resolve) => (finishFirst = resolve));
+			return Promise.resolve();
+		});
+		app.workspace.getActiveFile.mockReturnValue(originalFile);
+
+		const firstBatch = plugin.processAllFrontmatter();
+		app.workspace.getActiveFile.mockReturnValue(otherFile);
+		const overlappingBatch = plugin.processAllFrontmatter();
+		await overlappingBatch;
+		finishFirst();
+		await firstBatch;
+
+		expect(mocks.classify.mock.calls).toEqual([
+			[originalFile, 1],
+			[otherFile, 1],
+			[otherFile, 2],
+			[originalFile, 2],
+		]);
+	});
+
+	it('keeps an existing batch bound to its original service lifetime', async () => {
+		installClassificationService();
+		plugin.settings.frontmatter = [makeField(1), makeField(2)];
+		const replacement = vi.fn().mockResolvedValue(undefined);
+		mocks.classify.mockImplementationOnce(async () => {
+			(plugin as any).classificationService = { classify: replacement };
+		});
+		app.workspace.getActiveFile.mockReturnValue(createMockTFile('notes/one.md', 'one'));
+		await plugin.processAllFrontmatter();
+		expect(mocks.classify).toHaveBeenCalledTimes(2);
+		expect(replacement).not.toHaveBeenCalled();
+	});
+
+	it('reports missing active files and unknown field IDs without invoking classification', async () => {
+		installClassificationService();
+		app.workspace.getActiveFile.mockReturnValue(null);
+
+		await plugin.processFrontmatter(1);
+		await plugin.processAllFrontmatter();
+
+		expect(mocks.noticeShow).toHaveBeenCalledTimes(2);
+		expect(mocks.noticeShow).toHaveBeenCalledWith('no_active_file');
+		expect(mocks.classify).not.toHaveBeenCalled();
+
+		const file = createMockTFile('notes/one.md', 'one');
+		app.workspace.getActiveFile.mockReturnValue(file);
+		await plugin.processFrontmatter(99);
+
+		expect(mocks.noticeShow).toHaveBeenCalledWith('no_frontmatter_setting', { id: 99 });
+		expect(mocks.classify).not.toHaveBeenCalled();
+	});
+
+	it('preserves legacy Codex data and provider entries through startup', async () => {
+		const tokens: OAuthTokens = {
+			accessToken: 'legacy-token',
+			refreshToken: 'legacy-refresh',
+			expiresAt: 1,
+			accountId: 'synthetic-account',
+		};
+		const provider: ProviderConfig = {
+			name: 'Codex',
+			apiKey: 'stored-provider-key',
+			baseUrl: 'https://provider.invalid',
+			models: [{ id: 'model-1', name: 'Model 1' }],
+		};
+		const providers = [provider];
+		(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue({
+			frontmatter: [makeField(1)],
+			providers,
+			codexConnection: tokens,
 		});
 
-		it('should not refresh when no OAuth providers exist', async () => {
-			plugin.settings.providers = [mockProvider]; // No OAuth provider
+		await plugin.onload();
 
-			const refreshOAuthTokensIfNeeded = (plugin as any).refreshOAuthTokensIfNeeded.bind(plugin);
-			await refreshOAuthTokensIfNeeded();
-
-			// CodexOAuth should not be instantiated
-			expect(CodexOAuth).not.toHaveBeenCalled();
+		expect(plugin.settings.providers).toBe(providers);
+		expect(plugin.settings.providers[0]).toBe(provider);
+		expect(plugin.settings.providers[0]).toEqual({
+			name: 'Codex',
+			apiKey: 'stored-provider-key',
+			baseUrl: 'https://provider.invalid',
+			models: [{ id: 'model-1', name: 'Model 1' }],
 		});
-
-		it('should not refresh when tokens are not expired', async () => {
-			const oauthProvider: ProviderConfig = {
-				name: 'Codex',
-				apiKey: '',
-				baseUrl: 'https://codex.api',
-				models: [],
-				temperature: 0.7,
-				authType: 'oauth',
-				oauth: {
-					accessToken: 'valid-token',
-					refreshToken: 'refresh-token',
-					expiresAt: Math.floor(Date.now() / 1000) + 3600,
-					accountId: 'account-id',
-				},
-			};
-			plugin.settings.providers = [oauthProvider];
-
-			isTokenExpired.mockReturnValue(false);
-
-			const refreshOAuthTokensIfNeeded = (plugin as any).refreshOAuthTokensIfNeeded.bind(plugin);
-			await refreshOAuthTokensIfNeeded();
-
-			// Should check if expired but not refresh
-			const mockCodexOAuthInstance = (CodexOAuth as any).mock.instances[0];
-			expect(mockCodexOAuthInstance?.refreshTokens).not.toHaveBeenCalled();
-		});
-
-		it('should refresh expired tokens and save settings', async () => {
-			const expiredTokens: OAuthTokens = {
-				accessToken: 'expired-token',
-				refreshToken: 'refresh-token',
-				expiresAt: Math.floor(Date.now() / 1000) - 100, // Expired
-				accountId: 'account-id',
-			};
-
-			const oauthProvider: ProviderConfig = {
-				name: 'Codex',
-				apiKey: '',
-				baseUrl: 'https://codex.api',
-				models: [],
-				temperature: 0.7,
-				authType: 'oauth',
-				oauth: expiredTokens,
-			};
-			plugin.settings.providers = [oauthProvider];
-
-			isTokenExpired.mockReturnValue(true);
-
-			const saveSpy = vi.spyOn(plugin, 'saveSettings').mockResolvedValue(undefined);
-
-			const refreshOAuthTokensIfNeeded = (plugin as any).refreshOAuthTokensIfNeeded.bind(plugin);
-			await refreshOAuthTokensIfNeeded();
-
-			// Should have called refresh and saved settings
-			expect(saveSpy).toHaveBeenCalled();
-			// Provider's oauth should be updated
-			expect(plugin.settings.providers[0].oauth?.accessToken).toBe('new-access-token');
-
-			saveSpy.mockRestore();
-		});
-
-		it('should handle refresh errors gracefully', async () => {
-			const expiredTokens: OAuthTokens = {
-				accessToken: 'expired-token',
-				refreshToken: 'refresh-token',
-				expiresAt: Math.floor(Date.now() / 1000) - 100,
-				accountId: 'account-id',
-			};
-
-			const oauthProvider: ProviderConfig = {
-				name: 'Codex',
-				apiKey: '',
-				baseUrl: 'https://codex.api',
-				models: [],
-				temperature: 0.7,
-				authType: 'oauth',
-				oauth: expiredTokens,
-			};
-			plugin.settings.providers = [oauthProvider];
-
-			isTokenExpired.mockReturnValue(true);
-
-			// Mock refresh to throw error
-			CodexOAuth.mockImplementationOnce(function (this: any) {
-				this.refreshTokens = vi.fn().mockRejectedValue(new Error('Refresh failed'));
-			});
-
-			const refreshOAuthTokensIfNeeded = (plugin as any).refreshOAuthTokensIfNeeded.bind(plugin);
-
-			// Should not throw
-			await expect(refreshOAuthTokensIfNeeded()).resolves.not.toThrow();
-
-			// Should log error via plugin.logger.error
-			expect(plugin.logger.error).toHaveBeenCalled();
-		});
+		expect(Reflect.get(plugin.settings, 'codexConnection')).toBe(tokens);
+		expect(Reflect.get(plugin.settings, 'codexConnection')).toEqual(tokens);
+		expect(plugin.saveData).toHaveBeenCalledWith(plugin.settings);
 	});
 });
