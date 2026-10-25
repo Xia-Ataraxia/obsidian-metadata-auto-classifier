@@ -17,7 +17,6 @@ pnpm run dev:build      # esbuild watch only (no vault)
 pnpm run build          # tsc type-check + esbuild production (single-shot)
 pnpm run test           # Vitest unit tests
 pnpm run test:watch     # Vitest watch mode
-pnpm run test:coverage  # Vitest with coverage report
 pnpm run lint           # ESLint (flat config v9)
 pnpm run lint:fix       # ESLint auto-fix
 pnpm run ci             # build + lint + test
@@ -47,9 +46,7 @@ src/
 
 - Framework: Vitest
 - Test location: `__tests__/` (mirrors src/ structure)
-- Obsidian API mock: `__mocks__/obsidian.ts`
-- Coverage: v8, HTML + LCOV reports
-- Config: `vitest.config.ts` (includes path aliases)
+- Config: `vitest.config.ts`
 
 ## TypeScript Path Aliases
 

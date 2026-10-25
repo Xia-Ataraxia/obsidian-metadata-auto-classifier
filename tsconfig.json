@@ -34,5 +34,5 @@
 		"types": ["vitest/globals", "node"]
 	},
 	"include": ["src/**/*.ts"],
-	"exclude": ["__tests__/**/*", "__mocks__/**/*", "node_modules"]
+	"exclude": ["__tests__/**/*", "node_modules"]
 }

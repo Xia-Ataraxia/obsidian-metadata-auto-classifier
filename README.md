@@ -75,7 +75,6 @@ pnpm dev              # vault selection + esbuild watch + hot reload
 pnpm build            # tsc type-check + production build
 pnpm test             # Vitest unit tests
 pnpm test:watch       # Vitest watch mode
-pnpm test:coverage    # Vitest with coverage report
 pnpm lint             # ESLint
 pnpm run ci           # build + lint + test
 pnpm release:patch    # also release:minor / release:major
@@ -88,7 +87,7 @@ pnpm release:patch    # also release:minor / release:major
 | Platform | Obsidian Plugin API |
 | Language | TypeScript 5 |
 | Bundler | esbuild |
-| Testing | Vitest (with coverage) |
+| Testing | Vitest |
 | Linting | ESLint 9 (flat config) |
 
 ### Project Structure
@@ -101,7 +100,6 @@ obsidian-metadata-auto-classifier/
 │   ├── ui/               # Commands, providers, settings UI
 │   └── utils/            # Pure utilities
 ├── __tests__/            # Vitest tests
-├── __mocks__/            # Obsidian API mock
 ├── scripts/              # dev.mjs, version.mjs, release.mjs
 ├── boiler.config.mjs     # Per-repo config
 └── manifest.json         # Obsidian plugin manifest
