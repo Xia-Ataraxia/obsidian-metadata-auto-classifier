@@ -103,7 +103,7 @@ export class ModelModal extends Modal {
 	}
 
 	private addPopularModelsSection(containerEl: HTMLElement): void {
-		const popularSection = containerEl.createEl('div', { cls: 'popular-models-section' });
+		const popularSection = containerEl.createDiv({ cls: 'popular-models-section' });
 		popularSection.createEl('h3', { text: 'Popular models' });
 		popularSection.createEl('p', {
 			text: 'Choose from commonly used models or enter custom model details.',
@@ -127,7 +127,7 @@ export class ModelModal extends Modal {
 			providerData = presets.find((preset) => preset.name === this.selectedProvider) || null;
 		}
 
-		const modelsContainer = containerEl.createEl('div', {
+		const modelsContainer = containerEl.createDiv({
 			cls: 'popular-models-container mac-grid-container',
 		});
 
@@ -152,7 +152,7 @@ export class ModelModal extends Modal {
 					}
 				});
 
-				modelOption.createEl('span', { text: model.name });
+				modelOption.createSpan({ text: model.name });
 			});
 		}
 
@@ -175,7 +175,7 @@ export class ModelModal extends Modal {
 				this.updateRadioSelection();
 			}
 		});
-		customOption.createEl('span', { text: 'Custom model' });
+		customOption.createSpan({ text: 'Custom model' });
 	}
 
 	private updateRadioSelection(): void {

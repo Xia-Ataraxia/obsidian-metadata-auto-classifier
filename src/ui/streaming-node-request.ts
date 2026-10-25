@@ -1,3 +1,5 @@
+import { Platform } from 'obsidian';
+
 type NodeHttps = {
 	request: (
 		options: Record<string, unknown>,
@@ -20,23 +22,30 @@ type NodeResponse = {
 	) => NodeResponse;
 };
 
+function loadHttps(): NodeHttps {
+	if (Platform.isDesktop) {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef -- loaded via require() in Obsidian's Node context; dynamic import not viable
+		return require('https') as NodeHttps;
+	}
+	throw new Error('Node HTTPS streaming is only available on desktop');
+}
+
 export async function sendStreamingRequestViaNode(
 	url: string,
 	headers: Record<string, string>,
 	body: Record<string, unknown>,
 	timeoutMs: number
 ): Promise<{ status: number; text: string }> {
-	// eslint-disable-next-line @typescript-eslint/no-require-imports, import/no-nodejs-modules, no-undef -- Node HTTPS is loaded only after desktop gating for streaming APIs.
-	const https = require('https') as NodeHttps;
+	const https = loadHttps();
 	const parsedUrl = new URL(url);
 	const payload = JSON.stringify(body);
 	const payloadLength = Buffer.byteLength(payload);
 
 	return new Promise((resolve, reject) => {
-		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+		let timeoutId: number | null = null;
 		let isResolved = false;
 		const cleanup = () => {
-			if (timeoutId) clearTimeout(timeoutId);
+			if (timeoutId) window.clearTimeout(timeoutId);
 			timeoutId = null;
 		};
 		const request = https.request(
@@ -71,7 +80,7 @@ export async function sendStreamingRequestViaNode(
 				});
 			}
 		);
-		timeoutId = setTimeout(() => {
+		timeoutId = window.setTimeout(() => {
 			if (isResolved) return;
 			isResolved = true;
 			request.destroy();

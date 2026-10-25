@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call -- APIResponseData is intentionally any; providers return varied runtime shapes validated by each parseResponse */
 import {
 	ANTHROPIC_TOOL_CONFIG,
 	COMMON_CONSTANTS,
@@ -20,7 +19,7 @@ import { macLogger } from '../utils/mac-logger';
 
 const parseJsonResponse = (content: string, providerName: string): StructuredOutput => {
 	try {
-		const result = JSON.parse(content.trim());
+		const result = JSON.parse(content.trim()) as Partial<StructuredOutput>;
 		if (!Array.isArray(result.output) || typeof result.reliability !== 'number') {
 			throw new Error('Invalid response structure: missing output array or reliability number');
 		}
@@ -36,10 +35,18 @@ const parseJsonResponse = (content: string, providerName: string): StructuredOut
 	}
 };
 
-// Using any for API response data since providers return varied structures
-// that are validated at runtime in parseResponse functions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional: API responses have varied runtime shapes validated by each provider's parseResponse
-type APIResponseData = any;
+interface CodexOutputItem {
+	type: string;
+	content?: Array<{ type: string; text?: string }>;
+}
+
+interface APIResponseData {
+	content?: Array<{ input?: { output?: StructuredOutput['output']; reliability?: number } }>;
+	candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+	message?: { content?: string };
+	choices?: Array<{ message?: { content?: string } }>;
+	output?: CodexOutputItem[];
+}
 
 type RequestBody = Record<string, unknown>;
 
@@ -239,13 +246,13 @@ export class UnifiedProvider implements APIProvider {
 					throw new Error('Codex response missing output array');
 				}
 
-				const messageItem = output.find((item: { type: string }) => item.type === 'message');
+				const messageItem = output.find((item) => item.type === 'message');
 				if (!messageItem?.content) {
 					throw new Error('Codex response missing message content');
 				}
 
 				const textContent = messageItem.content.find(
-					(c: { type: string }) => c.type === 'output_text'
+					(c) => c.type === 'output_text'
 				);
 				if (!textContent?.text) {
 					throw new Error('Codex response missing text content');
@@ -356,7 +363,7 @@ export class UnifiedProvider implements APIProvider {
 
 		// Standard non-streaming request for other providers
 		const response = await sendRequest(url, headers, body);
-		return this.processApiResponse(response, provider.name);
+		return this.processApiResponse(response as APIResponseData, provider.name);
 	}
 
 	private async refreshCodexTokensAndRetry(

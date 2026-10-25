@@ -62,10 +62,10 @@ export class Notice {
 
 	static endProgress(notice: ObsidianNotice & { interval?: number; timeout?: number }): void {
 		if (notice.interval) {
-			clearInterval(notice.interval);
+			window.clearInterval(notice.interval);
 		}
 		if (notice.timeout) {
-			clearTimeout(notice.timeout);
+			window.clearTimeout(notice.timeout);
 		}
 		notice.hide();
 	}

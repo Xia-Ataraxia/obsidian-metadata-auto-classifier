@@ -201,7 +201,7 @@ export const DEFAULT_TAG_SETTING: FrontmatterField = {
 	refs: [],
 	count: { min: 1, max: 5 },
 	overwrite: false,
-	linkType: 'Normal' as LinkType,
+	linkType: 'Normal',
 	customQuery: '',
 };
 

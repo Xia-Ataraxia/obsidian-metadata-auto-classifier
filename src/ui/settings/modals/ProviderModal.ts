@@ -1,3 +1,4 @@
+import { confirmAction } from './ConfirmModal';
 import type { App } from 'obsidian';
 import { ButtonComponent, Modal, Platform } from 'obsidian';
 
@@ -159,7 +160,7 @@ export class ProviderModal extends Modal {
 					'.setting-item:last-child .setting-item-description'
 				);
 				if (settingEl) {
-					const linkEl = document.createElement('a');
+					const linkEl = createEl('a');
 					linkEl.href = preset.apiKeyUrl;
 					linkEl.target = '_blank';
 					linkEl.className = 'mac-api-key-link';
@@ -194,23 +195,16 @@ export class ProviderModal extends Modal {
 			button: {
 				text: isConnected ? 'Disconnect' : 'Connect Account',
 				warning: isConnected,
-				onClick: isConnected ? () => this.disconnectOAuth() : () => this.connectOAuth(),
+				onClick: isConnected ? () => void this.disconnectOAuth() : () => this.connectOAuth(),
 			},
 		});
 
 		// Add info text about requirements
 		if (!isConnected) {
-			const infoEl = containerEl.createEl('div', {
+			const infoEl = containerEl.createDiv({
 				cls: 'setting-item-description oauth-connection-info',
 			});
-			infoEl.setCssProps({
-				'margin-top': '-8px',
-				'margin-bottom': '16px',
-				'padding-left': '16px',
-				color: 'var(--text-muted)',
-			});
-			// eslint-disable-next-line obsidianmd/ui/sentence-case -- "ChatGPT Pro" is a proper noun and must remain capitalized
-			infoEl.textContent = 'Requires ChatGPT Pro subscription';
+			infoEl.textContent = 'Requires a paid subscription';
 		}
 	}
 
@@ -243,9 +237,8 @@ export class ProviderModal extends Modal {
 	/**
 	 * Disconnect OAuth
 	 */
-	private disconnectOAuth(): void {
-		// eslint-disable-next-line no-alert -- confirm() used intentionally for destructive action; modal refactor is out of scope
-		const confirmed = confirm('Are you sure you want to disconnect?');
+	private async disconnectOAuth(): Promise<void> {
+		const confirmed = await confirmAction(this.app, 'Are you sure you want to disconnect?');
 		if (!confirmed) return;
 
 		this.oauthTokens = undefined;

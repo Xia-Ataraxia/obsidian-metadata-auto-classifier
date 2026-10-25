@@ -1,6 +1,6 @@
 import { Platform, requestUrl } from 'obsidian';
 import { CODEX_OAUTH } from '../../domain/auth/oauth-constants';
-import { OAuthCallbackServer } from '../../domain/auth/oauth-server';
+import { OAuthCallbackServer } from './oauth-server';
 import { generatePKCEChallenge, generateState } from '../../domain/auth/pkce';
 import { createTokensFromResponse, isTokenExpired } from '../../domain/auth/token-manager';
 import type { OAuthTokens, TokenResponse } from '../../types/auth';

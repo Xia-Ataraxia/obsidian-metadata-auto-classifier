@@ -1,7 +1,8 @@
-import { CODEX_OAUTH } from './oauth-constants';
+import { Platform } from 'obsidian';
+import { CODEX_OAUTH } from '../../domain/auth/oauth-constants';
 import type { OAuthCallbackResponse } from '../../types/auth';
 import { macLogger } from '../../utils/mac-logger';
-import { buildOAuthErrorHtml, buildOAuthSuccessHtml } from './oauth-response-html';
+import { buildOAuthErrorHtml, buildOAuthSuccessHtml } from '../../domain/auth/oauth-response-html';
 
 // Types for Node.js http module (imported dynamically)
 type HttpServer = {
@@ -19,10 +20,22 @@ type HttpRequest = {
 	url?: string;
 };
 
+type HttpModule = {
+	createServer: (handler: (req: HttpRequest, res: HttpResponse) => void) => HttpServer;
+};
+
+function loadHttp(): HttpModule {
+	if (Platform.isDesktop) {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports, no-undef -- loaded via require() in Obsidian's Node context; dynamic import not viable
+		return require('http') as HttpModule;
+	}
+	throw new Error('OAuth callback server is only available on desktop');
+}
+
 /**
  * Local OAuth callback server for handling the authorization code redirect
  * Runs on localhost:1455 as required by OpenAI
- * Note: Uses dynamic import for 'http' module to avoid breaking mobile builds
+ * Note: loads 'http' lazily behind Platform.isDesktop so mobile builds keep working
  */
 export class OAuthCallbackServer {
 	private server: HttpServer | null = null;
@@ -38,18 +51,13 @@ export class OAuthCallbackServer {
 		expectedState: string,
 		timeoutMs: number = 300000
 	): Promise<OAuthCallbackResponse> {
-		// Dynamic import of http module to avoid breaking mobile builds
-
-		// eslint-disable-next-line @typescript-eslint/no-require-imports, import/no-nodejs-modules, no-undef -- http must be loaded via require() in Obsidian's Node context; dynamic import not viable here
-		const http = require('http') as {
-			createServer: (handler: (req: HttpRequest, res: HttpResponse) => void) => HttpServer;
-		};
+		const http = loadHttp();
 
 		return new Promise((resolve, reject) => {
 			this.resolveCallback = resolve;
 			this.rejectCallback = reject;
 
-			const timeout = setTimeout(() => {
+			const timeout = window.setTimeout(() => {
 				this.stop();
 				reject(new Error('OAuth callback timeout - no response received'));
 			}, timeoutMs);
@@ -59,7 +67,7 @@ export class OAuthCallbackServer {
 			});
 
 			this.server.on('error', (err: Error) => {
-				clearTimeout(timeout);
+				window.clearTimeout(timeout);
 				this.stop();
 				if ((err as Error & { code?: string }).code === 'EADDRINUSE') {
 					reject(
@@ -85,7 +93,7 @@ export class OAuthCallbackServer {
 		req: HttpRequest,
 		res: HttpResponse,
 		expectedState: string,
-		timeout: ReturnType<typeof setTimeout>
+		timeout: number
 	): void {
 		const url = new URL(req.url || '/', `http://localhost:${CODEX_OAUTH.REDIRECT_PORT}`);
 
@@ -103,7 +111,7 @@ export class OAuthCallbackServer {
 
 		// Handle OAuth errors
 		if (error) {
-			clearTimeout(timeout);
+			window.clearTimeout(timeout);
 			this.sendErrorResponse(res, `OAuth error: ${error} - ${errorDescription || 'Unknown error'}`);
 			this.rejectCallback?.(
 				new Error(`OAuth error: ${error} - ${errorDescription || 'Unknown error'}`)
@@ -114,7 +122,7 @@ export class OAuthCallbackServer {
 
 		// Validate state to prevent CSRF
 		if (state !== expectedState) {
-			clearTimeout(timeout);
+			window.clearTimeout(timeout);
 			this.sendErrorResponse(res, 'Invalid state parameter - possible CSRF attack');
 			this.rejectCallback?.(new Error('Invalid state parameter - possible CSRF attack'));
 			this.stop();
@@ -123,7 +131,7 @@ export class OAuthCallbackServer {
 
 		// Validate code presence
 		if (!code) {
-			clearTimeout(timeout);
+			window.clearTimeout(timeout);
 			this.sendErrorResponse(res, 'No authorization code received');
 			this.rejectCallback?.(new Error('No authorization code received'));
 			this.stop();
@@ -131,7 +139,7 @@ export class OAuthCallbackServer {
 		}
 
 		// Success!
-		clearTimeout(timeout);
+		window.clearTimeout(timeout);
 		this.sendSuccessResponse(res);
 		this.resolveCallback?.({ code, state });
 		this.stop();
