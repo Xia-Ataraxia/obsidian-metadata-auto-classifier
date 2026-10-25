@@ -2,7 +2,6 @@ import {
 	ExtraButtonComponent,
 	Setting as ObsidianSetting,
 	TextAreaComponent,
-	TextComponent,
 } from 'obsidian';
 
 export interface ButtonProps {
@@ -25,14 +24,6 @@ export interface TextInputConfig {
 	value?: string;
 	disabled?: boolean;
 	onChange: (value: string) => void | Promise<void>;
-}
-
-export interface RangeInputConfig {
-	minPlaceholder?: string;
-	maxPlaceholder?: string;
-	minValue?: number;
-	maxValue?: number;
-	onChange: (min: number, max: number) => void | Promise<void>;
 }
 
 export interface DropdownConfig {
@@ -61,7 +52,6 @@ export interface SettingProps {
 
 	// Input components
 	textInput?: TextInputConfig;
-	rangeInput?: RangeInputConfig;
 	dropdown?: DropdownConfig;
 	toggle?: ToggleConfig;
 	textArea?: TextAreaConfig;
@@ -82,7 +72,6 @@ export class Setting {
 			className,
 			heading,
 			textInput,
-			rangeInput,
 			dropdown,
 			toggle,
 			textArea,
@@ -101,7 +90,6 @@ export class Setting {
 
 		// Initialize components based on configuration
 		if (textInput) this.initTextInput(textInput);
-		if (rangeInput) this.initRangeInput(rangeInput);
 		if (dropdown) this.initDropdown(dropdown);
 		if (toggle) this.initToggle(toggle);
 		if (textArea) this.initTextArea(textArea);
@@ -170,7 +158,9 @@ export class Setting {
 		this.setting.addButton((btn) => {
 			if (props.text) btn.setButtonText(props.text);
 			if (props.icon) btn.setIcon(props.icon);
-			if (props.tooltip) btn.setTooltip(props.tooltip);
+			// setIcon replaces the button text, so keep it as the accessible label
+			const tooltip = props.tooltip ?? (props.icon ? props.text : undefined);
+			if (tooltip) btn.setTooltip(tooltip);
 			if (props.cta) btn.setCta();
 			if (props.warning) btn.buttonEl.addClass('mod-warning');
 			if (props.disabled) btn.setDisabled(props.disabled);
@@ -184,48 +174,6 @@ export class Setting {
 			if (props.tooltip) btn.setTooltip(props.tooltip);
 			if (props.disabled) btn.setDisabled(props.disabled);
 			btn.onClick(props.onClick);
-		});
-	}
-
-	private initRangeInput(config: RangeInputConfig): void {
-		// Local state for composition - no class fields needed!
-		let minComponent: TextComponent;
-		let maxComponent: TextComponent;
-
-		// Inner composite function - encapsulates combination logic
-		const handleCombinedChange = () => {
-			const min = parseInt(minComponent?.getValue() || '0', 10);
-			const max = parseInt(maxComponent?.getValue() || '0', 10);
-			if (!isNaN(min) && !isNaN(max)) {
-				void config.onChange(min, max);
-			}
-		};
-
-		// First component - same as any other TextInput
-		this.setting.addText((input) => {
-			minComponent = input;
-			input.inputEl.type = 'number';
-			input.inputEl.setCssProps({ width: '80px' });
-			if (config.minPlaceholder) input.setPlaceholder(config.minPlaceholder);
-			if (config.minValue !== undefined) input.setValue(config.minValue.toString());
-			input.onChange(handleCombinedChange);
-		});
-
-		// Separator - pure presentation
-		this.setting.controlEl.createSpan({
-			text: '~',
-			cls: 'range-separator',
-			attr: { style: 'margin: 0 8px; color: var(--text-muted);' },
-		});
-
-		// Second component - same as any other TextInput
-		this.setting.addText((input) => {
-			maxComponent = input;
-			input.inputEl.type = 'number';
-			input.inputEl.setCssProps({ width: '80px' });
-			if (config.maxPlaceholder) input.setPlaceholder(config.maxPlaceholder);
-			if (config.maxValue !== undefined) input.setValue(config.maxValue.toString());
-			input.onChange(handleCombinedChange);
 		});
 	}
 }

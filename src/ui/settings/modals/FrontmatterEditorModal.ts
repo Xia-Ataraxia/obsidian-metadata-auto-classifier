@@ -145,7 +145,7 @@ export class ConfigurableSettingModal extends Modal {
 					this.localState.refs = inputOptions;
 				});
 			this.textAreaComponent.inputEl.rows = 4;
-			this.textAreaComponent.inputEl.setCssStyles({ width: '100%' });
+			this.textAreaComponent.inputEl.addClass('mac-full-width');
 		}
 	}
 
@@ -173,7 +173,7 @@ export class ConfigurableSettingModal extends Modal {
 				this.localState.customQuery = value;
 			});
 		textArea.inputEl.rows = 4;
-		textArea.inputEl.setCssStyles({ width: '100%' });
+		textArea.inputEl.addClass('mac-full-width');
 	}
 
 	private addActionButtons(containerEl: HTMLElement): void {

@@ -7,6 +7,7 @@ import { DEFAULT_SYSTEM_ROLE, getPromptTemplate } from '../domain/prompt';
 import { Notice } from './settings/components/Notice';
 import type { FrontmatterField, FrontMatter, ProviderConfig, StructuredOutput } from '../types';
 import type { PluginNotices } from './plugin-notices';
+import { toApiErrorNotice } from '../utils/api-error-notice';
 
 export interface ClassificationContext {
 	app: App;
@@ -167,14 +168,22 @@ export class ClassificationService {
 			this.context.classificationRule
 		);
 
-		return Notice.withProgress(currentFile.name, frontmatter.name, () =>
-			processAPIRequest(
-				DEFAULT_SYSTEM_ROLE,
-				promptTemplate,
-				this.context.provider,
-				this.context.model
-			)
-		);
+		try {
+			return await Notice.withProgress(currentFile.name, frontmatter.name, () =>
+				processAPIRequest(
+					DEFAULT_SYSTEM_ROLE,
+					promptTemplate,
+					this.context.provider,
+					this.context.model
+				)
+			);
+		} catch (error) {
+			console.error('[MAC] Classification request failed', error);
+			this.context.notices.show('api_error', {
+				message: toApiErrorNotice(error, this.context.provider.name),
+			});
+			return null;
+		}
 	}
 
 	private async processClassificationResult(

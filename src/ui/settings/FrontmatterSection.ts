@@ -26,6 +26,11 @@ export class Frontmatter extends BaseSettingsComponent {
 
 	private handleEdit(frontmatterSetting: FrontmatterField): void {
 		this.openEditModal(frontmatterSetting, async (updatedFrontmatter) => {
+			// The modal edits a clone, so write it back by id
+			this.plugin.settings.frontmatter = this.plugin.settings.frontmatter.map((f) =>
+				f.id === updatedFrontmatter.id ? updatedFrontmatter : f
+			);
+
 			// Register command for the updated frontmatter
 			this.plugin.registerCommand(
 				updatedFrontmatter.name,

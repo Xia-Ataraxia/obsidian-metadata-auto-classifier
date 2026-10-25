@@ -40,4 +40,5 @@ describe('log redaction', () => {
 	it('sanitizes bearer tokens in error messages', () => {
 		expect(sanitizeErrorMessage('failed Bearer abc.def.ghi')).toContain('[REDACTED]');
 	});
+
 });
