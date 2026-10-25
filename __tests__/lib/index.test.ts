@@ -1,8 +1,5 @@
-import {
-	generateId,
-	getProviderPreset,
-	findMatchingPreset,
-} from 'lib';
+import { generateId, getProviderPreset, findUniqueProvider } from 'lib';
+import type { ProviderConfig } from '../../src/types';
 
 // -------------------- generateId Tests --------------------
 describe('generateId', () => {
@@ -36,42 +33,37 @@ describe('getProviderPreset', () => {
 	});
 });
 
-// -------------------- findMatchingPreset Tests --------------------
-describe('findMatchingPreset', () => {
-	test('matches provider by exact baseUrl', () => {
-		const config = {
-			baseUrl: 'https://api.openai.com/v1/chat/completions',
-			name: 'SomeOtherName',
-		};
-
-		const result = findMatchingPreset(config);
-		expect(result).toBe('OpenAI');
+describe('findUniqueProvider', () => {
+	const provider = (name: string, baseUrl = 'https://example.invalid'): ProviderConfig => ({
+		name,
+		baseUrl,
+		models: [],
 	});
 
-	test('matches provider by exact name', () => {
-		const config = {
-			baseUrl: 'https://some-other-url.com',
-			name: 'Anthropic',
-		};
-
-		const result = findMatchingPreset(config);
-		expect(result).toBe('Anthropic');
+	test('returns the exact configured object without rewriting its endpoint', () => {
+		const first = provider('Anthropic');
+		const selected = provider('OpenAI', 'https://custom.example.invalid');
+		const providers = [first, selected];
+		expect(findUniqueProvider(providers, 'OpenAI')).toBe(selected);
+		expect(providers).toEqual([first, selected]);
 	});
 
-	test('prioritizes baseUrl match over name match', () => {
-		const config = {
-			baseUrl: 'https://api.openai.com/v1/chat/completions',
-			name: 'Anthropic',
-		};
-
-		const result = findMatchingPreset(config);
-		expect(result).toBe('OpenAI');
+	test('does not infer a backend from the endpoint or normalize the name', () => {
+		const configured = provider('Alias', 'https://api.openai.com/v1/chat/completions');
+		expect(findUniqueProvider([configured], 'OpenAI')).toBeUndefined();
+		expect(findUniqueProvider([provider('OpenAI')], 'openai')).toBeUndefined();
+		expect(findUniqueProvider([], 'OpenAI')).toBeUndefined();
 	});
 
-	test('returns "Custom Provider" when no match found', () => {
-		expect(findMatchingPreset({ baseUrl: '', name: '' })).toBe('Custom Provider');
-		expect(findMatchingPreset({ baseUrl: 'https://custom.com', name: 'UnknownProvider' })).toBe('Custom Provider');
-		expect(findMatchingPreset({ baseUrl: 'https://custom.com', name: 'openai' })).toBe('Custom Provider');
-		expect(findMatchingPreset({ baseUrl: 'https://api.openai.com/v1/chat', name: 'Test' })).toBe('Custom Provider');
+	test('rejects duplicate names regardless of order or differing endpoints', () => {
+		const first = provider('OpenAI', 'https://first.example.invalid');
+		const second = provider('OpenAI', 'https://second.example.invalid');
+		expect(findUniqueProvider([first, second], 'OpenAI')).toBeUndefined();
+		expect(findUniqueProvider([second, first], 'OpenAI')).toBeUndefined();
+	});
+
+	test('rejects a repeated object instead of silently choosing its first occurrence', () => {
+		const configured = provider('OpenAI');
+		expect(findUniqueProvider([configured, configured], 'OpenAI')).toBeUndefined();
 	});
 });

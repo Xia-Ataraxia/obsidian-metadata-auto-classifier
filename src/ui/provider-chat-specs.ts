@@ -52,10 +52,11 @@ function parseChatCompletion(data: unknown): GeneratedTags {
 }
 
 function openAIHeaders(apiKey: string): Record<string, string> {
-	return {
+	const headers: Record<string, string> = {
 		'Content-Type': 'application/json',
-		Authorization: `Bearer ${apiKey}`,
 	};
+	if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+	return headers;
 }
 
 function openAIRequestBody(

@@ -56,7 +56,13 @@ describe('settings error privacy', () => {
 		for (const failure of [new Error(canary), { message: canary }]) {
 			const show = vi.fn();
 			startAuthFlow.mockRejectedValueOnce(failure);
-			const modal = new ProviderModal(new App(), vi.fn(), { show } as unknown as PluginNotices);
+			const modal = new ProviderModal(new App(), vi.fn(), { show } as unknown as PluginNotices, {
+				name: 'Codex',
+				baseUrl: 'https://chatgpt.com/backend-api/codex/responses',
+				models: [],
+				authType: 'oauth',
+			});
+			modal.onOpen();
 			await (modal as unknown as { connectOAuth(): Promise<void> }).connectOAuth();
 			expect(show).toHaveBeenCalledWith('oauth_failed', {
 				message: 'Authentication could not be completed. Check the account configuration.',

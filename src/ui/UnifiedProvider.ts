@@ -11,10 +11,79 @@ import { nativeProviderSpecs } from './provider-native-specs';
 const REQUEST_TIMEOUT_MS = 60_000;
 const inFlightCodexRefreshTokens = new Set<string>();
 
+type ProviderAuthMode = 'apiKey' | 'oauth';
+
+const AUTH_MODE_ERROR = 'Provider authentication mode is unsupported';
+const AUTH_UNAVAILABLE_ERROR = 'Provider authentication is unavailable';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasCredentialString(value: unknown): value is string {
+	return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasOAuthCredential(value: unknown): boolean {
+	return (
+		isRecord(value) &&
+		hasCredentialString(value.accessToken) &&
+		hasCredentialString(value.refreshToken) &&
+		hasCredentialString(value.accountId) &&
+		typeof value.expiresAt === 'number' &&
+		Number.isFinite(value.expiresAt)
+	);
+}
+
+function resolveApiKey(provider: ProviderConfig): string {
+	const expectedAuth: ProviderAuthMode =
+		provider.name === PROVIDER_NAMES.CODEX ? 'oauth' : 'apiKey';
+	const optionalKey =
+		provider.name === PROVIDER_NAMES.OLLAMA || provider.name === PROVIDER_NAMES.LMSTUDIO;
+	const configuredAuthType: unknown = provider.authType;
+
+	if (provider.auth !== undefined) {
+		const auth: unknown = provider.auth;
+		if (!isRecord(auth) || auth.type !== expectedAuth) {
+			throw new Error(AUTH_MODE_ERROR);
+		}
+		if (expectedAuth === 'oauth') {
+			if (!hasOAuthCredential(auth.oauth)) throw new Error(AUTH_UNAVAILABLE_ERROR);
+			return '';
+		}
+		if (typeof auth.apiKey !== 'string') throw new Error(AUTH_UNAVAILABLE_ERROR);
+		if (optionalKey) return auth.apiKey.trim().length > 0 ? auth.apiKey : '';
+		if (!hasCredentialString(auth.apiKey)) throw new Error(AUTH_UNAVAILABLE_ERROR);
+		return auth.apiKey;
+	}
+
+	if (configuredAuthType !== undefined && configuredAuthType !== expectedAuth) {
+		throw new Error(AUTH_MODE_ERROR);
+	}
+	if (expectedAuth === 'oauth') {
+		if (!hasOAuthCredential(provider.oauth)) throw new Error(AUTH_UNAVAILABLE_ERROR);
+		return '';
+	}
+	if (provider.apiKey === undefined && optionalKey) return '';
+	if (typeof provider.apiKey !== 'string') throw new Error(AUTH_UNAVAILABLE_ERROR);
+	if (optionalKey) return provider.apiKey.trim().length > 0 ? provider.apiKey : '';
+	if (!hasCredentialString(provider.apiKey)) throw new Error(AUTH_UNAVAILABLE_ERROR);
+	return provider.apiKey;
+}
+
 function extractOAuthTokens(provider: ProviderConfig) {
-	if (provider.auth) return provider.auth.type === 'oauth' ? provider.auth.oauth : undefined;
-	if (provider.authType === 'apiKey') return undefined;
-	return provider.oauth;
+	if (provider.auth !== undefined) {
+		const auth: unknown = provider.auth;
+		return provider.name === PROVIDER_NAMES.CODEX &&
+			isRecord(auth) &&
+			auth.type === 'oauth' &&
+			hasOAuthCredential(auth.oauth)
+			? (auth.oauth as ProviderConfig['oauth'])
+			: undefined;
+	}
+	if (provider.name !== PROVIDER_NAMES.CODEX) return undefined;
+	if (provider.authType !== undefined && provider.authType !== 'oauth') return undefined;
+	return hasOAuthCredential(provider.oauth) ? provider.oauth : undefined;
 }
 
 function getProviderSpec(providerName: string): ProviderSpec {
@@ -68,14 +137,9 @@ export class UnifiedProvider implements APIProvider {
 		requestOptions?: HttpRequestOptions
 	): Promise<GeneratedTags> {
 		const spec = getProviderSpec(provider.name);
-		const expectedAuth = provider.name === PROVIDER_NAMES.CODEX ? 'oauth' : 'apiKey';
-		const configuredAuth = provider.auth?.type ?? provider.authType;
-		if (configuredAuth && configuredAuth !== expectedAuth)
-			throw new Error('Provider authentication mode is unsupported');
+		const apiKey = resolveApiKey(provider);
 		const deadlineOptions = requestOptionsWithDeadline(requestOptions);
 		assertDeadline(deadlineOptions);
-		const apiKey =
-			provider.auth?.type === 'apiKey' ? provider.auth.apiKey : (provider.apiKey ?? '');
 		const headers = spec.buildHeaders(apiKey, provider);
 		const body = spec.buildRequestBody(
 			systemRole,

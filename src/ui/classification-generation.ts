@@ -2,6 +2,7 @@ import type { AutoClassifierSettings } from '../types';
 import { ClassificationStateError, providerHasAuth } from '../domain/classification-state';
 import type { FieldSnapshot } from '../domain/classification-state';
 import { validateGeneratedTags } from '../domain/tag-generation';
+import { findUniqueProvider } from '../utils/lib-utils';
 import { createProviderSession } from './provider-session';
 import { generateTags } from './provider-api';
 import { HttpError } from './request';
@@ -42,8 +43,7 @@ export function createGenerationStage(context: GenerationContext) {
 		const settings = context.getSettings();
 		const providerName = settings.selectedProvider;
 		const model = settings.selectedModel;
-		const getProvider = () =>
-			context.getSettings().providers.find((provider) => provider.name === providerName);
+		const getProvider = () => findUniqueProvider(context.getSettings().providers, providerName);
 		const configured = getProvider();
 		if (
 			!configured ||

@@ -2,6 +2,7 @@ import { App, type TFile } from 'obsidian';
 import { ClassificationService } from '../../src/ui/ClassificationService';
 import type { AutoClassifierSettings, FrontmatterField, ProviderConfig } from '../../src/types';
 import { getFieldValues } from '../../src/ui/frontmatter';
+import { findUniqueProvider, PROVIDER_NAMES } from '../../src/utils/lib-utils';
 
 const mocks = vi.hoisted(() => ({
 	classify: vi.fn(),
@@ -105,6 +106,17 @@ describe('ClassificationService', () => {
 		mocks.generate.mockResolvedValue(['fresh-tag']);
 	});
 
+	it('finds only one exact provider-name match', () => {
+		const exact = makeProvider({ name: 'Exact name' });
+		expect(findUniqueProvider([exact], 'Exact name')).toBe(exact);
+		expect(findUniqueProvider([exact], 'exact name')).toBeUndefined();
+		expect(findUniqueProvider([exact], 'Exact name ')).toBeUndefined();
+		expect(findUniqueProvider([], 'Exact name')).toBeUndefined();
+		expect(findUniqueProvider([exact, makeProvider({ name: 'Exact name' })], 'Exact name')).toBe(
+			undefined
+		);
+	});
+
 	it('does not revive a deactivated service when the plugin becomes active again', async () => {
 		active = false;
 		service.deactivate();
@@ -206,6 +218,43 @@ describe('ClassificationService', () => {
 		});
 		expect((app.vault as any).process).toHaveBeenCalledOnce();
 		expect(written[0]).toContain('fresh-tag');
+	});
+
+	it('rejects generation for duplicate exact provider names before making a provider request', async () => {
+		settings.frontmatter[0] = makeField({ name: 'tags', refs: ['   '], generateNewTags: true });
+		const first = makeProvider({
+			name: 'Duplicate provider',
+			baseUrl: 'https://first.invalid',
+			apiKey: 'first-profile-key',
+		});
+		const second = makeProvider({
+			name: 'Duplicate provider',
+			baseUrl: 'https://second.invalid',
+			apiKey: 'second-profile-key',
+		});
+		settings.providers = [first, second];
+		settings.selectedProvider = 'Duplicate provider';
+		settings.selectedModel = 'model-1';
+
+		await service.classify(file, 9);
+
+		expect(mocks.generate).not.toHaveBeenCalled();
+		expect(mocks.classify).not.toHaveBeenCalled();
+		expect(saveSettings).not.toHaveBeenCalled();
+		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(first).toMatchObject({
+			name: 'Duplicate provider',
+			baseUrl: 'https://first.invalid',
+			apiKey: 'first-profile-key',
+		});
+		expect(second).toMatchObject({
+			name: 'Duplicate provider',
+			baseUrl: 'https://second.invalid',
+			apiKey: 'second-profile-key',
+		});
+		expect(show).toHaveBeenCalledWith('classification_status', {
+			message: 'New tags could not be generated safely. No changes were made.',
+		});
 	});
 
 	it('does not run either provider or commit when references are absent and generation is disabled', async () => {
@@ -671,11 +720,12 @@ describe('ClassificationService', () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [
 			makeProvider({
+				name: PROVIDER_NAMES.CODEX,
 				apiKey: '',
 				auth: { type: 'oauth', oauth: tokens },
 			}),
 		];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = settings.providers[0].name;
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockImplementation(async (_input, _provider, _model, refresh) => {
 			await refresh({ ...tokens, accessToken: 'new-access' });

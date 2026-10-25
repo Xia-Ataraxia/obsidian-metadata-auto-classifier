@@ -12,25 +12,13 @@ import { Tag } from './TagSection';
 
 export class AutoClassifierSettingTab extends PluginSettingTab {
 	plugin: AutoClassifierPlugin;
-	api: Api;
-	tagSetting: Tag;
-	frontmatterSetting: Frontmatter;
-
-	private apiContainer: HTMLElement;
-	private tagContainer: HTMLElement;
-	private frontmatterContainer: HTMLElement;
+	api!: Api;
+	tagSetting!: Tag;
+	frontmatterSetting!: Frontmatter;
 
 	constructor(plugin: AutoClassifierPlugin) {
 		super(plugin.app, plugin);
 		this.plugin = plugin;
-
-		this.apiContainer = document.createElement('div');
-		this.tagContainer = document.createElement('div');
-		this.frontmatterContainer = document.createElement('div');
-
-		this.api = new Api(plugin, this.apiContainer);
-		this.tagSetting = new Tag(plugin, this.tagContainer);
-		this.frontmatterSetting = new Frontmatter(plugin, this.frontmatterContainer);
 	}
 
 	display(): void {
@@ -54,18 +42,18 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 		const jevContainer = containerEl.createDiv({ cls: 'jev-section' });
 		new JevSection(this.plugin, jevContainer).display();
 
-		this.apiContainer = containerEl.createDiv({ cls: 'api-section' });
-		this.api = new Api(this.plugin, this.apiContainer);
+		const apiContainer = containerEl.createDiv({ cls: 'api-section' });
+		this.api = new Api(this.plugin, apiContainer);
 		this.api.display();
 
 		new ObsidianSetting(containerEl).setName('Frontmatters').setHeading();
 
-		this.tagContainer = containerEl.createDiv({ cls: 'tag-section' });
-		this.tagSetting = new Tag(this.plugin, this.tagContainer);
+		const tagContainer = containerEl.createDiv({ cls: 'tag-section' });
+		this.tagSetting = new Tag(this.plugin, tagContainer);
 		this.tagSetting.display();
 
-		this.frontmatterContainer = containerEl.createDiv({ cls: 'frontmatter-section' });
-		this.frontmatterSetting = new Frontmatter(this.plugin, this.frontmatterContainer);
+		const frontmatterContainer = containerEl.createDiv({ cls: 'frontmatter-section' });
+		this.frontmatterSetting = new Frontmatter(this.plugin, frontmatterContainer);
 		this.frontmatterSetting.display();
 
 		const addButtonContainer = containerEl.createDiv({ cls: 'add-button-container' });

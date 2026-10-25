@@ -65,18 +65,13 @@ export type ProviderAuth =
 	| { type: 'apiKey'; apiKey: string }
 	| { type: 'oauth'; oauth: OAuthTokens };
 
-/**
- * Provider configuration interface
- * NOTE: During migration, both old format (apiKey, oauth fields) and new format (auth field) are supported
- */
 export interface ProviderBase {
 	name: string;
 	baseUrl: string;
 	temperature?: number;
 	models: Model[];
-	// New unified auth field
+	// Explicit auth takes precedence; flat fields must not supply fallback credentials.
 	auth?: ProviderAuth;
-	// Legacy fields (kept for backward compatibility during migration)
 	apiKey?: string;
 	authType?: AuthType;
 	oauth?: OAuthTokens;

@@ -209,7 +209,7 @@ export class TextComponent {
 }
 
 export class TextAreaComponent {
-	inputEl = { rows: 0, style: { width: '' } } as any;
+	inputEl = { rows: 0, addClass: vi.fn() };
 	constructor(public containerEl: HTMLElement) {}
 	setPlaceholder = vi.fn().mockReturnThis();
 	setValue = vi.fn().mockReturnThis();
@@ -234,6 +234,9 @@ function createMockElement(): any {
 		checked: false,
 	};
 	// Recursive mock for createEl and createDiv
+	mockElement.setCssProps = vi.fn((properties: Record<string, string>) => {
+		Object.assign(mockElement.style, properties);
+	});
 	mockElement.createEl = vi.fn().mockImplementation(() => createMockElement());
 	mockElement.createDiv = vi.fn().mockImplementation(() => createMockElement());
 	return mockElement;

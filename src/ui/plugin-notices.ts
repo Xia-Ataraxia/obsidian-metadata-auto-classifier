@@ -1,4 +1,4 @@
-import { Notice, setIcon } from 'obsidian';
+import { ButtonComponent, Notice } from 'obsidian';
 import type { NoticeCatalog, NoticeShowOptions, PluginNoticesHost } from '../types';
 
 const BUILTIN_TEMPLATES: Record<string, string> = {
@@ -130,60 +130,44 @@ export class PluginNotices {
 		text: string,
 		opts: { button?: { text: string; callback: () => void }; immutable: boolean }
 	): DocumentFragment {
-		const fragment = document.createDocumentFragment();
-		const wrapper = document.createElement('div');
-		wrapper.className = 'plugin-notice';
+		const fragment = window.activeDocument.createDocumentFragment();
+		const wrapper = fragment.createDiv({ cls: 'plugin-notice' });
+		wrapper.createEl('p', { cls: 'plugin-notice-head', text: `[${this.prefix}]` });
+		wrapper.createEl('p', { cls: 'plugin-notice-content', text });
 
-		const head = document.createElement('p');
-		head.className = 'plugin-notice-head';
-		head.textContent = `[${this.prefix}]`;
-		wrapper.appendChild(head);
+		const hasActionButton = opts.button?.text && typeof opts.button.callback === 'function';
+		if (hasActionButton || !opts.immutable) {
+			const actions = wrapper.createDiv({ cls: 'plugin-notice-actions' });
 
-		const body = document.createElement('p');
-		body.className = 'plugin-notice-content';
-		body.textContent = text;
-		wrapper.appendChild(body);
+			if (hasActionButton && opts.button) {
+				this.createActionButton(actions, opts.button.text, () => {
+					opts.button?.callback();
+					this.remove(id);
+				});
+			}
 
-		const actions = document.createElement('div');
-		actions.className = 'plugin-notice-actions';
-
-		if (opts.button?.text && typeof opts.button.callback === 'function') {
-			const btn = this.createActionButton(opts.button.text, () => {
-				opts.button?.callback();
-				this.remove(id);
-			});
-			actions.appendChild(btn);
+			if (!opts.immutable) this.createMuteButton(actions, id);
 		}
 
-		if (!opts.immutable) {
-			const muteBtn = this.createMuteButton(id);
-			actions.appendChild(muteBtn);
-		}
-
-		if (actions.childElementCount > 0) {
-			wrapper.appendChild(actions);
-		}
-
-		fragment.appendChild(wrapper);
 		return fragment;
 	}
 
-	private createActionButton(text: string, callback: () => void): HTMLButtonElement {
-		const button = document.createElement('button');
-		button.className = 'plugin-notice-btn';
-		button.type = 'button';
-		button.textContent = text;
-		button.addEventListener('click', callback);
-		return button;
+	private createActionButton(containerEl: HTMLElement, text: string, callback: () => void): void {
+		const button = new ButtonComponent(containerEl)
+			.setButtonText(text)
+			.setClass('plugin-notice-btn');
+		button.buttonEl.type = 'button';
+		button.onClick(() => callback());
 	}
 
-	private createMuteButton(id: string): HTMLButtonElement {
-		const button = document.createElement('button');
-		button.className = 'plugin-notice-btn plugin-notice-btn--mute';
-		button.type = 'button';
-		button.setAttribute('aria-label', `Mute notice: ${id}`);
-		setIcon(button, 'bell-off');
-		button.addEventListener('click', () => {
+	private createMuteButton(containerEl: HTMLElement, id: string): void {
+		const button = new ButtonComponent(containerEl)
+			.setClass('plugin-notice-btn')
+			.setIcon('bell-off');
+		button.buttonEl.classList.add('plugin-notice-btn--mute');
+		button.buttonEl.type = 'button';
+		button.buttonEl.setAttribute('aria-label', `Mute notice: ${id}`);
+		button.onClick(() => {
 			void this.mute(id)
 				.then(() => {
 					this.remove(id);
@@ -193,7 +177,6 @@ export class PluginNotices {
 					console.error('[MAC] Failed to mute notice.');
 				});
 		});
-		return button;
 	}
 
 	private scheduleCleanup(id: string, timeout: number): void {

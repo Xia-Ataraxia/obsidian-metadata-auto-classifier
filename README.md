@@ -72,12 +72,13 @@ Jev accepts yes probabilities at or above 0.7 and no probabilities at or below 0
 
 ### Generation authentication and model limits
 
+- Provider names identify the nine supported protocols. Choose a preset rather than renaming a provider; arbitrary labels and duplicate names are not supported. Existing unsupported records are not silently rewritten.
 - Codex sign-in displays a device code and an explicit link to the official verification page. It does not start a local callback server, automatically open a browser, or copy the code. Closing the dialog cancels the flow.
 - OAuth refresh must preserve the account and save current credentials before retrying. Editing the provider or unloading the plugin invalidates an in-flight operation.
 - Models must support their provider's required output protocol. DeepSeek uses JSON mode with strict application validation; schema/tool-capable providers use their documented structured-output controls. Unsupported models fail rather than silently changing protocols or models.
 - Local Ollama and LM Studio servers may omit API keys; installed models and engine capabilities still matter. Bundled suggestions do not migrate saved models or endpoints and do not guarantee account access, free pricing, or local installation.
 
-Real-account device login, mobile behavior, and live provider compatibility are not yet certified. The retained Codex backend also has unresolved model and streaming-terminal compatibility limits.
+Real-account device login, mobile behavior, and live provider compatibility are not yet certified. Codex's supported terminal representations have synthetic coverage; model availability and actual backend behavior still require verification.
 
 ## Tech Stack
 
@@ -109,14 +110,15 @@ Metadata-Auto-Classifier/
 
 ## Development
 
+Bun is required by the workspace rules. The lockfile, package scripts, and generated CI are still awaiting migration: their advertised upstream generator is unavailable. Do not treat the existing `ci` script as Bun-based; it still invokes pnpm.
+
+The following checks run with already-installed dependencies. They do not replace a verified Bun lockfile/frozen installation or the required hosted CI check:
+
 ```bash
-pnpm install
-pnpm dev              # vault selection + esbuild watch + hot reload
-pnpm build            # tsc type-check + production build
-pnpm test             # Vitest unit tests
-pnpm test:coverage    # Vitest with coverage report
-pnpm lint             # ESLint
-pnpm run ci           # build + lint + test
+bun x --bun --no-install tsc --noEmit
+bun x --bun --no-install vitest run
+bun x --bun --no-install eslint . --ignore-pattern 'coverage/**' --ignore-pattern '__tests__/**' --ignore-pattern '__mocks__/**'
+bun esbuild.config.mjs production
 ```
 
 ## Inspiration

@@ -4,6 +4,7 @@ import type AutoClassifierPlugin from '../../main';
 import { testModel } from '../provider-api';
 import type { Model, ProviderConfig } from '../../types';
 import { ClassificationStateError } from '../../domain/classification-state';
+import { findUniqueProvider } from '../../utils/lib-utils';
 import { createProviderSession } from '../provider-session';
 import { Setting } from './components/Setting';
 import { ModelModal, type ModelModalProps } from './modals/ModelModal';
@@ -66,9 +67,21 @@ export class ModelSection {
 							text: isActive ? 'Selected' : 'Select',
 							cta: isActive,
 							onClick: async () => {
+								if (!this.plugin.isActive()) return;
+								const liveProvider = findUniqueProvider(
+									this.plugin.settings.providers,
+									provider.name
+								);
+								if (
+									liveProvider !== provider ||
+									provider.models.filter((model) => model.id === config.id).length !== 1 ||
+									provider.models.find((model) => model.id === config.id) !== config
+								)
+									return;
 								this.plugin.settings.selectedProvider = provider.name;
 								this.plugin.settings.selectedModel = config.id;
 								await this.plugin.saveSettings();
+								if (!this.plugin.isActive()) return;
 								this.onRefresh();
 							},
 						},
@@ -83,16 +96,26 @@ export class ModelSection {
 										if (!this.plugin.isActive()) {
 											throw new ClassificationStateError('operation-revoked');
 										}
-										const liveProvider = this.plugin.settings.providers.find(
-											(item) => item.name === providerName
+										const liveProvider = findUniqueProvider(
+											this.plugin.settings.providers,
+											providerName
 										);
-										if (!liveProvider?.models.some((item) => item.id === modelId)) {
+										if (
+											!liveProvider ||
+											liveProvider !== provider ||
+											!liveProvider.models.some((item) => item.id === modelId)
+										) {
 											throw new ClassificationStateError('provider-changed');
 										}
 									};
 									const session = createProviderSession({
-										getProvider: () =>
-											this.plugin.settings.providers.find((item) => item.name === providerName),
+										getProvider: () => {
+											const uniqueProvider = findUniqueProvider(
+												this.plugin.settings.providers,
+												providerName
+											);
+											return uniqueProvider === provider ? uniqueProvider : undefined;
+										},
 										saveSettings: () => this.plugin.saveSettings(),
 										assertCurrent: assertModelCurrent,
 									});
@@ -123,33 +146,44 @@ export class ModelSection {
 						{
 							icon: 'pencil',
 							text: 'Edit',
-							onClick: () => this.openModelModal('edit', editTarget),
+							onClick: () => {
+								if (!this.plugin.isActive()) return;
+								this.openModelModal('edit', editTarget, provider, config);
+							},
 						},
 						{
 							icon: 'trash',
 							text: 'Delete',
 							onClick: async () => {
+								if (!this.plugin.isActive()) return;
 								// eslint-disable-next-line no-alert -- confirm() used intentionally for destructive action
 								const confirmed = confirm(
 									`Are you sure you want to delete "${config.name}" model?`
 								);
 								if (!confirmed) return;
 
-								const currentProvider = this.plugin.settings.providers.find(
-									(p) => p.name === provider.name
-								);
-								if (currentProvider) {
-									currentProvider.models = currentProvider.models.filter(
-										(m: Model) => m.id !== config.id
-									);
-								}
+								const providers = this.plugin.settings.providers;
+								if (
+									!this.plugin.isActive() ||
+									providers.filter((item) => item === provider).length !== 1 ||
+									provider.models.filter((model) => model.id === config.id).length !== 1 ||
+									provider.models.find((model) => model.id === config.id) !== config
+								)
+									return;
 
-								if (this.plugin.settings.selectedModel === config.id) {
+								provider.models = provider.models.filter((model: Model) => model.id !== config.id);
+
+								if (
+									findUniqueProvider(providers, this.plugin.settings.selectedProvider) ===
+										provider &&
+									this.plugin.settings.selectedModel === config.id
+								) {
 									this.plugin.settings.selectedProvider = '';
 									this.plugin.settings.selectedModel = '';
 								}
 
 								await this.plugin.saveSettings();
+								if (!this.plugin.isActive()) return;
 								this.onRefresh();
 							},
 						},
@@ -161,45 +195,67 @@ export class ModelSection {
 
 	private openModelModal(
 		type: 'add' | 'edit',
-		editTarget?: { model: string; name: string; provider: string }
+		editTarget?: { model: string; name: string; provider: string },
+		capturedSource?: ProviderConfig,
+		capturedModel?: Model
 	): void {
+		if (!this.plugin.isActive()) return;
+		const modalProviders = [...this.plugin.settings.providers];
 		const modalProps: ModelModalProps = {
-			providers: this.plugin.settings.providers,
+			providers: modalProviders,
 			notices: this.plugin.notices,
 			onSave: async (result) => {
-				if (result.isEdit && result.oldModel) {
-					const provider = this.plugin.settings.providers.find(
-						(p) => p.name === result.oldModel?.provider
-					);
-					if (provider) {
-						provider.models = provider.models.filter((m) => m.id !== result.oldModel?.model);
-					}
+				if (!this.plugin.isActive()) return;
+				const currentProviders = this.plugin.settings.providers;
+				const openedTarget = findUniqueProvider(modalProviders, result.provider);
+				const target = findUniqueProvider(currentProviders, result.provider);
+				if (!openedTarget || target !== openedTarget) return;
 
-					const newProvider = this.plugin.settings.providers.find(
-						(p) => p.name === result.provider
-					);
-					if (newProvider) {
-						newProvider.models.push(result.model);
-					}
+				if (type === 'edit') {
+					const oldModel = result.oldModel;
+					if (
+						!result.isEdit ||
+						!oldModel ||
+						!editTarget ||
+						!capturedSource ||
+						!capturedModel ||
+						oldModel.provider !== editTarget.provider ||
+						oldModel.model !== editTarget.model
+					)
+						return;
 
-					if (editTarget && editTarget.model === result.oldModel.model) {
-						this.plugin.settings.selectedProvider = result.provider;
-						this.plugin.settings.selectedModel = result.model.id;
-					}
+					const openedSource = findUniqueProvider(modalProviders, oldModel.provider);
+					const source = findUniqueProvider(currentProviders, oldModel.provider);
+					if (
+						openedSource !== capturedSource ||
+						source !== capturedSource ||
+						capturedSource.models.filter((model) => model.id === oldModel.model).length !== 1 ||
+						capturedSource.models.find((model) => model.id === oldModel.model) !== capturedModel ||
+						capturedSource.models.find((model) => model.id === oldModel.model)?.name !==
+							editTarget.name
+					)
+						return;
+
+					capturedSource.models = capturedSource.models.filter(
+						(model) => model.id !== oldModel.model
+					);
+					target.models.push(result.model);
+					this.plugin.settings.selectedProvider = result.provider;
+					this.plugin.settings.selectedModel = result.model.id;
 				} else {
-					const provider = this.plugin.settings.providers.find((p) => p.name === result.provider);
-					if (provider) {
-						provider.models.push(result.model);
-					}
+					if (result.isEdit) return;
+					target.models.push(result.model);
 				}
 
 				await this.plugin.saveSettings();
+				if (!this.plugin.isActive()) return;
 				this.onRefresh();
 			},
 			editTarget: editTarget,
 		};
 
 		const modal = new ModelModal(this.app, modalProps);
+		this.plugin.register(() => modal.close());
 		modal.open();
 	}
 }

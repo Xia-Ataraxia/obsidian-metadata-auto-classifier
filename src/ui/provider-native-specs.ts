@@ -1,4 +1,5 @@
 import { TAG_GENERATION_SCHEMA } from '../domain/constants';
+import { providerHasAuth } from '../domain/classification-state';
 import { CODEX_OAUTH } from '../domain/auth/oauth-constants';
 import { TagGenerationError } from '../domain/tag-generation';
 import { PROVIDER_NAMES } from '../utils/lib-utils';
@@ -46,8 +47,9 @@ function parseOllamaResponse(data: unknown): GeneratedTags {
 }
 
 function extractOAuthTokens(provider: ProviderConfig): ProviderConfig['oauth'] {
-	if (provider.auth) return provider.auth.type === 'oauth' ? provider.auth.oauth : undefined;
-	if (provider.authType === 'apiKey') return undefined;
+	if (provider.name !== PROVIDER_NAMES.CODEX || !providerHasAuth(provider)) return undefined;
+	if (provider.auth !== undefined)
+		return provider.auth?.type === 'oauth' ? provider.auth.oauth : undefined;
 	return provider.oauth;
 }
 
@@ -97,11 +99,20 @@ function parseCodexEvent(event: SSEEvent): SSEEventOutcome {
 	}
 	if (event.type === 'response.completed') {
 		const response = event.response;
+		if (!isRecord(response)) return { type: 'error' };
+		const hasOutput = 'output' in response;
+		const hasStatus = 'status' in response;
+		const hasCompletedOutput = response.status === 'completed' && Array.isArray(response.output);
+		const hasResponseId =
+			!hasOutput &&
+			typeof response.id === 'string' &&
+			response.id.trim().length > 0 &&
+			(!hasStatus || response.status === 'completed');
 		if (
-			!isRecord(response) ||
-			response.status !== 'completed' ||
-			!Array.isArray(response.output) ||
-			containsRefusal(response.output)
+			(response.error !== undefined && response.error !== null) ||
+			(response.incomplete_details !== undefined && response.incomplete_details !== null) ||
+			(!hasCompletedOutput && !hasResponseId) ||
+			(hasCompletedOutput && containsRefusal(response.output))
 		) {
 			return { type: 'error' };
 		}

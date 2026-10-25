@@ -32,6 +32,30 @@ export interface FieldSnapshot {
 	readonly generateNewTags: boolean;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasCredentialString(value: unknown): value is string {
+	return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasApiKey(value: unknown, optional: boolean): boolean {
+	if (value === undefined) return optional;
+	return typeof value === 'string' && (optional || value.trim().length > 0);
+}
+
+function hasOAuthCredential(value: unknown): boolean {
+	return (
+		isRecord(value) &&
+		hasCredentialString(value.accessToken) &&
+		hasCredentialString(value.refreshToken) &&
+		hasCredentialString(value.accountId) &&
+		typeof value.expiresAt === 'number' &&
+		Number.isFinite(value.expiresAt)
+	);
+}
+
 export function findField(
 	settings: { frontmatter: FrontmatterField[] },
 	id: number
@@ -40,17 +64,24 @@ export function findField(
 }
 
 export function copyProvider(provider: ProviderConfig): ProviderConfig {
-	return {
+	const copied: ProviderConfig = {
 		...provider,
 		models: provider.models.map((model) => ({ ...model })),
-		auth:
-			provider.auth?.type === 'oauth'
-				? { type: 'oauth', oauth: { ...provider.auth.oauth } }
-				: provider.auth?.type === 'apiKey'
-					? { ...provider.auth }
-					: undefined,
 		oauth: provider.oauth ? { ...provider.oauth } : undefined,
 	};
+	if (provider.auth !== undefined) {
+		const auth: unknown = provider.auth;
+		if (Array.isArray(auth)) {
+			copied.auth = auth.slice() as unknown as ProviderConfig['auth'];
+		} else if (isRecord(auth)) {
+			const authCopy = { ...auth };
+			if (isRecord(auth.oauth)) authCopy.oauth = { ...auth.oauth };
+			copied.auth = authCopy as ProviderConfig['auth'];
+		} else {
+			copied.auth = auth as ProviderConfig['auth'];
+		}
+	}
+	return copied;
 }
 
 export function sameProvider(left: ProviderConfig | undefined, right: ProviderConfig): boolean {
@@ -64,11 +95,20 @@ export function sameProvider(left: ProviderConfig | undefined, right: ProviderCo
 export function providerHasAuth(provider: ProviderConfig): boolean {
 	const optionalKey =
 		provider.name === PROVIDER_NAMES.OLLAMA || provider.name === PROVIDER_NAMES.LMSTUDIO;
-	if (provider.auth?.type === 'apiKey') return optionalKey || Boolean(provider.auth.apiKey);
-	if (provider.auth?.type === 'oauth') return Boolean(provider.auth.oauth?.accessToken);
-	if (provider.authType === 'oauth') return Boolean(provider.oauth?.accessToken);
-	if (provider.authType === 'apiKey') return optionalKey || Boolean(provider.apiKey);
-	return optionalKey || Boolean(provider.apiKey || provider.oauth?.accessToken);
+	const expectedAuth = provider.name === PROVIDER_NAMES.CODEX ? 'oauth' : 'apiKey';
+	if (provider.auth !== undefined) {
+		const auth: unknown = provider.auth;
+		if (!isRecord(auth) || auth.type !== expectedAuth) {
+			return false;
+		}
+		return expectedAuth === 'oauth'
+			? hasOAuthCredential(auth.oauth)
+			: hasApiKey(auth.apiKey, false) || (optionalKey && typeof auth.apiKey === 'string');
+	}
+	if (provider.authType !== undefined && provider.authType !== expectedAuth) return false;
+	return expectedAuth === 'oauth'
+		? hasOAuthCredential(provider.oauth)
+		: hasApiKey(provider.apiKey, optionalKey);
 }
 
 export function existingStringValues(target: TargetFieldSnapshot): string[] {

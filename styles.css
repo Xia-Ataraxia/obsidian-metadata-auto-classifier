@@ -2,58 +2,62 @@
 
 /* Grid Container for Popular Models */
 .mac-grid-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 8px;
-    margin-top: 10px;
-    margin-bottom: 20px;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 8px;
+	margin-top: 10px;
+	margin-bottom: 20px;
 }
 
 /* Model Option (Radio Button) */
 .mac-model-option {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    cursor: pointer;
+	display: flex;
+	align-items: center;
+	padding: 8px 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	cursor: pointer;
 }
 
-.mac-model-option input[type="radio"] {
-    margin-right: 8px;
+.mac-model-option input[type='radio'] {
+	margin-right: 8px;
 }
 
 .mac-model-option.selected {
-    background-color: var(--interactive-accent);
-    color: var(--text-on-accent);
-    border-color: var(--interactive-accent);
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
 }
 
 /* Button Container for Modals */
 .mac-button-container {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 20px;
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 20px;
 }
 
 /* Custom Prompt Container */
 .mac-custom-prompt-container {
-    width: 100%;
-    margin-top: 8px;
-    margin-bottom: 16px;
+	width: 100%;
+	margin-top: 8px;
+	margin-bottom: 16px;
+}
+
+.mac-classification-rule-textarea {
+	width: 100%;
 }
 
 /* Provider/Model Section Headings */
 .mac-section-heading {
-    margin-top: 16px;
-    margin-bottom: 8px;
+	margin-top: 16px;
+	margin-bottom: 8px;
 }
 
 /* API Key Link Styling */
 .mac-api-key-link {
-    color: var(--interactive-accent);
-    margin-left: 4px;
+	color: var(--interactive-accent);
+	margin-left: 4px;
 }
 
 /* Plugin notice styles */
@@ -89,17 +93,10 @@
 }
 
 .plugin-notice-btn {
-	border: 1px solid rgba(255, 255, 255, 0.2);
 	border-radius: var(--radius-s, 6px);
-	background: rgba(255, 255, 255, 0.1);
-	color: inherit;
 	font-size: var(--font-smallest, 11px);
 	padding: 2px 8px;
 	cursor: pointer;
-}
-
-.plugin-notice-btn:hover {
-	background: rgba(255, 255, 255, 0.2);
 }
 
 .plugin-notice-btn--mute {
@@ -115,4 +112,3 @@
 	width: 14px;
 	height: 14px;
 }
-

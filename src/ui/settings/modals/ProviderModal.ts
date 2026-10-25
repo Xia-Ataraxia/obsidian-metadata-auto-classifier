@@ -1,12 +1,14 @@
 import type { App } from 'obsidian';
 import { ButtonComponent, Modal } from 'obsidian';
 
+import { copyProvider } from '../../../domain/classification-state';
 import { getProviderPreset, getProviderPresets } from '../../../utils/lib-utils';
-import { CodexOAuth, formatTokenExpiry, isTokenExpired, CODEX_OAUTH } from '../../auth';
+import { CodexOAuth, CODEX_OAUTH } from '../../auth';
 import { OAuthError } from '../../auth/oauth';
-import type { OAuthTokens, ProviderConfig } from '../../../types';
+import type { AuthType, OAuthTokens, ProviderConfig } from '../../../types';
 import { ModalAccessibilityHelper } from '../components/ModalAccessibilityHelper';
 import { Notice } from '../components/Notice';
+import { renderOAuthDeviceCode, renderOAuthSection } from '../components/OAuthControls';
 import type { PluginNotices } from '../../plugin-notices';
 import { Setting as CommonSetting, type DropdownOption } from '../components/Setting';
 
@@ -16,9 +18,15 @@ export class ProviderModal extends Modal {
 	private readonly notices: PluginNotices;
 	private readonly accessibilityHelper = new ModalAccessibilityHelper();
 	private readonly codexOAuth = new CodexOAuth();
+	private readonly structuredAuth: boolean;
 	private oauthTokens?: OAuthTokens;
 	private modalOpen = false;
+	private modalGeneration = 0;
+	private saveInProgress = false;
+	private draftRevision = 0;
 	private oauthFlowGeneration = 0;
+	private oauthFlowActive = false;
+	private disconnectedOAuth = false;
 
 	constructor(
 		app: App,
@@ -29,11 +37,13 @@ export class ProviderModal extends Modal {
 		super(app);
 		this.onSave = onSave;
 		this.notices = notices;
+		this.structuredAuth = existingProvider?.auth !== undefined;
 
 		if (existingProvider) {
-			this.providerConfig = { ...existingProvider };
-			// Preserve OAuth tokens from existing provider
-			this.oauthTokens = existingProvider.oauth;
+			this.providerConfig = copyProvider(existingProvider);
+			if (this.getRequiredAuthMode() === 'oauth' && this.getAuthMode() === 'oauth') {
+				this.oauthTokens = this.getStoredOAuthTokens();
+			}
 		} else {
 			this.providerConfig = {
 				name: 'Custom Provider',
@@ -47,6 +57,8 @@ export class ProviderModal extends Modal {
 
 	onOpen(): void {
 		this.modalOpen = true;
+		this.modalGeneration++;
+		this.saveInProgress = false;
 		const { contentEl } = this;
 		contentEl.empty();
 
@@ -102,28 +114,120 @@ export class ProviderModal extends Modal {
 	 * Check if the current provider uses OAuth authentication
 	 */
 	private isOAuthProvider(): boolean {
+		return this.getRequiredAuthMode() === 'oauth';
+	}
+
+	private getRequiredAuthMode(): AuthType | undefined {
 		const preset = getProviderPresets().find((p) => p.name === this.providerConfig.name);
-		return preset?.authType === 'oauth' || this.providerConfig.authType === 'oauth';
+		if (!preset) return undefined;
+		return preset.authType === 'oauth' ? 'oauth' : 'apiKey';
+	}
+
+	private getAuthMode(): AuthType | undefined {
+		const explicitAuth: unknown = this.providerConfig.auth;
+		if (explicitAuth !== undefined) {
+			if (!explicitAuth || typeof explicitAuth !== 'object' || Array.isArray(explicitAuth))
+				return undefined;
+			const auth = explicitAuth as { type?: unknown; apiKey?: unknown; oauth?: unknown };
+			if (auth.type === 'apiKey' && typeof auth.apiKey === 'string') return 'apiKey';
+			if (auth.type === 'oauth' && this.isOAuthTokens(auth.oauth)) return 'oauth';
+			return undefined;
+		}
+		if (this.providerConfig.authType !== undefined) {
+			return this.providerConfig.authType === 'apiKey' || this.providerConfig.authType === 'oauth'
+				? this.providerConfig.authType
+				: undefined;
+		}
+		const preset = getProviderPresets().find((p) => p.name === this.providerConfig.name);
+		return preset?.authType ?? (this.providerConfig.oauth ? 'oauth' : 'apiKey');
+	}
+
+	private isOAuthTokens(value: unknown): value is OAuthTokens {
+		if (!value || typeof value !== 'object') return false;
+		const tokens = value as Partial<OAuthTokens>;
+		return (
+			typeof tokens.accessToken === 'string' &&
+			typeof tokens.refreshToken === 'string' &&
+			typeof tokens.expiresAt === 'number' &&
+			typeof tokens.accountId === 'string'
+		);
+	}
+
+	private getStoredOAuthTokens(): OAuthTokens | undefined {
+		const explicitAuth: unknown = this.providerConfig.auth;
+		if (explicitAuth !== undefined) {
+			if (!explicitAuth || typeof explicitAuth !== 'object' || Array.isArray(explicitAuth))
+				return undefined;
+			const auth = explicitAuth as { type?: unknown; oauth?: unknown };
+			return auth.type === 'oauth' && this.isOAuthTokens(auth.oauth) ? auth.oauth : undefined;
+		}
+		if (this.providerConfig.authType === 'apiKey') return undefined;
+		return this.providerConfig.oauth;
+	}
+
+	private getApiKey(): string {
+		const explicitAuth: unknown = this.providerConfig.auth;
+		if (explicitAuth !== undefined) {
+			if (!explicitAuth || typeof explicitAuth !== 'object' || Array.isArray(explicitAuth))
+				return '';
+			const auth = explicitAuth as { type?: unknown; apiKey?: unknown };
+			return auth.type === 'apiKey' && typeof auth.apiKey === 'string' ? auth.apiKey : '';
+		}
+		if (this.providerConfig.authType)
+			return this.providerConfig.authType === 'apiKey' ? (this.providerConfig.apiKey ?? '') : '';
+		if (this.providerConfig.oauth) return '';
+		return this.providerConfig.apiKey ?? '';
+	}
+
+	private applyAuthMode(mode: AuthType): void {
+		const apiKey = this.getApiKey();
+		this.providerConfig.authType = mode;
+
+		if (this.structuredAuth) {
+			this.providerConfig.apiKey = undefined;
+			this.providerConfig.oauth = undefined;
+			this.providerConfig.auth =
+				mode === 'apiKey'
+					? { type: 'apiKey', apiKey }
+					: this.oauthTokens
+						? { type: 'oauth', oauth: { ...this.oauthTokens } }
+						: undefined;
+			return;
+		}
+
+		this.providerConfig.auth = undefined;
+		if (mode === 'apiKey') {
+			this.providerConfig.apiKey = apiKey;
+			this.providerConfig.oauth = undefined;
+			this.oauthTokens = undefined;
+		} else {
+			this.providerConfig.apiKey = undefined;
+			this.providerConfig.oauth = this.oauthTokens ? { ...this.oauthTokens } : undefined;
+		}
+	}
+
+	private clearCredentialSources(): void {
+		this.providerConfig.auth = undefined;
+		this.providerConfig.apiKey = undefined;
+		this.providerConfig.oauth = undefined;
+	}
+
+	private markDraftChanged(): void {
+		this.draftRevision++;
+	}
+
+	private invalidateOAuthFlow(): void {
+		this.oauthFlowGeneration++;
+		if (this.oauthFlowActive) this.codexOAuth.cancelFlow();
+		this.oauthFlowActive = false;
 	}
 
 	private addProviderForm(containerEl: HTMLElement): void {
-		// Provider Name - always editable, but show hint if it matches preset
+		// Show the selected preset's provider name as a read-only setting.
 		const presets = getProviderPresets();
-		const isPresetProvider = presets.some((preset) => preset.name === this.providerConfig.name);
-
 		CommonSetting.create(containerEl, {
 			name: 'Provider Name',
-			desc: isPresetProvider
-				? 'Provider name (from preset)'
-				: 'Enter a unique name for your provider',
-			textInput: {
-				placeholder: 'Enter provider name',
-				value: this.providerConfig.name,
-				disabled: false,
-				onChange: (value) => {
-					this.providerConfig.name = value;
-				},
-			},
+			desc: this.providerConfig.name,
 		});
 
 		// API URL
@@ -135,6 +239,7 @@ export class ProviderModal extends Modal {
 				value: this.providerConfig.baseUrl,
 				onChange: (value) => {
 					this.providerConfig.baseUrl = value;
+					this.markDraftChanged();
 				},
 			},
 		});
@@ -143,16 +248,33 @@ export class ProviderModal extends Modal {
 
 		// Show OAuth or API Key based on provider type
 		if (this.isOAuthProvider()) {
-			this.addOAuthSection(containerEl);
+			renderOAuthSection(
+				containerEl,
+				this.oauthTokens,
+				() => this.connectOAuth(),
+				() => this.disconnectOAuth()
+			);
 		} else {
 			CommonSetting.create(containerEl, {
 				name: 'API Key',
 				desc: 'Your API key for this provider',
 				textInput: {
 					placeholder: 'Enter API key',
-					value: this.providerConfig.apiKey ?? '',
+					value: this.getApiKey(),
 					onChange: (value) => {
-						this.providerConfig.apiKey = value;
+						this.providerConfig.authType = 'apiKey';
+						this.oauthTokens = undefined;
+						this.disconnectedOAuth = false;
+						if (this.structuredAuth) {
+							this.providerConfig.auth = { type: 'apiKey', apiKey: value };
+							this.providerConfig.apiKey = undefined;
+							this.providerConfig.oauth = undefined;
+						} else {
+							this.providerConfig.auth = undefined;
+							this.providerConfig.apiKey = value;
+							this.providerConfig.oauth = undefined;
+						}
+						this.markDraftChanged();
 					},
 				},
 			});
@@ -163,61 +285,21 @@ export class ProviderModal extends Modal {
 					'.setting-item:last-child .setting-item-description'
 				);
 				if (settingEl) {
-					const linkEl = document.createElement('a');
-					linkEl.href = preset.apiKeyUrl;
-					linkEl.target = '_blank';
-					linkEl.className = 'mac-api-key-link';
-					linkEl.textContent = 'Get your API key here';
-					settingEl.appendChild(linkEl);
+					settingEl.createEl('a', {
+						text: 'Get your API key here',
+						cls: 'mac-api-key-link',
+						attr: { href: preset.apiKeyUrl, target: '_blank' },
+					});
 				}
 			}
 		}
 	}
 
-	/**
-	 * Add OAuth authentication section for providers like Codex
-	 */
-	private addOAuthSection(containerEl: HTMLElement): void {
-		const isConnected = this.oauthTokens && !isTokenExpired(this.oauthTokens);
-		const statusText = isConnected
-			? `Connected (${formatTokenExpiry(this.oauthTokens!)})`
-			: 'Not connected';
-
-		CommonSetting.create(containerEl, {
-			name: 'Authentication',
-			desc: isConnected ? statusText : 'Connect your account to use this provider',
-			button: {
-				text: isConnected ? 'Disconnect' : 'Connect Account',
-				warning: isConnected,
-				onClick: isConnected ? () => this.disconnectOAuth() : () => this.connectOAuth(),
-			},
-		});
-
-		// Explain account-level availability without implying eligibility.
-		if (!isConnected) {
-			const infoEl = containerEl.createEl('div', {
-				cls: 'setting-item-description oauth-connection-info',
-			});
-			infoEl.setCssProps({
-				'margin-top': '-8px',
-				'margin-bottom': '16px',
-				'padding-left': '16px',
-				color: 'var(--text-muted)',
-			});
-			infoEl.textContent = 'Device-code sign-in may be disabled by account or workspace settings.';
-		}
-	}
-
 	private showDeviceCode(userCode: string): void {
 		this.contentEl.querySelector('.oauth-device-code')?.remove();
-		const section = this.contentEl.createDiv({ cls: 'oauth-device-code' });
-		section.createEl('p', {
-			text: `Enter this one-time code at ${CODEX_OAUTH.DEVICE_VERIFICATION_URI}.`,
-		});
-		section.createEl('code', { text: userCode });
-		new ButtonComponent(section)
-			.setButtonText('Open verification page')
-			.onClick(() => window.open(CODEX_OAUTH.DEVICE_VERIFICATION_URI, '_blank'));
+		renderOAuthDeviceCode(this.contentEl, userCode, () =>
+			window.open(CODEX_OAUTH.DEVICE_VERIFICATION_URI, '_blank')
+		);
 	}
 
 	/**
@@ -225,27 +307,34 @@ export class ProviderModal extends Modal {
 	 */
 	private async connectOAuth(): Promise<void> {
 		const flowGeneration = ++this.oauthFlowGeneration;
+		this.oauthFlowActive = true;
 		try {
 			const tokens = await this.codexOAuth.startAuthFlow(({ userCode }) => {
-				if (this.modalOpen && flowGeneration === this.oauthFlowGeneration) {
+				if (
+					this.modalOpen &&
+					flowGeneration === this.oauthFlowGeneration &&
+					this.isOAuthProvider()
+				) {
 					this.showDeviceCode(userCode);
 				}
 			});
 			if (flowGeneration !== this.oauthFlowGeneration) return;
+			this.oauthFlowActive = false;
+			if (!this.modalOpen || !this.isOAuthProvider()) return;
 			this.contentEl.querySelector('.oauth-device-code')?.remove();
 			this.oauthTokens = tokens;
-
-			// Update provider config
-			this.providerConfig.authType = 'oauth';
-			this.providerConfig.oauth = tokens;
+			this.disconnectedOAuth = false;
+			this.applyAuthMode('oauth');
+			this.markDraftChanged();
 
 			this.notices.show('oauth_connected');
 			this.updateForm();
 		} catch (error) {
 			if (flowGeneration !== this.oauthFlowGeneration) return;
+			this.oauthFlowActive = false;
+			if (!this.modalOpen) return;
 			this.contentEl.querySelector('.oauth-device-code')?.remove();
 			if (error instanceof OAuthError && error.code === 'cancelled') {
-				if (!this.modalOpen) return;
 				this.notices.show('oauth_cancelled');
 			} else {
 				const message =
@@ -267,12 +356,13 @@ export class ProviderModal extends Modal {
 	 * Disconnect OAuth
 	 */
 	private disconnectOAuth(): void {
-		// eslint-disable-next-line no-alert -- confirm() used intentionally for destructive action; modal refactor is out of scope
-		const confirmed = confirm('Are you sure you want to disconnect?');
-		if (!confirmed) return;
-
+		this.invalidateOAuthFlow();
+		this.contentEl.querySelector('.oauth-device-code')?.remove();
 		this.oauthTokens = undefined;
-		this.providerConfig.oauth = undefined;
+		this.clearCredentialSources();
+		this.providerConfig.authType = 'oauth';
+		this.disconnectedOAuth = true;
+		this.markDraftChanged();
 
 		this.notices.show('oauth_disconnected');
 		this.updateForm();
@@ -286,28 +376,58 @@ export class ProviderModal extends Modal {
 		const saveBtn = new ButtonComponent(buttonContainer)
 			.setButtonText('Save')
 			.setCta()
-			.onClick(() => {
-				const notice = Notice.startProgress('Saving provider...');
+			.onClick(async () => {
+				if (!this.modalOpen || this.saveInProgress) return;
+				this.saveInProgress = true;
+				const modalGeneration = this.modalGeneration;
 				saveBtn.setDisabled(true);
+				let notice: ReturnType<typeof Notice.startProgress> | undefined;
+				const draftRevision = this.draftRevision;
+				const saveSnapshot = copyProvider(this.providerConfig);
 				try {
-					if (this.validateForm()) {
-						void this.onSave(this.providerConfig);
+					notice = Notice.startProgress('Saving provider...');
+					if (!this.validateForm()) return;
+					await this.onSave(saveSnapshot);
+					if (this.isCurrentModal(modalGeneration) && this.draftRevision === draftRevision) {
 						this.close();
 					}
+				} catch {
+					if (this.isCurrentModal(modalGeneration)) {
+						this.notices.show('validation_error', {
+							component: 'Provider',
+							message: 'Could not save provider settings. Please try again.',
+						});
+					}
 				} finally {
-					Notice.endProgress(notice);
-					saveBtn.setDisabled(false);
+					try {
+						if (notice) Notice.endProgress(notice);
+					} finally {
+						saveBtn.setDisabled(false);
+						if (this.isCurrentModal(modalGeneration)) this.saveInProgress = false;
+					}
 				}
 			});
 	}
 
+	private isCurrentModal(generation: number): boolean {
+		return this.modalOpen && this.modalGeneration === generation;
+	}
+
 	private loadPresetData(providerName: string): void {
 		const preset = getProviderPreset(providerName);
+		const nextMode: AuthType = preset.authType === 'oauth' ? 'oauth' : 'apiKey';
+		if (this.providerConfig.name !== preset.name || this.getAuthMode() !== nextMode) {
+			this.invalidateOAuthFlow();
+			this.oauthTokens = undefined;
+			this.disconnectedOAuth = false;
+			this.clearCredentialSources();
+		}
 
 		this.providerConfig.name = preset.name;
 		this.providerConfig.baseUrl = preset.baseUrl;
 		this.providerConfig.temperature = preset.temperature;
-		this.providerConfig.authType = preset.authType;
+		this.applyAuthMode(nextMode);
+		this.markDraftChanged();
 
 		// For OAuth providers, use the special endpoint
 		if (preset.authType === 'oauth' && preset.name === 'Codex') {
@@ -354,6 +474,25 @@ export class ProviderModal extends Modal {
 			});
 			return false;
 		}
+		if (!getProviderPresets().some((preset) => preset.name === this.providerConfig.name)) {
+			this.notices.show('validation_error', {
+				component: 'Provider',
+				message: 'Select a supported provider preset before saving.',
+			});
+			return false;
+		}
+		const requiredAuthMode = this.getRequiredAuthMode();
+		const configuredAuthMode = this.getAuthMode();
+		if (requiredAuthMode && configuredAuthMode !== requiredAuthMode) {
+			this.notices.show('validation_error', {
+				component: 'Provider',
+				message:
+					requiredAuthMode === 'oauth'
+						? 'Connect this provider with OAuth or select a compatible preset.'
+						: 'Enter an API key for this provider or select a compatible preset.',
+			});
+			return false;
+		}
 
 		// API URL validation
 		if (!this.providerConfig.baseUrl.trim()) {
@@ -377,7 +516,7 @@ export class ProviderModal extends Modal {
 
 		// For OAuth providers, check if connected
 		if (this.isOAuthProvider()) {
-			if (!this.oauthTokens) {
+			if (!this.oauthTokens && !this.disconnectedOAuth) {
 				this.notices.show('validation_error', {
 					component: 'Provider',
 					message: 'Please connect your account before saving.',
@@ -391,10 +530,11 @@ export class ProviderModal extends Modal {
 
 	onClose(): void {
 		this.modalOpen = false;
-		this.oauthFlowGeneration++;
+		this.modalGeneration++;
+		this.saveInProgress = false;
+		this.invalidateOAuthFlow();
 		const { contentEl } = this;
 		this.accessibilityHelper.cleanup(contentEl);
-		this.codexOAuth.cancelFlow();
 		contentEl.empty();
 	}
 }

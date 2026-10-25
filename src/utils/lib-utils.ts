@@ -1,4 +1,4 @@
-import type { ProviderPreset } from '../types';
+import type { ProviderConfig, ProviderPreset } from '../types';
 import providerPresetsData from '../domain/presets.json';
 
 export const PROVIDER_NAMES = {
@@ -37,14 +37,15 @@ export const getProviderPreset = (providerName: string): ProviderPreset => {
 	return preset;
 };
 
-/**
- * Find matching preset for an existing provider config
- * Matches by baseUrl or name
- */
-export const findMatchingPreset = (providerConfig: { baseUrl: string; name: string }): string => {
-	const presets = getProviderPresets();
-	const matchingPreset = presets.find(
-		(preset) => preset.baseUrl === providerConfig.baseUrl || preset.name === providerConfig.name
-	);
-	return matchingPreset?.name || 'Custom Provider';
-};
+export function findUniqueProvider(
+	providers: ReadonlyArray<ProviderConfig>,
+	name: string
+): ProviderConfig | undefined {
+	let match: ProviderConfig | undefined;
+	for (const provider of providers) {
+		if (provider.name !== name) continue;
+		if (match) return undefined;
+		match = provider;
+	}
+	return match;
+}

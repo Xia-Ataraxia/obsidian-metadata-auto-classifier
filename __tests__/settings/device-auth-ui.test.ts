@@ -1,6 +1,7 @@
 import { App, Platform } from 'obsidian';
 import { CODEX_OAUTH, CodexOAuth } from '../../src/ui/auth';
 import { ProviderModal } from '../../src/ui/settings/modals/ProviderModal';
+import { Notice } from '../../src/ui/settings/components/Notice';
 import type { PluginNotices } from '../../src/ui/plugin-notices';
 import type { OAuthTokens, ProviderConfig } from '../../src/types';
 
@@ -301,16 +302,18 @@ vi.mock('../../src/utils/lib-utils', () => {
 });
 
 vi.mock('../../src/ui/settings/components/Notice', () => ({
-	Notice: { startProgress: vi.fn(() => null), endProgress: vi.fn() },
+	Notice: { startProgress: vi.fn(() => ({})), endProgress: vi.fn() },
 }));
 
 interface TestControl {
 	settingName: string;
+	value: string;
 	change(value: string): unknown;
 }
 
 interface TestButton {
 	textContent: string;
+	disabled: boolean;
 	click(): unknown;
 }
 
@@ -414,6 +417,12 @@ describe('ProviderModal device-code authentication UI', () => {
 		expect(open).toHaveBeenCalledWith(CODEX_OAUTH.DEVICE_VERIFICATION_URI, '_blank');
 		pending.resolve(tokens);
 		await connection;
+		expect((modal as any).providerConfig).toMatchObject({
+			authType: 'oauth',
+			oauth: tokens,
+		});
+		expect((modal as any).providerConfig.auth).toBeUndefined();
+		expect((modal as any).providerConfig.apiKey).toBeUndefined();
 	});
 
 	it('cancels on close and ignores late success or failure after closing and reopening', async () => {
@@ -466,11 +475,265 @@ describe('ProviderModal device-code authentication UI', () => {
 		expect(startAuthFlow).toHaveBeenCalledTimes(1);
 	});
 
-	it('preserves existing provider fields when edited settings are saved', () => {
+	it('keeps provider names read-only and changes them only through supported preset selection', () => {
+		const modal = new ProviderModal(new App(), vi.fn(), {
+			show: vi.fn(),
+		} as unknown as PluginNotices);
+		modal.onOpen();
+
+		expect(getSettingDescription(modal, 'Provider Name')).toBe('Custom Provider');
+		expect(() => getControl(modal, 'Provider Name')).toThrow('Missing control: Provider Name');
+		getControl(modal, 'Provider Preset').change('OpenAI');
+		expect(getSettingDescription(modal, 'Provider Name')).toBe('OpenAI');
+		expect((modal as any).providerConfig.name).toBe('OpenAI');
+	});
+
+	it('does not silently rewrite an unsupported existing provider name and rejects its save', async () => {
+		const onSave = vi.fn();
+		const show = vi.fn();
+		const modal = new ProviderModal(new App(), onSave, { show } as unknown as PluginNotices);
+		(modal as any).providerConfig.name = 'Unsupported Backend';
+		(modal as any).providerConfig.baseUrl = 'https://unsupported.example/v1/chat';
+		modal.onOpen();
+
+		expect(getSettingDescription(modal, 'Provider Name')).toBe('Unsupported Backend');
+		expect(() => getButton(modal, 'Connect Account')).toThrow('Missing button: Connect Account');
+		await getButton(modal, 'Save').click();
+
+		expect(onSave).not.toHaveBeenCalled();
+		expect((modal as any).providerConfig.name).toBe('Unsupported Backend');
+		expect(show).toHaveBeenCalledWith('validation_error', {
+			component: 'Provider',
+			message: 'Select a supported provider preset before saving.',
+		});
+	});
+
+	it('shows the required API-key control for OpenAI without reading structured OAuth fallbacks', async () => {
 		const existingProvider: ProviderConfig = {
-			name: 'Existing Provider',
+			name: 'OpenAI',
+			apiKey: 'stale-legacy-key',
+			baseUrl: 'https://api.openai.com/v1/chat/completions',
+			models: [],
+			temperature: 0.5,
+			authType: 'apiKey',
+			oauth: { ...tokens, accessToken: 'stale-legacy-oauth' },
+			auth: { type: 'oauth', oauth: tokens },
+		};
+		const show = vi.fn();
+		const onSave = vi.fn();
+		const modal = new ProviderModal(
+			new App(),
+			onSave,
+			{ show } as unknown as PluginNotices,
+			existingProvider
+		);
+		modal.onOpen();
+
+		const apiKey = getControl(modal, 'API Key');
+		expect(apiKey.value).toBe('');
+		expect(() => getButton(modal, 'Connect Account')).toThrow('Missing button: Connect Account');
+		expect((modal as any).oauthTokens).toBeUndefined();
+		expect((modal as any).providerConfig.auth).toEqual({ type: 'oauth', oauth: tokens });
+		expect(existingProvider.auth).toEqual({ type: 'oauth', oauth: tokens });
+
+		await getButton(modal, 'Save').click();
+		expect(onSave).not.toHaveBeenCalled();
+		expect(show).toHaveBeenCalledWith('validation_error', {
+			component: 'Provider',
+			message: 'Enter an API key for this provider or select a compatible preset.',
+		});
+
+		apiKey.change('new-openai-key');
+		expect((modal as any).providerConfig.auth).toEqual({
+			type: 'apiKey',
+			apiKey: 'new-openai-key',
+		});
+		expect((modal as any).providerConfig.oauth).toBeUndefined();
+		await getButton(modal, 'Save').click();
+		expect(onSave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				auth: { type: 'apiKey', apiKey: 'new-openai-key' },
+				apiKey: undefined,
+				oauth: undefined,
+			})
+		);
+	});
+
+	it('shows Codex OAuth without reading an explicit API key and requires connecting before save', async () => {
+		const existingProvider: ProviderConfig = {
+			name: 'Codex',
+			apiKey: 'stale-legacy-key',
+			baseUrl: CODEX_OAUTH.API_ENDPOINT,
+			models: [],
+			temperature: 0.5,
+			authType: 'oauth',
+			oauth: { ...tokens, accessToken: 'stale-legacy-oauth' },
+			auth: { type: 'apiKey', apiKey: 'stale-structured-key' },
+		};
+		const show = vi.fn();
+		const onSave = vi.fn();
+		const modal = new ProviderModal(
+			new App(),
+			onSave,
+			{ show } as unknown as PluginNotices,
+			existingProvider
+		);
+		modal.onOpen();
+
+		expect(getButton(modal, 'Connect Account')).toBeDefined();
+		expect(
+			modal.contentEl.querySelectorAll('input').map((input) => input.settingName)
+		).not.toContain('API Key');
+		expect((modal as any).providerConfig.auth).toEqual({
+			type: 'apiKey',
+			apiKey: 'stale-structured-key',
+		});
+		expect((modal as any).oauthTokens).toBeUndefined();
+		expect(existingProvider.auth).toEqual({
+			type: 'apiKey',
+			apiKey: 'stale-structured-key',
+		});
+
+		await getButton(modal, 'Save').click();
+		expect(onSave).not.toHaveBeenCalled();
+		expect(show).toHaveBeenCalledWith('validation_error', {
+			component: 'Provider',
+			message: 'Connect this provider with OAuth or select a compatible preset.',
+		});
+
+		vi.spyOn(CodexOAuth.prototype, 'startAuthFlow').mockResolvedValue(tokens);
+		await getButton(modal, 'Connect Account').click();
+		expect((modal as any).providerConfig.auth).toEqual({ type: 'oauth', oauth: tokens });
+		expect((modal as any).providerConfig.apiKey).toBeUndefined();
+		expect((modal as any).providerConfig.oauth).toBeUndefined();
+		await getButton(modal, 'Save').click();
+		expect(onSave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				auth: { type: 'oauth', oauth: tokens },
+				apiKey: undefined,
+				oauth: undefined,
+			})
+		);
+	});
+
+	it('treats malformed explicit auth as authoritative until the required API key repairs it', async () => {
+		const malformedAuths: unknown[] = [
+			null,
+			{},
+			{ type: 'password', password: 'secret' },
+			{ type: 'apiKey', apiKey: 42 },
+		];
+		for (const auth of malformedAuths) {
+			const existingProvider = {
+				name: 'OpenAI',
+				apiKey: 'stale-legacy-key',
+				baseUrl: 'https://api.openai.com/v1/chat/completions',
+				models: [],
+				authType: 'apiKey',
+				oauth: { ...tokens, accessToken: 'stale-legacy-oauth' },
+				auth,
+			} as unknown as ProviderConfig;
+			const onSave = vi.fn();
+			const show = vi.fn();
+			const modal = new ProviderModal(
+				new App(),
+				onSave,
+				{ show } as unknown as PluginNotices,
+				existingProvider
+			);
+			modal.onOpen();
+
+			expect(getControl(modal, 'API Key').value).toBe('');
+			expect(() => getButton(modal, 'Connect Account')).toThrow('Missing button: Connect Account');
+			expect((modal as any).providerConfig.auth).toEqual(auth);
+			await getButton(modal, 'Save').click();
+			expect(onSave).not.toHaveBeenCalled();
+			expect(show).toHaveBeenCalledWith('validation_error', {
+				component: 'Provider',
+				message: 'Enter an API key for this provider or select a compatible preset.',
+			});
+
+			getControl(modal, 'API Key').change('repaired-key');
+			expect((modal as any).providerConfig.auth).toEqual({
+				type: 'apiKey',
+				apiKey: 'repaired-key',
+			});
+			await getButton(modal, 'Save').click();
+			expect(onSave).toHaveBeenCalledOnce();
+			expect(existingProvider.auth).toEqual(auth);
+		}
+	});
+
+	it('retains newer draft edits after a deferred save failure and retries the edited snapshot', async () => {
+		const pending = makeDeferred<void>();
+		const onSave = vi
+			.fn()
+			.mockImplementationOnce(() => pending.promise)
+			.mockResolvedValue(undefined);
+		const show = vi.fn();
+		const modal = new ProviderModal(new App(), onSave, { show } as unknown as PluginNotices);
+		modal.onOpen();
+		getControl(modal, 'Provider Preset').change('OpenAI');
+		const save = getButton(modal, 'Save').click() as Promise<void>;
+		getControl(modal, 'API URL').change('https://retry.example/v1/chat');
+		pending.reject(new Error('synthetic persistence failure'));
+		await save;
+
+		expect(show).toHaveBeenCalledWith('validation_error', {
+			component: 'Provider',
+			message: 'Could not save provider settings. Please try again.',
+		});
+		expect(getControl(modal, 'API URL').value).toBe('https://retry.example/v1/chat');
+		expect(getButton(modal, 'Save')).toBeDefined();
+
+		await getButton(modal, 'Save').click();
+		expect(onSave).toHaveBeenCalledTimes(2);
+		expect(onSave.mock.calls[1]![0]).toMatchObject({
+			baseUrl: 'https://retry.example/v1/chat',
+		});
+	});
+
+	it('keeps draft edits made during a successful save open for a follow-up save', async () => {
+		const pending = makeDeferred<void>();
+		const onSave = vi
+			.fn()
+			.mockImplementationOnce(() => pending.promise)
+			.mockResolvedValue(undefined);
+		const modal = new ProviderModal(new App(), onSave, {
+			show: vi.fn(),
+		} as unknown as PluginNotices);
+		modal.onOpen();
+		getControl(modal, 'Provider Preset').change('OpenAI');
+		const save = getButton(modal, 'Save').click() as Promise<void>;
+		const firstSnapshot = onSave.mock.calls[0]![0] as ProviderConfig;
+
+		getControl(modal, 'API URL').change('https://edited.example/v1/chat');
+		getControl(modal, 'API Key').change('edited-key');
+		pending.resolve(undefined);
+		await save;
+
+		expect(firstSnapshot.baseUrl).toBe('https://api.openai.com/v1/chat/completions');
+		expect(firstSnapshot.auth).toBeUndefined();
+		expect(firstSnapshot.apiKey).toBe('');
+		expect(getControl(modal, 'API URL').value).toBe('https://edited.example/v1/chat');
+		expect(getControl(modal, 'API Key').value).toBe('edited-key');
+		expect(getButton(modal, 'Save')).toBeDefined();
+
+		await getButton(modal, 'Save').click();
+		expect(onSave).toHaveBeenCalledTimes(2);
+		expect(onSave.mock.calls[1]![0]).toMatchObject({
+			baseUrl: 'https://edited.example/v1/chat',
+			apiKey: 'edited-key',
+			authType: 'apiKey',
+		});
+		expect(modal.contentEl.querySelectorAll('button')).toHaveLength(0);
+	});
+
+	it('preserves existing provider fields when edited settings are saved', async () => {
+		const existingProvider: ProviderConfig = {
+			name: 'OpenAI',
 			apiKey: 'existing-api-key',
-			baseUrl: 'https://existing.example/v1/chat',
+			baseUrl: 'https://api.openai.com/v1/chat/completions',
 			models: [{ id: 'existing-model', name: 'Existing Model' }],
 			temperature: 0.25,
 			authType: 'apiKey',
@@ -484,17 +747,285 @@ describe('ProviderModal device-code authentication UI', () => {
 		);
 		modal.onOpen();
 
-		getControl(modal, 'Provider Name').change('Renamed Provider');
 		getControl(modal, 'API URL').change('https://updated.example/v1/chat');
-		getButton(modal, 'Save').click();
+		await getButton(modal, 'Save').click();
 
 		expect(onSave).toHaveBeenCalledTimes(1);
 		expect(onSave).toHaveBeenCalledWith({
 			...existingProvider,
-			name: 'Renamed Provider',
 			baseUrl: 'https://updated.example/v1/chat',
 		});
-		expect(existingProvider.name).toBe('Existing Provider');
-		expect(existingProvider.baseUrl).toBe('https://existing.example/v1/chat');
+		expect(existingProvider.name).toBe('OpenAI');
+		expect(existingProvider.baseUrl).toBe('https://api.openai.com/v1/chat/completions');
+	});
+
+	it('uses structured auth over stale legacy fields when displaying and editing an API key', async () => {
+		const existingProvider: ProviderConfig = {
+			name: 'OpenAI',
+			apiKey: 'stale-legacy-key',
+			baseUrl: 'https://existing.example/v1/chat',
+			models: [{ id: 'model-1', name: 'Model 1' }],
+			temperature: 0.5,
+			authType: 'oauth',
+			oauth: { ...tokens, accessToken: 'stale-legacy-oauth' },
+			auth: { type: 'apiKey', apiKey: 'structured-api-key' },
+		};
+		const onSave = vi.fn();
+		const modal = new ProviderModal(
+			new App(),
+			onSave,
+			{ show: vi.fn() } as unknown as PluginNotices,
+			existingProvider
+		);
+		modal.onOpen();
+
+		const apiKey = getControl(modal, 'API Key');
+		expect(apiKey.value).toBe('structured-api-key');
+		apiKey.change('updated-structured-key');
+		expect((modal as any).providerConfig.auth).toEqual({
+			type: 'apiKey',
+			apiKey: 'updated-structured-key',
+		});
+		expect((modal as any).providerConfig.apiKey).toBeUndefined();
+		expect((modal as any).providerConfig.oauth).toBeUndefined();
+
+		await getButton(modal, 'Save').click();
+		expect(onSave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				auth: { type: 'apiKey', apiKey: 'updated-structured-key' },
+				models: [{ id: 'model-1', name: 'Model 1' }],
+			})
+		);
+		expect(existingProvider.apiKey).toBe('stale-legacy-key');
+		expect(existingProvider.auth).toEqual({ type: 'apiKey', apiKey: 'structured-api-key' });
+	});
+
+	it('edits legacy API keys in the legacy shape', async () => {
+		const existingProvider: ProviderConfig = {
+			name: 'OpenAI',
+			apiKey: 'legacy-key',
+			baseUrl: 'https://legacy.example/v1/chat',
+			models: [],
+			temperature: 0.6,
+			authType: 'apiKey',
+		};
+		const onSave = vi.fn();
+		const modal = new ProviderModal(
+			new App(),
+			onSave,
+			{ show: vi.fn() } as unknown as PluginNotices,
+			existingProvider
+		);
+		modal.onOpen();
+
+		const apiKey = getControl(modal, 'API Key');
+		expect(apiKey.value).toBe('legacy-key');
+		apiKey.change('updated-legacy-key');
+		await getButton(modal, 'Save').click();
+
+		expect(onSave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				apiKey: 'updated-legacy-key',
+				authType: 'apiKey',
+				auth: undefined,
+				oauth: undefined,
+			})
+		);
+		expect(existingProvider.apiKey).toBe('legacy-key');
+	});
+
+	it('accepts OAuth tokens into the explicit auth shape instead of stale legacy credentials', async () => {
+		const expiredTokens = { ...tokens, expiresAt: 0 };
+		const existingProvider: ProviderConfig = {
+			name: 'Codex',
+			apiKey: 'stale-legacy-key',
+			baseUrl: CODEX_OAUTH.API_ENDPOINT,
+			models: [],
+			temperature: 0.5,
+			authType: 'apiKey',
+			oauth: { ...expiredTokens, accessToken: 'stale-legacy-oauth' },
+			auth: { type: 'oauth', oauth: expiredTokens },
+		};
+		const modal = new ProviderModal(
+			new App(),
+			vi.fn(),
+			{ show: vi.fn() } as unknown as PluginNotices,
+			existingProvider
+		);
+		modal.onOpen();
+		expect(getButton(modal, 'Connect Account')).toBeDefined();
+		expect(
+			modal.contentEl.querySelectorAll('input').map((input) => input.settingName)
+		).not.toContain('API Key');
+
+		vi.spyOn(CodexOAuth.prototype, 'startAuthFlow').mockResolvedValue(tokens);
+		await getButton(modal, 'Connect Account').click();
+
+		expect((modal as any).providerConfig.auth).toEqual({ type: 'oauth', oauth: tokens });
+		expect((modal as any).providerConfig.authType).toBe('oauth');
+		expect((modal as any).providerConfig.apiKey).toBeUndefined();
+		expect((modal as any).providerConfig.oauth).toBeUndefined();
+		expect(existingProvider.auth).toEqual({ type: 'oauth', oauth: expiredTokens });
+	});
+
+	it('clears incompatible credentials when selecting a different preset auth mode', () => {
+		const existingProvider: ProviderConfig = {
+			name: 'Existing OAuth Provider',
+			apiKey: 'stale-legacy-key',
+			baseUrl: 'https://existing.example/v1/chat',
+			models: [{ id: 'model-1', name: 'Model 1' }],
+			temperature: 0.5,
+			authType: 'oauth',
+			oauth: { ...tokens, accessToken: 'stale-legacy-oauth' },
+			auth: { type: 'oauth', oauth: tokens },
+		};
+		const modal = new ProviderModal(
+			new App(),
+			vi.fn(),
+			{ show: vi.fn() } as unknown as PluginNotices,
+			existingProvider
+		);
+		modal.onOpen();
+
+		getControl(modal, 'Provider Preset').change('OpenAI');
+		expect((modal as any).providerConfig.auth).toEqual({ type: 'apiKey', apiKey: '' });
+		expect((modal as any).providerConfig.authType).toBe('apiKey');
+		expect((modal as any).providerConfig.apiKey).toBeUndefined();
+		expect((modal as any).providerConfig.oauth).toBeUndefined();
+		expect(getControl(modal, 'API Key').value).toBe('');
+		expect((modal as any).providerConfig.models).toEqual([{ id: 'model-1', name: 'Model 1' }]);
+
+		getControl(modal, 'Provider Preset').change('Codex');
+		expect((modal as any).providerConfig.auth).toBeUndefined();
+		expect((modal as any).providerConfig.authType).toBe('oauth');
+		expect((modal as any).providerConfig.apiKey).toBeUndefined();
+		expect((modal as any).providerConfig.oauth).toBeUndefined();
+		expect(getButton(modal, 'Connect Account')).toBeDefined();
+	});
+
+	it('keeps a canceled credential edit in the modal draft only', () => {
+		const existingProvider: ProviderConfig = {
+			name: 'Legacy Provider',
+			apiKey: 'original-key',
+			baseUrl: 'https://legacy.example/v1/chat',
+			models: [{ id: 'model-1', name: 'Original Model' }],
+			temperature: 0.6,
+		};
+		const onSave = vi.fn();
+		const modal = new ProviderModal(
+			new App(),
+			onSave,
+			{ show: vi.fn() } as unknown as PluginNotices,
+			existingProvider
+		);
+		modal.onOpen();
+		getControl(modal, 'API Key').change('draft-only-key');
+		getButton(modal, 'Cancel').click();
+
+		expect(existingProvider.apiKey).toBe('original-key');
+		expect(existingProvider.models[0]?.name).toBe('Original Model');
+		expect(onSave).not.toHaveBeenCalled();
+	});
+
+	it('retains the modal and reports a fixed safe message when provider persistence rejects', async () => {
+		const pending = makeDeferred<void>();
+		const show = vi.fn();
+		const onSave = vi.fn(() => pending.promise);
+		const modal = new ProviderModal(new App(), onSave, { show } as unknown as PluginNotices);
+		modal.onOpen();
+		getControl(modal, 'Provider Preset').change('OpenAI');
+		getControl(modal, 'API URL').change('https://api.example.com/v1/chat');
+
+		const saveButton = getButton(modal, 'Save');
+		const save = saveButton.click() as Promise<void>;
+		expect(onSave).toHaveBeenCalledOnce();
+		expect(saveButton.disabled).toBe(true);
+		expect(Notice.startProgress).toHaveBeenCalledWith('Saving provider...');
+		pending.reject(new Error('sensitive persistence details'));
+		await save;
+
+		expect(show).toHaveBeenCalledWith('validation_error', {
+			component: 'Provider',
+			message: 'Could not save provider settings. Please try again.',
+		});
+		expect(
+			modal.contentEl.querySelectorAll('button').some((button) => button.textContent === 'Save')
+		).toBe(true);
+		expect(saveButton.disabled).toBe(false);
+		expect(Notice.endProgress).toHaveBeenCalledOnce();
+	});
+
+	it('does not update the UI when a pending provider save settles after close', async () => {
+		const pending = makeDeferred<void>();
+		const show = vi.fn();
+		const onSave = vi.fn(() => pending.promise);
+		const modal = new ProviderModal(new App(), onSave, { show } as unknown as PluginNotices);
+		modal.onOpen();
+		getControl(modal, 'Provider Preset').change('OpenAI');
+		getControl(modal, 'API URL').change('https://api.example.com/v1/chat');
+
+		const saveButton = getButton(modal, 'Save');
+		const save = saveButton.click() as Promise<void>;
+		modal.close();
+		pending.reject(new Error('late persistence failure'));
+		await save;
+
+		expect(show).not.toHaveBeenCalled();
+		expect(modal.contentEl.querySelectorAll('button')).toHaveLength(0);
+		expect(saveButton.disabled).toBe(false);
+		expect(Notice.endProgress).toHaveBeenCalledOnce();
+	});
+
+	it('clears every credential source on disconnect and saves an intentional disconnected OAuth draft', async () => {
+		const expiredTokens = { ...tokens, expiresAt: 0 };
+		const existingProvider: ProviderConfig = {
+			name: 'Codex',
+			apiKey: 'stale-api-key',
+			baseUrl: CODEX_OAUTH.API_ENDPOINT,
+			models: [{ id: 'model-1', name: 'Model 1' }],
+			temperature: 0.6,
+			authType: 'oauth',
+			oauth: { ...expiredTokens, accessToken: 'stale-legacy-token' },
+			auth: { type: 'oauth', oauth: expiredTokens },
+		};
+		const onSave = vi.fn();
+		const modal = new ProviderModal(
+			new App(),
+			onSave,
+			{ show: vi.fn() } as unknown as PluginNotices,
+			existingProvider
+		);
+		modal.onOpen();
+
+		const pending = makeDeferred<OAuthTokens>();
+		const cancelFlow = vi.spyOn(CodexOAuth.prototype, 'cancelFlow');
+		vi.spyOn(CodexOAuth.prototype, 'startAuthFlow').mockReturnValue(pending.promise);
+		const connection = getButton(modal, 'Connect Account').click() as Promise<void>;
+		(modal as any).disconnectOAuth();
+
+		const draft = (modal as any).providerConfig as ProviderConfig;
+		expect(cancelFlow).toHaveBeenCalledOnce();
+		expect(draft.auth).toBeUndefined();
+		expect(draft.apiKey).toBeUndefined();
+		expect(draft.oauth).toBeUndefined();
+		expect(draft.authType).toBe('oauth');
+		expect(draft.baseUrl).toBe(CODEX_OAUTH.API_ENDPOINT);
+		expect(draft.models).toEqual([{ id: 'model-1', name: 'Model 1' }]);
+
+		await getButton(modal, 'Save').click();
+		expect(onSave).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: 'Codex',
+				authType: 'oauth',
+				auth: undefined,
+				oauth: undefined,
+				apiKey: undefined,
+				baseUrl: CODEX_OAUTH.API_ENDPOINT,
+			})
+		);
+		expect(existingProvider.auth).toEqual({ type: 'oauth', oauth: expiredTokens });
+		pending.resolve(tokens);
+		await connection;
+		expect((modal as any).providerConfig.auth).toBeUndefined();
 	});
 });

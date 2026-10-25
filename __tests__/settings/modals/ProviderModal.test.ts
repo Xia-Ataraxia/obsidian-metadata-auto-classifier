@@ -10,6 +10,8 @@ vi.mock('settings/components/Notice', () => ({
 		success: vi.fn(),
 		validationError: vi.fn(),
 		formatValidationError: vi.fn((component, message) => `[${component}] ${message}`),
+		startProgress: vi.fn(() => ({})),
+		endProgress: vi.fn(),
 	},
 }));
 
@@ -79,6 +81,36 @@ describe('ProviderModal', () => {
 			expect(config.apiKey).toBe('sk-test-key');
 			expect(config.baseUrl).toBe('https://api.openai.com/v1/chat/completions');
 		});
+
+		it('deep-copies structured credentials and model settings for edit mode', () => {
+			const existingProvider: ProviderConfig = {
+				name: 'Structured OAuth',
+				apiKey: 'legacy-key',
+				baseUrl: 'https://api.example.com/v1/chat',
+				models: [{ id: 'model-1', name: 'Model 1' }],
+				temperature: 0.4,
+				auth: {
+					type: 'oauth',
+					oauth: {
+						accessToken: 'access-before-edit',
+						refreshToken: 'refresh-before-edit',
+						expiresAt: 1,
+						accountId: 'account-1',
+					},
+				},
+			};
+
+			const modal = new ProviderModal(mockApp, mockOnSave, mockNotices, existingProvider);
+			const draft = (modal as any).providerConfig as ProviderConfig;
+			if (draft.auth?.type === 'oauth') draft.auth.oauth.accessToken = 'edited-access';
+			draft.models[0]!.name = 'Edited Model';
+
+			expect(existingProvider.auth).toMatchObject({
+				type: 'oauth',
+				oauth: { accessToken: 'access-before-edit' },
+			});
+			expect(existingProvider.models[0]?.name).toBe('Model 1');
+		});
 	});
 
 	describe('onOpen', () => {
@@ -94,7 +126,6 @@ describe('ProviderModal', () => {
 	});
 
 	describe('Form Validation', () => {
-
 		it('should show error when provider name is empty', () => {
 			const modal = new ProviderModal(mockApp, mockOnSave, mockNotices);
 			(modal as any).providerConfig.name = '   ';
@@ -113,7 +144,7 @@ describe('ProviderModal', () => {
 
 		it('should show error when API URL is empty', () => {
 			const modal = new ProviderModal(mockApp, mockOnSave, mockNotices);
-			(modal as any).providerConfig.name = 'Test Provider';
+			(modal as any).providerConfig.name = 'OpenAI';
 			(modal as any).providerConfig.baseUrl = '';
 
 			const result = (modal as any).validateForm();
@@ -130,7 +161,7 @@ describe('ProviderModal', () => {
 
 		it('should show error when API URL is invalid', () => {
 			const modal = new ProviderModal(mockApp, mockOnSave, mockNotices);
-			(modal as any).providerConfig.name = 'Test Provider';
+			(modal as any).providerConfig.name = 'OpenAI';
 			(modal as any).providerConfig.baseUrl = 'not-a-valid-url';
 
 			const result = (modal as any).validateForm();
@@ -147,12 +178,31 @@ describe('ProviderModal', () => {
 
 		it('should pass validation when all fields are valid', () => {
 			const modal = new ProviderModal(mockApp, mockOnSave, mockNotices);
-			(modal as any).providerConfig.name = 'Test Provider';
+			(modal as any).providerConfig.name = 'OpenAI';
 			(modal as any).providerConfig.baseUrl = 'https://api.example.com/v1/chat';
 
 			const result = (modal as any).validateForm();
 
 			expect(result).toBe(true);
+		});
+
+		it('rejects provider names outside the supported preset list without rewriting them', () => {
+			const modal = new ProviderModal(mockApp, mockOnSave, mockNotices);
+			const config = (modal as any).providerConfig as ProviderConfig;
+			config.name = 'Unsupported Backend';
+			config.baseUrl = 'https://api.example.com/v1/chat';
+
+			const result = (modal as any).validateForm();
+
+			expect(result).toBe(false);
+			expect(config.name).toBe('Unsupported Backend');
+			expect(mockNotices.show).toHaveBeenCalledWith(
+				'validation_error',
+				expect.objectContaining({
+					component: 'Provider',
+					message: 'Select a supported provider preset before saving.',
+				})
+			);
 		});
 	});
 

@@ -1,6 +1,7 @@
 import { PROVIDER_NAMES } from '../../src/utils/lib-utils';
 import type { ProviderConfig } from '../../src/types';
 import { TAG_GENERATION_SCHEMA } from '../../src/domain/constants';
+import { copyProvider, providerHasAuth } from '../../src/domain/classification-state';
 import { HttpError, sendRequest } from '../../src/ui/request';
 import { sendStreamingRequest } from '../../src/ui/streaming-request';
 import { UnifiedProvider } from '../../src/ui/UnifiedProvider';
@@ -51,6 +52,22 @@ function config(name: string): ProviderConfig {
 					}
 				: undefined,
 	};
+}
+
+function oauthCredential(accessToken: string) {
+	return {
+		accessToken,
+		refreshToken: 'refresh-token-secret',
+		expiresAt: Date.now() / 1000 + 3600,
+		accountId: 'account-id',
+	};
+}
+
+function runtimeConfig(name: string, overrides: Record<string, unknown> = {}): ProviderConfig {
+	const providerConfig = config(name);
+	providerConfig.oauth = oauthCredential('stale-flat-oauth');
+	Object.assign(providerConfig, overrides);
+	return providerConfig;
 }
 
 function chatResponse(content: string): unknown {
@@ -397,18 +414,50 @@ describe('UnifiedProvider generated-tags contract', () => {
 		}
 	});
 
-	it('accepts only Codex completed terminal events and rejects failed, incomplete, and refusal events', async () => {
+	it('accepts Codex completed-output and ID-only terminals while retaining only delta text', async () => {
+		mockSendStreamingRequest.mockImplementationOnce(async (_url, _headers, _body, parseEvent) => {
+			const delta = parseEvent({ type: 'response.output_text.delta', delta: generatedJson });
+			const terminal = parseEvent({
+				type: 'response.completed',
+				response: { id: 'resp_123' },
+			});
+			if (delta.type !== 'delta' || terminal.type !== 'complete') {
+				throw new Error('Unexpected Codex stream outcome');
+			}
+			return delta.text;
+		});
+		await expect(
+			provider.callAPI('system', 'prompt', config(PROVIDER_NAMES.CODEX), 'model')
+		).resolves.toEqual(generated);
+
 		mockSendStreamingRequest.mockResolvedValueOnce(generatedJson);
 		await provider.callAPI('system', 'prompt', config(PROVIDER_NAMES.CODEX), 'model');
 		const parseEvent = mockSendStreamingRequest.mock.calls[0]?.[3];
 		expect(parseEvent).toBeDefined();
-		expect(
-			parseEvent?.({ type: 'response.completed', response: { status: 'completed', output: [] } })
-		).toEqual({ type: 'complete' });
+		for (const response of [
+			{ status: 'completed', output: [] },
+			{ id: 'resp_123' },
+			{ id: 'resp_123', status: 'completed', error: null, incomplete_details: null },
+		]) {
+			expect(parseEvent?.({ type: 'response.completed', response })).toEqual({ type: 'complete' });
+		}
 		for (const event of [
 			{ type: 'response.failed' },
 			{ type: 'response.incomplete' },
 			{ type: 'response.refusal.delta' },
+			{ type: 'response.completed', response: {} },
+			{ type: 'response.completed', response: { id: '' } },
+			{ type: 'response.completed', response: { id: '   ' } },
+			{ type: 'response.completed', response: { status: 'in_progress', output: [] } },
+			{ type: 'response.completed', response: { id: 'resp_123', status: 'failed' } },
+			{ type: 'response.completed', response: { id: 'resp_123', status: null } },
+			{ type: 'response.completed', response: { id: 'resp_123', output: null } },
+			{ type: 'response.completed', response: { id: 'resp_123', output: {} } },
+			{ type: 'response.completed', response: { id: 'resp_123', error: { code: 'failed' } } },
+			{
+				type: 'response.completed',
+				response: { id: 'resp_123', incomplete_details: { reason: 'max_output_tokens' } },
+			},
 			{
 				type: 'response.completed',
 				response: {
@@ -591,6 +640,41 @@ describe('UnifiedProvider generated-tags contract', () => {
 		expect(mockCodexOAuth).not.toHaveBeenCalled();
 	});
 
+	it('refreshes structured Codex OAuth despite a stale flat authType', async () => {
+		const configured = runtimeConfig(PROVIDER_NAMES.CODEX, {
+			auth: { type: 'oauth', oauth: oauthCredential('structured-codex-token') },
+			authType: 'apiKey',
+			oauth: oauthCredential('stale-flat-codex-token'),
+			apiKey: 'stale-flat-api-key',
+		});
+		const refreshed = {
+			accessToken: 'rotated-codex-token',
+			refreshToken: 'rotated-refresh-token',
+			expiresAt: Date.now() / 1000 + 7200,
+			accountId: 'account-id',
+		};
+		const refreshTokens = vi.fn().mockResolvedValue(refreshed);
+		mockCodexOAuth.mockImplementationOnce(function () {
+			return { refreshTokens } as unknown as CodexOAuth;
+		});
+		mockSendStreamingRequest
+			.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401))
+			.mockResolvedValueOnce(generatedJson);
+		const persist = vi.fn().mockResolvedValue(undefined);
+
+		await expect(
+			provider.callAPI('system', 'prompt', configured, 'model', undefined, persist)
+		).resolves.toEqual(generated);
+		expect(refreshTokens).toHaveBeenCalledWith('refresh-token-secret', expect.any(Object));
+		expect(mockSendStreamingRequest.mock.calls[0]?.[1]).toMatchObject({
+			Authorization: 'Bearer structured-codex-token',
+		});
+		expect(mockSendStreamingRequest.mock.calls[1]?.[1]).toMatchObject({
+			Authorization: 'Bearer rotated-codex-token',
+		});
+		expect(persist).toHaveBeenCalledWith(refreshed);
+	});
+
 	it('does not rotate credentials without a persistence callback', async () => {
 		mockSendStreamingRequest.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401));
 		await expect(
@@ -664,6 +748,282 @@ describe('UnifiedProvider generated-tags contract', () => {
 			'Provider authentication mode is unsupported'
 		);
 		expect(mockSendRequest).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{
+			label: 'flat API key',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OPENAI, { apiKey: 'flat-api-key' }),
+			expected: true,
+		},
+		{
+			label: 'flat API key with explicit apiKey mode',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OPENAI, {
+				auth: undefined,
+				authType: 'apiKey',
+			}),
+			expected: true,
+		},
+		{
+			label: 'structured API key despite stale flat credentials',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OPENAI, {
+				auth: { type: 'apiKey', apiKey: 'structured-api-key' },
+				authType: 'oauth',
+				apiKey: 'stale-flat-api-key',
+			}),
+			expected: true,
+		},
+		{
+			label: 'flat Codex OAuth',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.CODEX, {
+				auth: undefined,
+				oauth: oauthCredential('flat-codex-token'),
+			}),
+			expected: true,
+		},
+		{
+			label: 'structured Codex OAuth despite stale flat credentials',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.CODEX, {
+				auth: { type: 'oauth', oauth: oauthCredential('structured-codex-token') },
+				authType: 'apiKey',
+				oauth: oauthCredential('stale-flat-codex-token'),
+				apiKey: 'stale-flat-api-key',
+			}),
+			expected: true,
+		},
+		{
+			label: 'Codex configured for API keys',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.CODEX, {
+				auth: undefined,
+				authType: 'apiKey',
+			}),
+			expected: false,
+		},
+		{
+			label: 'API-key provider configured for OAuth',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OPENAI, { authType: 'oauth' }),
+			expected: false,
+		},
+		{
+			label: 'null explicit auth despite stale flat credentials',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OPENAI, { auth: null }),
+			expected: false,
+		},
+		{
+			label: 'malformed explicit API key type',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OPENAI, {
+				auth: { type: 'apiKey', apiKey: 17 },
+			}),
+			expected: false,
+		},
+		{
+			label: 'empty required API key',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OPENAI, { apiKey: '' }),
+			expected: false,
+		},
+		{
+			label: 'invalid authType despite stale flat key',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OPENAI, { authType: '' }),
+			expected: false,
+		},
+		{
+			label: 'keyless Ollama',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OLLAMA, { apiKey: undefined }),
+			expected: true,
+		},
+		{
+			label: 'keyless LM Studio with empty key',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.LMSTUDIO, { apiKey: '' }),
+			expected: true,
+		},
+		{
+			label: 'local provider with malformed key type',
+			providerConfig: runtimeConfig(PROVIDER_NAMES.OLLAMA, { apiKey: 17 }),
+			expected: false,
+		},
+	])('providerHasAuth honors $label', ({ providerConfig, expected }) => {
+		expect(providerHasAuth(providerConfig)).toBe(expected);
+	});
+
+	it.each([
+		{
+			label: 'null auth',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { auth: null },
+			error: 'Provider authentication mode is unsupported',
+			explicitAuth: true,
+		},
+		{
+			label: 'empty auth object',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { auth: {} },
+			error: 'Provider authentication mode is unsupported',
+			explicitAuth: true,
+		},
+		{
+			label: 'auth object without a type',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { auth: { apiKey: 'stale-structured-key' } },
+			error: 'Provider authentication mode is unsupported',
+			explicitAuth: true,
+		},
+		{
+			label: 'unknown auth type',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { auth: { type: 'unknown-secret-mode' } },
+			error: 'Provider authentication mode is unsupported',
+			explicitAuth: true,
+		},
+		{
+			label: 'blank authType',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { authType: '' },
+			error: 'Provider authentication mode is unsupported',
+			explicitAuth: false,
+		},
+		{
+			label: 'unknown authType',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { authType: 'legacy-secret-mode' },
+			error: 'Provider authentication mode is unsupported',
+			explicitAuth: false,
+		},
+		{
+			label: 'incompatible authType',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { authType: 'oauth' },
+			error: 'Provider authentication mode is unsupported',
+			explicitAuth: false,
+		},
+		{
+			label: 'incompatible structured auth',
+			name: PROVIDER_NAMES.CODEX,
+			overrides: { auth: { type: 'apiKey', apiKey: 'stale-structured-key' } },
+			error: 'Provider authentication mode is unsupported',
+			explicitAuth: true,
+		},
+		{
+			label: 'malformed structured API key type',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { auth: { type: 'apiKey', apiKey: 17 } },
+			error: 'Provider authentication is unavailable',
+			explicitAuth: true,
+		},
+		{
+			label: 'malformed flat API key type',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { auth: undefined, authType: 'apiKey', apiKey: 17 },
+			error: 'Provider authentication is unavailable',
+			explicitAuth: false,
+		},
+		{
+			label: 'malformed OAuth access token type',
+			name: PROVIDER_NAMES.CODEX,
+			overrides: {
+				auth: {
+					type: 'oauth',
+					oauth: { ...oauthCredential('stale-flat-token'), accessToken: 17 },
+				},
+			},
+			error: 'Provider authentication is unavailable',
+			explicitAuth: true,
+		},
+	])('rejects $label before direct or copied dispatch', async (testCase) => {
+		const configured = runtimeConfig(testCase.name, testCase.overrides);
+		await expect(provider.callAPI('system', 'prompt', configured, 'model')).rejects.toThrow(
+			testCase.error
+		);
+
+		const copied = copyProvider(configured);
+		if (testCase.explicitAuth) {
+			expect(Object.prototype.hasOwnProperty.call(copied, 'auth')).toBe(true);
+			expect(copied.auth).toEqual(configured.auth);
+			if (typeof configured.auth === 'object' && configured.auth !== null) {
+				expect(copied.auth).not.toBe(configured.auth);
+			}
+		}
+		await expect(provider.callAPI('system', 'prompt', copied, 'model')).rejects.toThrow(
+			testCase.error
+		);
+		expect(mockSendRequest).not.toHaveBeenCalled();
+		expect(mockSendStreamingRequest).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{
+			label: 'flat API key',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: { auth: undefined, apiKey: 'flat-api-key' },
+			streaming: false,
+			authorization: 'Bearer flat-api-key',
+		},
+		{
+			label: 'structured API key over stale flat key',
+			name: PROVIDER_NAMES.OPENAI,
+			overrides: {
+				auth: { type: 'apiKey', apiKey: 'structured-api-key' },
+				authType: 'oauth',
+				apiKey: 'stale-flat-api-key',
+			},
+			streaming: false,
+			authorization: 'Bearer structured-api-key',
+		},
+		{
+			label: 'flat Codex OAuth',
+			name: PROVIDER_NAMES.CODEX,
+			overrides: { auth: undefined, oauth: oauthCredential('flat-codex-token') },
+			streaming: true,
+			authorization: 'Bearer flat-codex-token',
+		},
+		{
+			label: 'structured Codex OAuth over stale flat OAuth',
+			name: PROVIDER_NAMES.CODEX,
+			overrides: {
+				auth: { type: 'oauth', oauth: oauthCredential('structured-codex-token') },
+				authType: 'apiKey',
+				oauth: oauthCredential('stale-flat-codex-token'),
+			},
+			streaming: true,
+			authorization: 'Bearer structured-codex-token',
+		},
+	])('dispatches with $label credentials', async (testCase) => {
+		const configured = runtimeConfig(testCase.name, testCase.overrides);
+		if (testCase.streaming) {
+			mockSendStreamingRequest.mockResolvedValueOnce(generatedJson);
+		} else {
+			mockSendRequest.mockResolvedValueOnce(chatResponse(generatedJson));
+		}
+
+		await expect(provider.callAPI('system', 'prompt', configured, 'model')).resolves.toEqual(
+			generated
+		);
+		const headers = testCase.streaming
+			? mockSendStreamingRequest.mock.calls[0]?.[1]
+			: mockSendRequest.mock.calls[0]?.[1];
+		expect(headers?.Authorization).toBe(testCase.authorization);
+	});
+
+	it.each([
+		{ name: PROVIDER_NAMES.OLLAMA, apiKey: undefined },
+		{ name: PROVIDER_NAMES.OLLAMA, apiKey: '' },
+		{ name: PROVIDER_NAMES.LMSTUDIO, apiKey: undefined },
+		{ name: PROVIDER_NAMES.LMSTUDIO, apiKey: '' },
+	])('keeps $name keyless when its API key is $apiKey', async ({ name, apiKey }) => {
+		const configured = runtimeConfig(name, { auth: undefined });
+		if (apiKey === undefined) delete configured.apiKey;
+		else configured.apiKey = apiKey;
+		expect(providerHasAuth(configured)).toBe(true);
+		mockSendRequest.mockResolvedValueOnce(
+			name === PROVIDER_NAMES.OLLAMA
+				? { done: true, done_reason: 'stop', message: { content: generatedJson } }
+				: chatResponse(generatedJson)
+		);
+
+		await expect(provider.callAPI('system', 'prompt', configured, 'model')).resolves.toEqual(
+			generated
+		);
+		expect(mockSendRequest).toHaveBeenCalledOnce();
+		expect(mockSendRequest.mock.calls[0]?.[1]).not.toHaveProperty('Authorization');
 	});
 
 	it('does not replace a safe non-401 transport error', async () => {
