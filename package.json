@@ -1,6 +1,6 @@
 {
   "name": "metadata-auto-classifier",
-  "version": "1.12.10",
+  "version": "1.12.11",
   "description": "Metadata Auto Classifier is an innovative Obsidian plugin that harnesses the power of AI to revolutionize your note-taking experience. By automatically generating and classifying metadata for your notes, this plugin streamlines your workflow and enhances the organization of your knowledge base.",
   "main": "main.js",
   "packageManager": "pnpm@10.28.2",
