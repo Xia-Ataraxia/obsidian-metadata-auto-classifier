@@ -1,4 +1,4 @@
-import { redactLogPayload, sanitizeErrorMessage, toNoticeMessage } from '../../src/utils/log-redaction';
+import { redactLogPayload, sanitizeErrorMessage } from '../../src/utils/log-redaction';
 import { PluginLogger } from '../../src/utils/plugin-logger';
 
 describe('log redaction', () => {
@@ -41,19 +41,4 @@ describe('log redaction', () => {
 		expect(sanitizeErrorMessage('failed Bearer abc.def.ghi')).toContain('[REDACTED]');
 	});
 
-	it('reduces API errors to one short notice line without raw bodies or URLs', () => {
-		expect(toNoticeMessage('Request failed, status 401')).toBe('Request failed, status 401');
-		expect(
-			toNoticeMessage(
-				'Failed to parse API response: Unexpected token. Raw content: {"secret":"note body"}'
-			)
-		).toBe('Failed to parse API response: Unexpected token');
-		expect(
-			toNoticeMessage('Client error (HTTP 401) from https://api.example.com/v1?key=x: {"error":"bad"}')
-		).toBe('Client error (HTTP 401)');
-		expect(toNoticeMessage('Bearer abc.def failed')).toBe('[REDACTED] failed');
-		const long = toNoticeMessage('x'.repeat(500));
-		expect(long).toHaveLength(120);
-		expect(long.endsWith('…')).toBe(true);
-	});
 });

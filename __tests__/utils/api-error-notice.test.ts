@@ -1,0 +1,38 @@
+import { toApiErrorNotice } from '../../src/utils/api-error-notice';
+
+describe('toApiErrorNotice', () => {
+	it('maps HTTP statuses to calm copy without URLs or bodies', () => {
+		expect(toApiErrorNotice(new Error('Request failed, status 401'), 'OpenAI')).toBe(
+			'Request failed (401). Check the API key for OpenAI.'
+		);
+		expect(toApiErrorNotice({ status: 403 }, 'OpenAI')).toBe(
+			'Request failed (403). Check the API key for OpenAI.'
+		);
+		expect(toApiErrorNotice(new Error('Request failed, status 429'), 'OpenAI')).toBe(
+			'Rate limited. Try again in a moment.'
+		);
+		const serverError = toApiErrorNotice(
+			new Error('Server error (HTTP 502) from https://api.example.com/v1: {"secret":"body"}'),
+			'Gemini'
+		);
+		expect(serverError).toBe('Gemini is unavailable (502). Try again later.');
+		expect(toApiErrorNotice(new Error('Request failed, status 404'), 'Ollama')).toBe(
+			'Request to Ollama failed (404).'
+		);
+	});
+
+	it('handles network, parse, and other failures', () => {
+		expect(toApiErrorNotice(new Error('net::ERR_CONNECTION_REFUSED'), 'Ollama')).toBe(
+			"Couldn't reach Ollama."
+		);
+		expect(
+			toApiErrorNotice(new Error('Failed to parse API response: x. Raw content: note body'), 'Fake')
+		).toBe("Fake sent a response that couldn't be read.");
+		expect(
+			toApiErrorNotice(new Error('Codex OAuth tokens not found. Please reconnect your account.'), 'Codex')
+		).toBe('Codex OAuth tokens not found. Please reconnect your account.');
+		const long = toApiErrorNotice(new Error('x'.repeat(500)), 'Fake');
+		expect(long).toHaveLength(120);
+		expect(long.endsWith('…')).toBe(true);
+	});
+});

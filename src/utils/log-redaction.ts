@@ -33,18 +33,6 @@ export function sanitizeErrorMessage(message: string): string {
 	return truncateLogString(message.replace(TOKEN_VALUE_PATTERN, '[REDACTED]'));
 }
 
-const MAX_NOTICE_LENGTH = 120;
-
-// Notices show one calm line; raw response bodies and URLs stay in the log
-export function toNoticeMessage(message: string): string {
-	const [head = message] = message.split(/\.?\s+Raw content:|\s+from https?:\/\//);
-	const summary = head
-		.replace(TOKEN_VALUE_PATTERN, '[REDACTED]')
-		.replace(/\s+/g, ' ')
-		.trim();
-	return summary.length <= MAX_NOTICE_LENGTH ? summary : `${summary.slice(0, MAX_NOTICE_LENGTH - 1)}…`;
-}
-
 function truncateLogString(value: string): string {
 	if (value.length <= MAX_LOG_FIELD_LENGTH) return value;
 	return `${value.slice(0, MAX_LOG_FIELD_LENGTH)}…[truncated ${value.length - MAX_LOG_FIELD_LENGTH} chars]`;
