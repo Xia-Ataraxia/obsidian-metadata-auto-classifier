@@ -11,33 +11,34 @@
 
 ## Layers
 
-| Layer | Responsibility |
-|---|---|
-| `src/types/` | Provider, field, settings, and Jev contracts |
+| Layer         | Responsibility                                                                                                                                       |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/types/`  | Provider, field, settings, and Jev contracts                                                                                                         |
 | `src/domain/` | Pure Jev request construction and decisions, generated-tag validation, YAML range editing and target snapshots, explicit operation-state transitions |
-| `src/ui/` | Obsidian-dependent classification orchestration, native atomic commits, provider adapters, transport, authentication, and settings UI |
-| `src/utils/` | Repository-local utilities and diagnostic boundary |
-| `src/main.ts` | Composition root, lifecycle, persisted settings, and command entry points |
+| `src/ui/`     | Obsidian-dependent classification orchestration, native atomic commits, provider adapters, transport, authentication, and settings UI                |
+| `src/utils/`  | Repository-local utilities and diagnostic boundary                                                                                                   |
+| `src/main.ts` | Composition root, lifecycle, persisted settings, and command entry points                                                                            |
 
 Domain classification and YAML modules must not import Obsidian. The `yaml` library supplies parsing and source ranges; the plugin does not implement a competing YAML parser. Stateful operation tokens have an explicit owner and lifetime rather than an implicit module-global lock.
 
 ## Classification modules
 
-| Module | Responsibility |
-|---|---|
-| `domain/jev-questions.ts` | Build stable named Noul questions and conservatively bounded request chunks |
-| `domain/jev-selection.ts` | Validate exact response keys, probabilities, model and usage; distinguish yes, all-no, and abstention |
-| `domain/tag-generation.ts` | Exact `tags` permission gate, remaining-slot calculation, generation prompt and strict tag-result validation |
-| `domain/classification-state.ts` | Related settings snapshots, token ownership, and conflict checks |
-| `domain/classification-result.ts` | All-or-nothing selection/generation decisions and combined operation counts |
-| `domain/frontmatter-snapshot.ts` | Typed target-field presence/value snapshots |
-| `domain/frontmatter-edit.ts` | Edit only a target YAML source range; reject unsafe or unsupported structures |
-| `ui/JevClassifier.ts` | Send all Jev chunks through the native transport and reject partial or stale results |
-| `ui/ClassificationService.ts` | Coordinate preparation, selection, optional generation, and the final guarded commit |
-| `ui/classification-generation.ts` | Capture only the used provider, guard refresh persistence, and preserve live generation validity |
-| `ui/classification-status.ts` | Map outcomes and failures to static, disclosure-safe messages |
-| `ui/frontmatter-commit.ts` | Use native frontmatter boundaries and one synchronous `Vault.process` compare-and-transform |
-| `ui/frontmatter.ts` | Collect reference values through metadata APIs and clone field settings for editing |
+| Module                            | Responsibility                                                                                                  |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `domain/jev-questions.ts`         | Build stable named Noul questions and conservatively bounded request chunks                                     |
+| `domain/jev-selection.ts`         | Validate exact response keys, probabilities, model and usage; distinguish yes, all-no, and abstention           |
+| `domain/tag-generation.ts`        | Exact `tags` permission gate, remaining-slot calculation, generation prompt and strict tag-result validation    |
+| `domain/classification-state.ts`  | Related settings snapshots, token ownership, and conflict checks                                                |
+| `domain/classification-result.ts` | All-or-nothing selection/generation decisions and combined operation counts                                     |
+| `domain/frontmatter-snapshot.ts`  | Typed target-field presence/value snapshots                                                                     |
+| `domain/frontmatter-edit.ts`      | Edit only a target YAML source range; reject unsafe or unsupported structures                                   |
+| `ui/JevClassifier.ts`             | Send all Jev chunks through the native transport and reject partial or stale results                            |
+| `ui/ClassificationService.ts`     | Coordinate preparation, selection, optional generation, and the final guarded commit                            |
+| `ui/classification-generation.ts` | Capture only the used provider, guard refresh persistence, and preserve live generation validity                |
+| `ui/provider-session.ts`          | Share provider snapshots and awaited, account-bound refresh persistence between generation and connection tests |
+| `ui/classification-status.ts`     | Map outcomes and failures to static, disclosure-safe messages                                                   |
+| `ui/frontmatter-commit.ts`        | Use native frontmatter boundaries and one synchronous `Vault.process` compare-and-transform                     |
+| `ui/frontmatter.ts`               | Collect reference values through metadata APIs and clone field settings for editing                             |
 
 A batch captures one original note. All entry points share the same classification service and per-note/per-field operation ownership. Tab switching does not retarget an in-flight operation; field or file changes, permission revocation, unload, and expiry invalidate its result. Changes to unrelated fields need not invalidate a safe commit.
 
@@ -45,9 +46,11 @@ A batch captures one original note. All entry points share the same classificati
 
 `ui/provider-api.ts` exposes explicit model connection testing and permission-gated new-tag generation. `UnifiedProvider` coordinates provider specs in `provider-chat-specs.ts` and `provider-native-specs.ts`. The generation result is only `{ tags: string[] }`; it is not the Jev classification response.
 
-`ui/request.ts` owns JSON/native HTTP behavior, safe HTTP errors, bounded explicit retries, and logical deadlines. `ui/streaming-request.ts` consumes buffered native responses as strict SSE frames and requires successful terminal completion. Neither path uses a Node HTTP fallback. A shared deadline and synchronous live-operation check are forwarded across generation requests and retries.
+`ui/request.ts` owns JSON or explicit raw-form/native HTTP behavior, safe HTTP errors, and bounded retries. `ui/request-control.ts` shares abort, deadline, and currentness enforcement across inference and authentication. Only explicit 429/529 responses retry, with three total attempts by default; authentication explicitly permits one attempt. Cancellation ignores late native completions rather than claiming physical cancellation of `requestUrl`. `ui/streaming-request.ts` consumes buffered native responses as strict SSE frames and requires successful terminal completion. Neither path uses a Node HTTP fallback. Codex ID-only `response.completed` events remain rejected; compatibility with the retained backend is unresolved.
 
 Authentication is a separate concern from candidate selection. Ordinary classification must not require generation credentials. Actual device authentication, mobile runtime validation, and provider service eligibility are separate verification obligations; requestUrl-based inference alone does not prove them.
+
+`ui/auth/device-auth.ts` implements the fixed-host device flow with a 15-minute deadline, cancellable polling, a hosted callback exchange, and single-attempt grants. The dialog renders the code as text and opens the fixed verification URL only on an explicit click. There is no loopback server or local PKCE implementation. Token parsing requires a future access-token expiry and `chatgpt_account_id`; optional ID-token account claims must agree. These decoded claims are routing/expiry hints, not signature verification. Refresh rejects account switches and awaits guarded persistence before retrying; an omitted rotated refresh token preserves the existing token, but an explicitly invalid token does not.
 
 ## Settings and diagnostics
 

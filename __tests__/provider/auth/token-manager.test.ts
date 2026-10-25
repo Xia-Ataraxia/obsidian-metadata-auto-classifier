@@ -8,13 +8,45 @@ import {
 } from '../../../src/domain/auth/token-manager';
 import type { OAuthTokens, TokenResponse } from '../../../src/types/auth';
 
-describe('token-manager', () => {
-	// Mock Date.now for consistent testing
-	const mockNow = 1700000000000; // Fixed timestamp
-	const originalDateNow = Date.now;
+const mockNow = 1700000000000;
+const nowSeconds = mockNow / 1000;
+const futureExpiry = nowSeconds + 3600;
+const authNamespace = 'https://api.openai.com/auth';
 
+function encodeBytes(bytes: Uint8Array): string {
+	let binary = '';
+	for (const byte of bytes) binary += String.fromCharCode(byte);
+	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function encodeJson(value: unknown): string {
+	return encodeBytes(new TextEncoder().encode(JSON.stringify(value)));
+}
+
+function jwt(claims: unknown, header: unknown = { alg: 'RS256', typ: 'JWT' }): string {
+	return `${encodeJson(header)}.${encodeJson(claims)}.c2ln`;
+}
+
+function claimsWithAccount(
+	accountId: unknown,
+	exp: unknown = futureExpiry
+): Record<string, unknown> {
+	return { exp, [authNamespace]: { chatgpt_account_id: accountId } };
+}
+
+function responseFor(
+	accessToken = jwt(claimsWithAccount('workspace-123'))
+): Record<string, unknown> {
+	return { access_token: accessToken, refresh_token: 'refresh-token-123' };
+}
+
+function tokensWithExpiry(expiresAt: number): OAuthTokens {
+	return { accessToken: 'token', refreshToken: 'refresh', expiresAt, accountId: 'workspace-123' };
+}
+
+describe('token-manager', () => {
 	beforeEach(() => {
-		vi.spyOn(Date, 'now').mockImplementation(() => mockNow);
+		vi.spyOn(Date, 'now').mockReturnValue(mockNow);
 	});
 
 	afterEach(() => {
@@ -22,228 +54,200 @@ describe('token-manager', () => {
 	});
 
 	describe('parseJwtClaims', () => {
-		it('should parse valid JWT and extract claims', () => {
-			// JWT with payload: {"sub": "user123", "name": "Test User"}
-			const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-			const payload = btoa(JSON.stringify({ sub: 'user123', name: 'Test User' }));
-			const signature = 'fake-signature';
-			const token = `${header}.${payload}.${signature}`;
-
-			const claims = parseJwtClaims(token);
-
-			expect(claims.sub).toBe('user123');
-			expect(claims.name).toBe('Test User');
+		it('parses strict base64url JWT objects with Unicode claims', () => {
+			const claims = { name: 'Jóhn 雪', nested: { value: '東京' } };
+			expect(parseJwtClaims(jwt(claims))).toEqual(claims);
 		});
 
-		it('should handle base64url encoded payloads', () => {
-			// Base64url uses - and _ instead of + and /
-			const header = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
-			const payload = 'eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0';
-			const signature = 'fake';
-			const token = `${header}.${payload}.${signature}`;
+		it.each(['one.two', 'a.b.c.d', '!.e30.c2ln', `${encodeJson({ alg: 'RS256' })}.e30.*`])(
+			'rejects malformed JWT envelope %s with a fixed error',
+			(token) => {
+				expect(() => parseJwtClaims(token)).toThrow('Invalid JWT');
+			}
+		);
 
-			const claims = parseJwtClaims(token);
-
-			expect(claims.sub).toBe('1234567890');
-			expect(claims.name).toBe('John Doe');
+		it.each(['[]', 'null', '"string"', '42'])('rejects non-object JWT payload %s', (payload) => {
+			expect(() =>
+				parseJwtClaims(`${encodeJson({ alg: 'RS256' })}.${encodeJson(JSON.parse(payload))}.c2ln`)
+			).toThrow('Invalid JWT');
 		});
 
-		it('should throw error for invalid JWT format (not 3 parts)', () => {
-			expect(() => parseJwtClaims('invalid-token')).toThrow('Invalid JWT format');
-			expect(() => parseJwtClaims('only.two')).toThrow('Invalid JWT format');
-			expect(() => parseJwtClaims('a.b.c.d')).toThrow('Invalid JWT format');
-		});
-
-		it('should throw error for invalid base64 payload', () => {
-			const token = 'header.!!!invalid-base64!!!.signature';
-			expect(() => parseJwtClaims(token)).toThrow('Failed to decode JWT payload');
-		});
-
-		it('should throw error for non-JSON payload', () => {
-			const header = btoa('header');
-			const payload = btoa('not-json');
-			const token = `${header}.${payload}.signature`;
-			expect(() => parseJwtClaims(token)).toThrow('Failed to decode JWT payload');
+		it('rejects invalid UTF-8 and malformed JSON payloads', () => {
+			const invalidUtf8 = encodeBytes(new Uint8Array([0xc0]));
+			const invalidJson = encodeBytes(new TextEncoder().encode('{not-json'));
+			const header = encodeJson({ alg: 'RS256' });
+			expect(() => parseJwtClaims(`${header}.${invalidUtf8}.c2ln`)).toThrow('Invalid JWT');
+			expect(() => parseJwtClaims(`${header}.${invalidJson}.c2ln`)).toThrow('Invalid JWT');
 		});
 	});
 
 	describe('extractAccountId', () => {
-		it('should extract user_id from OpenAI auth claims', () => {
-			const claims = {
-				'https://api.openai.com/auth': {
-					user_id: 'openai-user-123',
+		it('selects chatgpt_account_id rather than user_id, chatgpt_user_id, or sub', () => {
+			const accessToken = jwt({
+				exp: futureExpiry,
+				[authNamespace]: {
+					chatgpt_account_id: 'workspace-123',
+					chatgpt_user_id: 'person-456',
+					user_id: 'person-789',
 				},
-			};
-			const header = btoa(JSON.stringify({ alg: 'HS256' }));
-			const payload = btoa(JSON.stringify(claims));
-			const token = `${header}.${payload}.sig`;
-
-			const accountId = extractAccountId(token);
-
-			expect(accountId).toBe('openai-user-123');
+				sub: 'subject-abc',
+			});
+			expect(extractAccountId(accessToken)).toBe('workspace-123');
 		});
 
-		it('should fall back to sub claim if OpenAI auth claims not present', () => {
-			const claims = { sub: 'fallback-user-456' };
-			const header = btoa(JSON.stringify({ alg: 'HS256' }));
-			const payload = btoa(JSON.stringify(claims));
-			const token = `${header}.${payload}.sig`;
-
-			const accountId = extractAccountId(token);
-
-			expect(accountId).toBe('fallback-user-456');
+		it.each([
+			{ [authNamespace]: { user_id: 'person-123' }, sub: 'subject-123' },
+			{ [authNamespace]: { chatgpt_user_id: 'person-123' }, sub: 'subject-123' },
+			{ sub: 'subject-123' },
+		])('does not substitute user identity claims for a missing account ID', (claims) => {
+			expect(() => extractAccountId(jwt(claims))).toThrow('Invalid token account ID');
 		});
 
-		it('should throw error if no account ID can be extracted', () => {
-			const claims = { name: 'No user ID here' };
-			const header = btoa(JSON.stringify({ alg: 'HS256' }));
-			const payload = btoa(JSON.stringify(claims));
-			const token = `${header}.${payload}.sig`;
-
-			expect(() => extractAccountId(token)).toThrow('Could not extract account ID from token');
-		});
-	});
-
-	describe('isTokenExpired', () => {
-		it('should return false for non-expired token', () => {
-			const tokens: OAuthTokens = {
-				accessToken: 'token',
-				refreshToken: 'refresh',
-				expiresAt: mockNow / 1000 + 3600, // Expires in 1 hour
-				accountId: 'user123',
-			};
-
-			expect(isTokenExpired(tokens)).toBe(false);
+		it.each([null, 42, {}, ['workspace-123']])('rejects non-string account IDs %s', (accountId) => {
+			expect(() => extractAccountId(jwt(claimsWithAccount(accountId)))).toThrow(
+				'Invalid token account ID'
+			);
 		});
 
-		it('should return true for expired token', () => {
-			const tokens: OAuthTokens = {
-				accessToken: 'token',
-				refreshToken: 'refresh',
-				expiresAt: mockNow / 1000 - 100, // Expired 100 seconds ago
-				accountId: 'user123',
-			};
-
-			expect(isTokenExpired(tokens)).toBe(true);
-		});
-
-		it('should return true when within default buffer (5 minutes)', () => {
-			const tokens: OAuthTokens = {
-				accessToken: 'token',
-				refreshToken: 'refresh',
-				expiresAt: mockNow / 1000 + 200, // Expires in ~3.3 minutes (within 5 min buffer)
-				accountId: 'user123',
-			};
-
-			expect(isTokenExpired(tokens)).toBe(true);
-		});
-
-		it('should use custom buffer when provided', () => {
-			const tokens: OAuthTokens = {
-				accessToken: 'token',
-				refreshToken: 'refresh',
-				expiresAt: mockNow / 1000 + 200, // Expires in ~3.3 minutes
-				accountId: 'user123',
-			};
-
-			// With 60 second buffer, should not be considered expired
-			expect(isTokenExpired(tokens, 60)).toBe(false);
-			// With 300 second buffer (5 min), should be considered expired
-			expect(isTokenExpired(tokens, 300)).toBe(true);
+		it.each([
+			'',
+			'  ',
+			'workspace\r\nX-Injected: yes',
+			' workspace',
+			'work space',
+			'workspace\u2028',
+		])('rejects unsafe account IDs', (accountId) => {
+			expect(() => extractAccountId(jwt(claimsWithAccount(accountId)))).toThrow(
+				'Invalid token account ID'
+			);
 		});
 	});
 
 	describe('createTokensFromResponse', () => {
-		it('should create OAuthTokens from token response', () => {
-			// Create a mock token with extractable account ID
-			const claims = { sub: 'test-user-id' };
-			const header = btoa(JSON.stringify({ alg: 'HS256' }));
-			const payload = btoa(JSON.stringify(claims));
-			const mockAccessToken = `${header}.${payload}.sig`;
-
+		it('accepts the optional-field-free response and uses the access JWT expiry', () => {
+			const accessToken = jwt(claimsWithAccount('workspace-123'));
 			const response: TokenResponse = {
-				access_token: mockAccessToken,
+				access_token: accessToken,
 				refresh_token: 'refresh-token-123',
-				expires_in: 3600,
-				token_type: 'Bearer',
 			};
 
-			const tokens = createTokensFromResponse(response);
+			expect(createTokensFromResponse(response)).toEqual({
+				accessToken,
+				refreshToken: 'refresh-token-123',
+				expiresAt: futureExpiry,
+				accountId: 'workspace-123',
+			});
+		});
 
-			expect(tokens.accessToken).toBe(mockAccessToken);
-			expect(tokens.refreshToken).toBe('refresh-token-123');
-			expect(tokens.accountId).toBe('test-user-id');
-			// expiresAt should be current time + expires_in
-			expect(tokens.expiresAt).toBe(Math.floor(mockNow / 1000) + 3600);
+		it('requires a matching account ID in an optional ID token', () => {
+			const response = responseFor();
+			response.id_token = jwt(claimsWithAccount('workspace-123'));
+			response.token_type = 'bEaReR';
+			expect(createTokensFromResponse(response).accountId).toBe('workspace-123');
+
+			response.id_token = jwt({ sub: 'workspace-123' });
+			expect(() => createTokensFromResponse(response)).toThrow('Invalid token account ID');
+		});
+
+		it('rejects mismatched or missing ID-token account claims', () => {
+			const mismatch = responseFor();
+			mismatch.id_token = jwt(claimsWithAccount('another-workspace'));
+			expect(() => createTokensFromResponse(mismatch)).toThrow('Invalid token account ID');
+
+			const missing = responseFor();
+			missing.id_token = jwt({ sub: 'workspace-123' });
+			expect(() => createTokensFromResponse(missing)).toThrow('Invalid token account ID');
+		});
+
+		it('never allows an ID token to substitute for the access-token account claim', () => {
+			const response = responseFor(jwt({ exp: futureExpiry, sub: 'person-123' }));
+			response.id_token = jwt(claimsWithAccount('workspace-123'));
+			expect(() => createTokensFromResponse(response)).toThrow('Invalid token account ID');
+		});
+
+		it('uses expires_in only when it shortens the access JWT expiry', () => {
+			const shorter = responseFor();
+			shorter.expires_in = 900;
+			expect(createTokensFromResponse(shorter).expiresAt).toBe(nowSeconds + 900);
+
+			const longer = responseFor();
+			longer.expires_in = 7200;
+			expect(createTokensFromResponse(longer).expiresAt).toBe(futureExpiry);
+		});
+
+		it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, '3600'])(
+			'rejects invalid expires_in %s',
+			(expiresIn) => {
+				const response = responseFor();
+				response.expires_in = expiresIn;
+				expect(() => createTokensFromResponse(response)).toThrow('Invalid token response');
+			}
+		);
+
+		it.each([undefined, null, Number.POSITIVE_INFINITY, '1700003600', 1700000000, 1700003600.5])(
+			'rejects missing, invalid, or non-future access JWT exp %s',
+			(exp) => {
+				const response = responseFor(jwt({ ...claimsWithAccount('workspace-123'), exp }));
+				expect(() => createTokensFromResponse(response)).toThrow('Invalid token expiry');
+			}
+		);
+
+		it('rejects invalid token types and non-object responses', () => {
+			for (const tokenType of ['Basic', '', 7, null]) {
+				const response = responseFor();
+				response.token_type = tokenType;
+				expect(() => createTokensFromResponse(response)).toThrow('Invalid token response');
+			}
+			expect(() => createTokensFromResponse(null)).toThrow('Invalid token response');
+			expect(() => createTokensFromResponse([])).toThrow('Invalid token response');
+		});
+
+		it('rejects empty token strings and does not expose private response data in errors', () => {
+			const emptyAccess = responseFor(' ');
+			expect(() => createTokensFromResponse(emptyAccess)).toThrow('Invalid token response');
+
+			const privateCanary = 'private-response-canary';
+			const invalidJwt = responseFor(privateCanary);
+			let errorMessage = '';
+			try {
+				createTokensFromResponse(invalidJwt);
+			} catch (error) {
+				expect(error).toBeInstanceOf(Error);
+				errorMessage = (error as Error).message;
+			}
+			expect(errorMessage).toBe('Invalid JWT');
+			expect(errorMessage).not.toContain(privateCanary);
+
+			expect(() =>
+				createTokensFromResponse({
+					access_token: jwt(claimsWithAccount('workspace-123')),
+					refresh_token: '',
+				})
+			).toThrow('Invalid token response');
 		});
 	});
 
-	describe('getTokenRemainingTime', () => {
-		it('should return remaining seconds until expiry', () => {
-			const tokens: OAuthTokens = {
-				accessToken: 'token',
-				refreshToken: 'refresh',
-				expiresAt: mockNow / 1000 + 3600, // Expires in 1 hour
-				accountId: 'user123',
-			};
-
-			const remaining = getTokenRemainingTime(tokens);
-
-			expect(remaining).toBe(3600);
+	describe('expiry utilities', () => {
+		it('checks valid expiry and honors the refresh buffer', () => {
+			expect(isTokenExpired(tokensWithExpiry(nowSeconds + 3600))).toBe(false);
+			expect(isTokenExpired(tokensWithExpiry(nowSeconds + 200))).toBe(true);
+			expect(isTokenExpired(tokensWithExpiry(nowSeconds + 200), 60)).toBe(false);
 		});
 
-		it('should return 0 for expired tokens', () => {
-			const tokens: OAuthTokens = {
-				accessToken: 'token',
-				refreshToken: 'refresh',
-				expiresAt: mockNow / 1000 - 100, // Expired
-				accountId: 'user123',
-			};
+		it.each([Number.NaN, Number.POSITIVE_INFINITY, '1700003600'])(
+			'treats malformed expiry %s as expired',
+			(expiresAt) => {
+				const tokens = { ...tokensWithExpiry(futureExpiry), expiresAt } as unknown as OAuthTokens;
+				expect(isTokenExpired(tokens)).toBe(true);
+				expect(getTokenRemainingTime(tokens)).toBe(0);
+			}
+		);
 
-			const remaining = getTokenRemainingTime(tokens);
-
-			expect(remaining).toBe(0);
-		});
-	});
-
-	describe('formatTokenExpiry', () => {
-		it('should format remaining time with hours and minutes', () => {
-			const tokens: OAuthTokens = {
-				accessToken: 'token',
-				refreshToken: 'refresh',
-				expiresAt: mockNow / 1000 + 7200 + 1800, // 2h 30m remaining
-				accountId: 'user123',
-			};
-
-			const formatted = formatTokenExpiry(tokens);
-
-			expect(formatted).toBe('2h 30m remaining');
-		});
-
-		it('should format remaining time with only minutes when less than an hour', () => {
-			const tokens: OAuthTokens = {
-				accessToken: 'token',
-				refreshToken: 'refresh',
-				expiresAt: mockNow / 1000 + 1800, // 30m remaining
-				accountId: 'user123',
-			};
-
-			const formatted = formatTokenExpiry(tokens);
-
-			expect(formatted).toBe('30m remaining');
-		});
-
-		it('should return "Expired" for expired tokens', () => {
-			const tokens: OAuthTokens = {
-				accessToken: 'token',
-				refreshToken: 'refresh',
-				expiresAt: mockNow / 1000 - 100, // Expired
-				accountId: 'user123',
-			};
-
-			const formatted = formatTokenExpiry(tokens);
-
-			expect(formatted).toBe('Expired');
+		it('preserves remaining-time formatting', () => {
+			expect(getTokenRemainingTime(tokensWithExpiry(nowSeconds + 9000))).toBe(9000);
+			expect(formatTokenExpiry(tokensWithExpiry(nowSeconds + 9000))).toBe('2h 30m remaining');
+			expect(formatTokenExpiry(tokensWithExpiry(nowSeconds + 1800))).toBe('30m remaining');
+			expect(formatTokenExpiry(tokensWithExpiry(nowSeconds - 1))).toBe('Expired');
 		});
 	});
 });

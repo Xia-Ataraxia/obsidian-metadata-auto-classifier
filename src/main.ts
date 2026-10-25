@@ -16,6 +16,10 @@ export default class AutoClassifierPlugin extends Plugin {
 	private commandService: CommandService | null = null;
 	private active = false;
 
+	isActive(): boolean {
+		return this.active;
+	}
+
 	async onload() {
 		this.logger = new PluginLogger();
 

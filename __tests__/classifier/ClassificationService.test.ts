@@ -128,6 +128,17 @@ describe('ClassificationService', () => {
 		}
 	);
 
+	it.each(['Ollama', 'LM Studio'])('allows documented keyless %s generation', async (name) => {
+		settings.frontmatter = [makeField({ name: 'tags', refs: [], generateNewTags: true })];
+		settings.providers = [makeProvider({ name, apiKey: '' })];
+		settings.selectedProvider = name;
+		settings.selectedModel = 'model-1';
+		await service.classify(file, 9);
+		expect(mocks.classify).not.toHaveBeenCalled();
+		expect(mocks.generate).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
+	});
+
 	it('uses Jev for references without requiring provider, model, or LLM authentication', async () => {
 		await service.classify(file, 9);
 

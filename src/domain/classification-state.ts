@@ -1,4 +1,5 @@
 import type { FrontmatterField, ProviderConfig } from '../types';
+import { PROVIDER_NAMES } from '../utils/lib-utils';
 import type { TargetFieldSnapshot } from './frontmatter-snapshot';
 
 export type ClassificationStateErrorCode =
@@ -61,9 +62,13 @@ export function sameProvider(left: ProviderConfig | undefined, right: ProviderCo
 }
 
 export function providerHasAuth(provider: ProviderConfig): boolean {
-	if (provider.auth?.type === 'apiKey') return Boolean(provider.auth.apiKey);
+	const optionalKey =
+		provider.name === PROVIDER_NAMES.OLLAMA || provider.name === PROVIDER_NAMES.LMSTUDIO;
+	if (provider.auth?.type === 'apiKey') return optionalKey || Boolean(provider.auth.apiKey);
 	if (provider.auth?.type === 'oauth') return Boolean(provider.auth.oauth?.accessToken);
-	return Boolean(provider.apiKey || provider.oauth?.accessToken);
+	if (provider.authType === 'oauth') return Boolean(provider.oauth?.accessToken);
+	if (provider.authType === 'apiKey') return optionalKey || Boolean(provider.apiKey);
+	return optionalKey || Boolean(provider.apiKey || provider.oauth?.accessToken);
 }
 
 export function existingStringValues(target: TargetFieldSnapshot): string[] {

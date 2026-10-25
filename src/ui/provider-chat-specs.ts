@@ -78,10 +78,31 @@ function openAIRequestBody(
 	};
 }
 
+function deepSeekRequestBody(
+	systemRole: string,
+	userPrompt: string,
+	model: string,
+	temperature?: number
+): ProviderRequestBody {
+	return {
+		model,
+		messages: [
+			{
+				role: 'system',
+				content: `${systemRole}\n\nReturn only JSON with exactly one property named "tags", whose value is an array of strings. Example: {"tags": ["tag1"]}.`,
+			},
+			{ role: 'user', content: userPrompt },
+		],
+		temperature,
+		response_format: { type: 'json_object' },
+	};
+}
+
 const anthropicTool = {
 	name: 'generate_tags',
 	description: 'Return only newly generated Obsidian tags.',
 	input_schema: TAG_GENERATION_SCHEMA,
+	strict: true,
 } as const;
 
 function parseAnthropicResponse(data: unknown): GeneratedTags {
@@ -109,11 +130,18 @@ const openAICompatible = (): ProviderSpec => ({
 
 export const chatProviderSpecs: Record<string, ProviderSpec> = {
 	[PROVIDER_NAMES.OPENAI]: openAICompatible(),
-	[PROVIDER_NAMES.DEEPSEEK]: openAICompatible(),
+	[PROVIDER_NAMES.DEEPSEEK]: {
+		...openAICompatible(),
+		buildRequestBody: deepSeekRequestBody,
+	},
 	[PROVIDER_NAMES.LMSTUDIO]: openAICompatible(),
 	[PROVIDER_NAMES.CUSTOM]: openAICompatible(),
 	[PROVIDER_NAMES.OPENROUTER]: {
 		...openAICompatible(),
+		buildRequestBody: (systemRole, userPrompt, model, temperature) => ({
+			...openAIRequestBody(systemRole, userPrompt, model, temperature),
+			provider: { require_parameters: true },
+		}),
 		buildHeaders: (apiKey) => ({
 			...openAIHeaders(apiKey),
 			'X-Title': 'Metadata Auto Classifier',
@@ -132,7 +160,11 @@ export const chatProviderSpecs: Record<string, ProviderSpec> = {
 			messages: [{ role: 'user', content: userPrompt }],
 			temperature,
 			tools: [anthropicTool],
-			tool_choice: { type: 'tool', name: anthropicTool.name },
+			tool_choice: {
+				type: 'tool',
+				name: anthropicTool.name,
+				disable_parallel_tool_use: true,
+			},
 		}),
 		buildUrl: (baseUrl) => baseUrl,
 		parseResponse: parseAnthropicResponse,

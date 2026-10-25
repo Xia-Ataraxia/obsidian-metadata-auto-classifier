@@ -1,8 +1,9 @@
 import type { App } from 'obsidian';
-import { ButtonComponent, Modal, Platform } from 'obsidian';
+import { ButtonComponent, Modal } from 'obsidian';
 
 import { getProviderPreset, getProviderPresets } from '../../../utils/lib-utils';
 import { CodexOAuth, formatTokenExpiry, isTokenExpired, CODEX_OAUTH } from '../../auth';
+import { OAuthError } from '../../auth/oauth';
 import type { OAuthTokens, ProviderConfig } from '../../../types';
 import { ModalAccessibilityHelper } from '../components/ModalAccessibilityHelper';
 import { Notice } from '../components/Notice';
@@ -16,6 +17,8 @@ export class ProviderModal extends Modal {
 	private readonly accessibilityHelper = new ModalAccessibilityHelper();
 	private readonly codexOAuth = new CodexOAuth();
 	private oauthTokens?: OAuthTokens;
+	private modalOpen = false;
+	private oauthFlowGeneration = 0;
 
 	constructor(
 		app: App,
@@ -43,6 +46,7 @@ export class ProviderModal extends Modal {
 	}
 
 	onOpen(): void {
+		this.modalOpen = true;
 		const { contentEl } = this;
 		contentEl.empty();
 
@@ -179,15 +183,6 @@ export class ProviderModal extends Modal {
 			? `Connected (${formatTokenExpiry(this.oauthTokens!)})`
 			: 'Not connected';
 
-		// Desktop-only notice for OAuth
-		if (!Platform.isDesktop) {
-			CommonSetting.create(containerEl, {
-				name: 'Authentication',
-				desc: 'OAuth authentication requires the desktop app.',
-			});
-			return;
-		}
-
 		CommonSetting.create(containerEl, {
 			name: 'Authentication',
 			desc: isConnected ? statusText : 'Connect your account to use this provider',
@@ -198,7 +193,7 @@ export class ProviderModal extends Modal {
 			},
 		});
 
-		// Add info text about requirements
+		// Explain account-level availability without implying eligibility.
 		if (!isConnected) {
 			const infoEl = containerEl.createEl('div', {
 				cls: 'setting-item-description oauth-connection-info',
@@ -209,19 +204,35 @@ export class ProviderModal extends Modal {
 				'padding-left': '16px',
 				color: 'var(--text-muted)',
 			});
-			// eslint-disable-next-line obsidianmd/ui/sentence-case -- "ChatGPT Pro" is a proper noun and must remain capitalized
-			infoEl.textContent = 'Requires ChatGPT Pro subscription';
+			infoEl.textContent = 'Device-code sign-in may be disabled by account or workspace settings.';
 		}
+	}
+
+	private showDeviceCode(userCode: string): void {
+		this.contentEl.querySelector('.oauth-device-code')?.remove();
+		const section = this.contentEl.createDiv({ cls: 'oauth-device-code' });
+		section.createEl('p', {
+			text: `Enter this one-time code at ${CODEX_OAUTH.DEVICE_VERIFICATION_URI}.`,
+		});
+		section.createEl('code', { text: userCode });
+		new ButtonComponent(section)
+			.setButtonText('Open verification page')
+			.onClick(() => window.open(CODEX_OAUTH.DEVICE_VERIFICATION_URI, '_blank'));
 	}
 
 	/**
 	 * Start OAuth connection flow
 	 */
 	private async connectOAuth(): Promise<void> {
+		const flowGeneration = ++this.oauthFlowGeneration;
 		try {
-			this.notices.show('oauth_opening_browser');
-
-			const tokens = await this.codexOAuth.startAuthFlow();
+			const tokens = await this.codexOAuth.startAuthFlow(({ userCode }) => {
+				if (this.modalOpen && flowGeneration === this.oauthFlowGeneration) {
+					this.showDeviceCode(userCode);
+				}
+			});
+			if (flowGeneration !== this.oauthFlowGeneration) return;
+			this.contentEl.querySelector('.oauth-device-code')?.remove();
 			this.oauthTokens = tokens;
 
 			// Update provider config
@@ -231,12 +242,22 @@ export class ProviderModal extends Modal {
 			this.notices.show('oauth_connected');
 			this.updateForm();
 		} catch (error) {
-			const message = error instanceof Error ? error.message : 'Unknown error';
-			if (message.includes('timeout') || message.includes('cancelled')) {
+			if (flowGeneration !== this.oauthFlowGeneration) return;
+			this.contentEl.querySelector('.oauth-device-code')?.remove();
+			if (error instanceof OAuthError && error.code === 'cancelled') {
+				if (!this.modalOpen) return;
 				this.notices.show('oauth_cancelled');
 			} else {
+				const message =
+					error instanceof OAuthError && error.code === 'disabled'
+						? 'Device-code sign-in is unavailable. Check account or workspace settings.'
+						: error instanceof OAuthError && error.code === 'timeout'
+							? 'Authentication timed out. Please start again.'
+							: error instanceof OAuthError && error.code === 'invalid'
+								? 'The authentication response was invalid. Please retry.'
+								: 'Authentication could not be completed. Check the account configuration.';
 				this.notices.show('oauth_failed', {
-					message: 'Authentication could not be completed. Check the account configuration.',
+					message,
 				});
 			}
 		}
@@ -311,6 +332,7 @@ export class ProviderModal extends Modal {
 		if (oauthInfo) {
 			oauthInfo.remove();
 		}
+		this.contentEl.querySelector('.oauth-device-code')?.remove();
 
 		// Re-add form elements with updated data
 		this.addProviderForm(this.contentEl);
@@ -354,7 +376,7 @@ export class ProviderModal extends Modal {
 		}
 
 		// For OAuth providers, check if connected
-		if (this.isOAuthProvider() && Platform.isDesktop) {
+		if (this.isOAuthProvider()) {
 			if (!this.oauthTokens) {
 				this.notices.show('validation_error', {
 					component: 'Provider',
@@ -368,6 +390,8 @@ export class ProviderModal extends Modal {
 	}
 
 	onClose(): void {
+		this.modalOpen = false;
+		this.oauthFlowGeneration++;
 		const { contentEl } = this;
 		this.accessibilityHelper.cleanup(contentEl);
 		this.codexOAuth.cancelFlow();

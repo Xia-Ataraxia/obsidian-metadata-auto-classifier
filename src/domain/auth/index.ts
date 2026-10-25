@@ -8,9 +8,4 @@ export {
 	extractAccountId,
 	createTokensFromResponse,
 } from './token-manager';
-export type {
-	OAuthTokens,
-	PKCEChallenge,
-	TokenResponse,
-	OAuthCallbackResponse,
-} from '../../types/auth';
+export type { OAuthTokens, TokenResponse } from '../../types/auth';

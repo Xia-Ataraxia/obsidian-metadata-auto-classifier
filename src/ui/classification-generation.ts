@@ -1,12 +1,8 @@
-import type { AutoClassifierSettings, OAuthTokens, ProviderConfig } from '../types';
-import {
-	ClassificationStateError,
-	copyProvider,
-	providerHasAuth,
-	sameProvider,
-} from '../domain/classification-state';
+import type { AutoClassifierSettings } from '../types';
+import { ClassificationStateError, providerHasAuth } from '../domain/classification-state';
 import type { FieldSnapshot } from '../domain/classification-state';
 import { validateGeneratedTags } from '../domain/tag-generation';
+import { createProviderSession } from './provider-session';
 import { generateTags } from './provider-api';
 import { HttpError } from './request';
 
@@ -28,49 +24,10 @@ interface GenerationContext {
 
 /** Provider settings become relevant only if the result policy requests generation. */
 export function createGenerationStage(context: GenerationContext) {
-	let expected: ProviderConfig | undefined;
-	let providerName = '';
-	let model = '';
+	let session: ReturnType<typeof createProviderSession> | undefined;
 	const assertCurrent = () => {
-		context.assertCurrent();
-		if (!expected) return;
-		const live = context.getSettings();
-		if (
-			live.selectedProvider !== providerName ||
-			live.selectedModel !== model ||
-			!sameProvider(
-				live.providers.find((provider) => provider.name === providerName),
-				expected
-			)
-		) {
-			throw new ClassificationStateError('provider-changed');
-		}
-	};
-	const refreshTokens = async (tokens: OAuthTokens) => {
-		assertCurrent();
-		const live = context.getSettings();
-		const current = live.providers.find((provider) => provider.name === providerName);
-		if (!current || !expected) throw new ClassificationStateError('provider-changed');
-		const next = copyProvider(expected);
-		if (next.auth?.type === 'oauth') next.auth.oauth = { ...tokens };
-		else if (next.authType === 'oauth' || next.oauth) next.oauth = { ...tokens };
-		else throw new ClassificationStateError('provider-changed');
-		if (current.auth?.type === 'oauth') current.auth.oauth = { ...tokens };
-		else current.oauth = { ...tokens };
-		await context.saveSettings();
-		context.assertCurrent();
-		const saved = context.getSettings();
-		if (
-			saved.selectedProvider !== providerName ||
-			saved.selectedModel !== model ||
-			!sameProvider(
-				saved.providers.find((provider) => provider.name === providerName),
-				next
-			)
-		) {
-			throw new ClassificationStateError('provider-changed');
-		}
-		expected = next;
+		if (session) session.assertCurrent();
+		else context.assertCurrent();
 	};
 	const generate = async ({
 		excluded,
@@ -83,9 +40,11 @@ export function createGenerationStage(context: GenerationContext) {
 	}): Promise<string[]> => {
 		context.assertCurrent();
 		const settings = context.getSettings();
-		providerName = settings.selectedProvider;
-		model = settings.selectedModel;
-		const configured = settings.providers.find((provider) => provider.name === providerName);
+		const providerName = settings.selectedProvider;
+		const model = settings.selectedModel;
+		const getProvider = () =>
+			context.getSettings().providers.find((provider) => provider.name === providerName);
+		const configured = getProvider();
 		if (
 			!configured ||
 			!model ||
@@ -93,7 +52,16 @@ export function createGenerationStage(context: GenerationContext) {
 			!providerHasAuth(configured)
 		)
 			throw new GenerationFailedError();
-		expected = copyProvider(configured);
+		session = createProviderSession({
+			getProvider,
+			saveSettings: () => context.saveSettings(),
+			assertCurrent: () => {
+				context.assertCurrent();
+				const live = context.getSettings();
+				if (live.selectedProvider !== providerName || live.selectedModel !== model)
+					throw new ClassificationStateError('provider-changed');
+			},
+		});
 		const field = context.snapshot;
 		try {
 			const result = await generateTags(
@@ -108,9 +76,9 @@ export function createGenerationStage(context: GenerationContext) {
 					deadline: context.deadline,
 					assertCurrent,
 				},
-				expected,
+				session.provider,
 				model,
-				refreshTokens
+				session.refreshTokens
 			);
 			assertCurrent();
 			return validateGeneratedTags(result, excluded, maximum);

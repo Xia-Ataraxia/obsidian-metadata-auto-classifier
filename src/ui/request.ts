@@ -1,108 +1,40 @@
 import type { RequestUrlParam, RequestUrlResponse } from 'obsidian';
 import { requestUrl } from 'obsidian';
+import {
+	HttpError,
+	requestBeforeDeadline,
+	throwIfAborted,
+	waitBeforeDeadline,
+	type HttpRequestOptions,
+} from './request-control';
+
+export { HttpError } from './request-control';
+export type { HttpErrorCode, HttpRequestOptions } from './request-control';
 
 const REQUEST_TIMEOUT_MS = 60_000;
 const MAX_ATTEMPTS = 3;
 const MAX_RETRY_AFTER_MS = 5_000;
 
-export type HttpErrorCode =
-	| 'HTTP_ERROR'
-	| 'TRANSPORT_ERROR'
-	| 'PROTOCOL_ERROR'
-	| 'INVALID_JSON'
-	| 'TIMEOUT';
-
-export class HttpError extends Error {
-	readonly status: number | undefined;
-	readonly code: HttpErrorCode;
-
-	constructor(code: HttpErrorCode, status?: number) {
-		const message =
-			code === 'HTTP_ERROR' && status !== undefined
-				? `HTTP request failed (HTTP ${status})`
-				: `Request failed (${code})`;
-		super(message);
-		this.name = 'HttpError';
-		this.status = status;
-		this.code = code;
-	}
-}
-
-export interface HttpRequestOptions {
-	/** Absolute deadline in milliseconds since the Unix epoch. */
-	deadline?: number;
-	/** Synchronous operation validity check before every dispatch and after every response. */
-	assertCurrent?: () => void;
-}
-
 function createRequestParam(
 	url: string,
 	headers: Record<string, string>,
-	data: object
+	data: object | string
 ): RequestUrlParam {
-	let serialized: string | undefined;
-	try {
-		serialized = JSON.stringify(data);
-	} catch {
-		throw new HttpError('PROTOCOL_ERROR');
+	let serialized: string;
+	if (typeof data === 'string') {
+		serialized = data;
+	} else {
+		let json: string | undefined;
+		try {
+			json = JSON.stringify(data);
+		} catch {
+			throw new HttpError('PROTOCOL_ERROR');
+		}
+		if (typeof json !== 'string') throw new HttpError('PROTOCOL_ERROR');
+		serialized = json;
 	}
-	if (typeof serialized !== 'string') throw new HttpError('PROTOCOL_ERROR');
 
 	return { url, method: 'POST', headers, body: serialized, throw: false };
-}
-
-function requestBeforeDeadline(
-	param: RequestUrlParam,
-	deadline: number,
-	assertCurrent?: () => void
-): Promise<RequestUrlResponse> {
-	return new Promise((resolve, reject) => {
-		const remaining = deadline - Date.now();
-		if (remaining <= 0) {
-			reject(new HttpError('TIMEOUT'));
-			return;
-		}
-
-		let settled = false;
-		let guardFailed = false;
-		let guardError: unknown;
-		const timer = setTimeout(() => finish(reject, new HttpError('TIMEOUT')), remaining);
-		const finish = <T>(callback: (value: T) => void, value: T): void => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(timer);
-			callback(value);
-		};
-
-		Promise.resolve()
-			.then(() => {
-				if (settled || Date.now() >= deadline) throw new HttpError('TIMEOUT');
-				try {
-					assertCurrent?.();
-				} catch (error) {
-					guardFailed = true;
-					guardError = error;
-					throw error;
-				}
-				return requestUrl(param);
-			})
-			.then(
-				(response) => {
-					if (Date.now() >= deadline) {
-						finish(reject, new HttpError('TIMEOUT'));
-					} else {
-						finish(resolve, response);
-					}
-				},
-				() =>
-					finish(
-						reject,
-						guardFailed
-							? guardError
-							: new HttpError(Date.now() >= deadline ? 'TIMEOUT' : 'TRANSPORT_ERROR')
-					)
-			);
-	});
 }
 
 function retryDelay(response: RequestUrlResponse, attempt: number): number {
@@ -121,35 +53,42 @@ function retryDelay(response: RequestUrlResponse, attempt: number): number {
 	return Math.min(requestedDelay ?? backoff, MAX_RETRY_AFTER_MS);
 }
 
-async function waitBeforeDeadline(delayMs: number, deadline: number): Promise<void> {
-	const remaining = deadline - Date.now();
-	if (remaining <= 0) throw new HttpError('TIMEOUT');
-	if (delayMs >= remaining) {
-		await new Promise<void>((resolve) => setTimeout(resolve, remaining));
-		throw new HttpError('TIMEOUT');
-	}
-	await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-	if (Date.now() >= deadline) throw new HttpError('TIMEOUT');
-}
-
 export async function sendHttpRequest(
 	url: string,
 	headers: Record<string, string>,
-	data: object,
+	data: object | string,
 	options?: HttpRequestOptions
 ): Promise<RequestUrlResponse> {
 	const startedAt = Date.now();
+	throwIfAborted(options?.signal);
+	const requestedMaxAttempts = options?.maxAttempts;
+	if (
+		requestedMaxAttempts !== undefined &&
+		requestedMaxAttempts !== 1 &&
+		requestedMaxAttempts !== MAX_ATTEMPTS
+	) {
+		throw new HttpError('PROTOCOL_ERROR');
+	}
 	const deadline = Math.min(
 		options?.deadline ?? startedAt + REQUEST_TIMEOUT_MS,
 		startedAt + REQUEST_TIMEOUT_MS
 	);
 	if (!Number.isFinite(deadline) || deadline <= Date.now()) throw new HttpError('TIMEOUT');
 	const param = createRequestParam(url, headers, data);
+	throwIfAborted(options?.signal);
+	const maxAttempts = requestedMaxAttempts ?? MAX_ATTEMPTS;
 
-	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-		const response = await requestBeforeDeadline(param, deadline, options?.assertCurrent);
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		const response = await requestBeforeDeadline(
+			() => requestUrl(param),
+			deadline,
+			options?.signal,
+			options?.assertCurrent
+		);
+		throwIfAborted(options?.signal);
 		if (Date.now() >= deadline) throw new HttpError('TIMEOUT');
 		options?.assertCurrent?.();
+		throwIfAborted(options?.signal);
 		if (typeof response !== 'object' || response === null) {
 			throw new HttpError('PROTOCOL_ERROR');
 		}
@@ -157,13 +96,15 @@ export async function sendHttpRequest(
 			throw new HttpError('PROTOCOL_ERROR');
 		}
 		if (response.status >= 400) {
-			if ((response.status === 429 || response.status === 529) && attempt < MAX_ATTEMPTS) {
-				await waitBeforeDeadline(retryDelay(response, attempt), deadline);
+			if ((response.status === 429 || response.status === 529) && attempt < maxAttempts) {
+				await waitBeforeDeadline(retryDelay(response, attempt), deadline, options?.signal);
+				throwIfAborted(options?.signal);
 				continue;
 			}
 			throw new HttpError('HTTP_ERROR', response.status);
 		}
 		if (response.status < 200 || response.status >= 300) throw new HttpError('PROTOCOL_ERROR');
+		throwIfAborted(options?.signal);
 		return response;
 	}
 
@@ -173,13 +114,17 @@ export async function sendHttpRequest(
 export async function sendRequest(
 	url: string,
 	headers: Record<string, string>,
-	data: object,
+	data: object | string,
 	options?: HttpRequestOptions
 ): Promise<unknown> {
 	const response = await sendHttpRequest(url, headers, data, options);
+	throwIfAborted(options?.signal);
+	let parsed: unknown;
 	try {
-		return JSON.parse(response.text) as unknown;
+		parsed = JSON.parse(response.text) as unknown;
 	} catch {
 		throw new HttpError('INVALID_JSON');
 	}
+	throwIfAborted(options?.signal);
+	return parsed;
 }

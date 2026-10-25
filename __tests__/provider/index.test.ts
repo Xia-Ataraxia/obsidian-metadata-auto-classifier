@@ -31,6 +31,26 @@ describe('HTTP provider requests', () => {
 		expect(requestUrl).not.toHaveBeenCalled();
 	});
 
+	it('preserves non-Error operation validity failures and cleans up request controls', async () => {
+		vi.useFakeTimers();
+		const controller = new AbortController();
+		const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+		const revoked = Symbol('Synthetic operation revoked');
+
+		await expect(
+			sendHttpRequest(url, headers, body, {
+				signal: controller.signal,
+				assertCurrent: () => {
+					throw revoked;
+				},
+			})
+		).rejects.toBe(revoked);
+
+		expect(requestUrl).not.toHaveBeenCalled();
+		expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
 	it('does not retry a POST after permission is revoked during backoff', async () => {
 		vi.useFakeTimers();
 		let current = true;
@@ -198,6 +218,150 @@ describe('HTTP provider requests', () => {
 		resolveRequest(response(200));
 		await Promise.resolve();
 		await Promise.resolve();
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+	});
+
+	it('reports timeout when a native rejection arrives after the deadline before its timer runs', async () => {
+		vi.useFakeTimers();
+		let rejectRequest!: (reason?: unknown) => void;
+		vi.mocked(requestUrl).mockReturnValueOnce(
+			new Promise((_resolve, reject) => {
+				rejectRequest = reject;
+			})
+		);
+		const deadline = Date.now() + 100;
+		const request = sendHttpRequest(url, headers, body, { deadline });
+		const rejection = expect(request).rejects.toMatchObject({ code: 'TIMEOUT' });
+
+		await vi.advanceTimersByTimeAsync(0);
+		vi.setSystemTime(deadline);
+		rejectRequest(new Error('Synthetic native rejection'));
+
+		await rejection;
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
+	it('sends a string request body verbatim for URL-encoded forms', async () => {
+		const formBody =
+			'grant_type=authorization_code&code=code%2Bvalue&redirect_uri=app%3A%2F%2Fcallback';
+		vi.mocked(requestUrl).mockResolvedValueOnce(response(200));
+
+		await expect(
+			sendRequest(url, { 'Content-Type': 'application/x-www-form-urlencoded' }, formBody, {
+				maxAttempts: 1,
+			})
+		).resolves.toEqual({ ok: true });
+
+		expect(requestUrl).toHaveBeenCalledWith(
+			expect.objectContaining({ body: formBody, method: 'POST' })
+		);
+	});
+
+	it.each([429, 529])('does not retry HTTP %i when maxAttempts is one', async (status) => {
+		vi.mocked(requestUrl).mockResolvedValueOnce(response(status));
+
+		await expect(sendHttpRequest(url, headers, body, { maxAttempts: 1 })).rejects.toMatchObject({
+			status,
+			code: 'HTTP_ERROR',
+		});
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([0, 2, 4, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+		'rejects invalid runtime maxAttempts %s before serialization or dispatch',
+		async (maxAttempts) => {
+			const toJSON = vi.fn(() => ({ secret: true }));
+			const options = { maxAttempts } as unknown as Parameters<typeof sendHttpRequest>[3];
+
+			await expect(sendHttpRequest(url, headers, { toJSON }, options)).rejects.toMatchObject({
+				code: 'PROTOCOL_ERROR',
+			});
+			expect(toJSON).not.toHaveBeenCalled();
+			expect(requestUrl).not.toHaveBeenCalled();
+		}
+	);
+
+	it('rejects an already-aborted request before serializing or dispatching', async () => {
+		const controller = new AbortController();
+		const toJSON = vi.fn(() => ({ secret: true }));
+		controller.abort();
+
+		await expect(
+			sendHttpRequest(url, headers, { toJSON }, { signal: controller.signal })
+		).rejects.toMatchObject({ code: 'CANCELLED' });
+		expect(toJSON).not.toHaveBeenCalled();
+		expect(requestUrl).not.toHaveBeenCalled();
+	});
+
+	it('aborts a pending native request promptly and ignores its late response', async () => {
+		vi.useFakeTimers();
+		const controller = new AbortController();
+		const addListener = vi.spyOn(controller.signal, 'addEventListener');
+		const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+		let resolveRequest!: (value: RequestUrlResponse) => void;
+		vi.mocked(requestUrl).mockReturnValueOnce(
+			new Promise((resolve) => {
+				resolveRequest = resolve;
+			})
+		);
+		const request = sendHttpRequest(url, headers, body, { signal: controller.signal });
+
+		await vi.advanceTimersByTimeAsync(0);
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+		controller.abort();
+		await expect(request).rejects.toMatchObject({ code: 'CANCELLED' });
+		expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+		expect(vi.getTimerCount()).toBe(0);
+
+		resolveRequest(response(200));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(addListener).toHaveBeenCalledTimes(1);
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+	});
+
+	it('rejects cancellation when the signal aborts as the native response arrives', async () => {
+		const controller = new AbortController();
+		vi.mocked(requestUrl).mockImplementationOnce(() => {
+			controller.abort();
+			return Promise.resolve(response(200));
+		});
+
+		await expect(
+			sendHttpRequest(url, headers, body, { signal: controller.signal })
+		).rejects.toMatchObject({ code: 'CANCELLED' });
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+	});
+
+	it('cleans up the deadline timer and abort listener after success', async () => {
+		vi.useFakeTimers();
+		const controller = new AbortController();
+		const addListener = vi.spyOn(controller.signal, 'addEventListener');
+		const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+		vi.mocked(requestUrl).mockResolvedValueOnce(response(200));
+
+		await sendHttpRequest(url, headers, body, { signal: controller.signal });
+
+		expect(addListener).toHaveBeenCalledTimes(1);
+		expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
+	it('aborts retry backoff and never dispatches another POST', async () => {
+		vi.useFakeTimers();
+		const controller = new AbortController();
+		const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+		vi.mocked(requestUrl).mockResolvedValueOnce(response(429, '', { 'Retry-After': '5' }));
+		const request = sendHttpRequest(url, headers, body, { signal: controller.signal });
+
+		await vi.advanceTimersByTimeAsync(0);
+		expect(requestUrl).toHaveBeenCalledTimes(1);
+		expect(vi.getTimerCount()).toBe(1);
+		controller.abort();
+		await expect(request).rejects.toMatchObject({ code: 'CANCELLED' });
+		expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+		expect(vi.getTimerCount()).toBe(0);
+		await vi.advanceTimersByTimeAsync(5_000);
 		expect(requestUrl).toHaveBeenCalledTimes(1);
 	});
 });

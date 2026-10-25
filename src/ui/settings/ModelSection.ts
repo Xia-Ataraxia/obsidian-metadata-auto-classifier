@@ -3,8 +3,12 @@ import type { App } from 'obsidian';
 import type AutoClassifierPlugin from '../../main';
 import { testModel } from '../provider-api';
 import type { Model, ProviderConfig } from '../../types';
+import { ClassificationStateError } from '../../domain/classification-state';
+import { createProviderSession } from '../provider-session';
 import { Setting } from './components/Setting';
 import { ModelModal, type ModelModalProps } from './modals/ModelModal';
+
+const MODEL_TEST_TIMEOUT_MS = 60_000;
 
 export class ModelSection {
 	constructor(
@@ -73,13 +77,43 @@ export class ModelSection {
 							text: 'Test',
 							onClick: async () => {
 								try {
-									const success = await testModel(provider, config.id);
+									const providerName = provider.name;
+									const modelId = config.id;
+									const assertModelCurrent = (): void => {
+										if (!this.plugin.isActive()) {
+											throw new ClassificationStateError('operation-revoked');
+										}
+										const liveProvider = this.plugin.settings.providers.find(
+											(item) => item.name === providerName
+										);
+										if (!liveProvider?.models.some((item) => item.id === modelId)) {
+											throw new ClassificationStateError('provider-changed');
+										}
+									};
+									const session = createProviderSession({
+										getProvider: () =>
+											this.plugin.settings.providers.find((item) => item.name === providerName),
+										saveSettings: () => this.plugin.saveSettings(),
+										assertCurrent: assertModelCurrent,
+									});
+									const success = await testModel(
+										session.provider,
+										modelId,
+										session.refreshTokens,
+										{
+											deadline: Date.now() + MODEL_TEST_TIMEOUT_MS,
+											assertCurrent: session.assertCurrent,
+										}
+									);
+									session.assertCurrent();
 									if (success) {
 										this.plugin.notices.show('model_test_success', { name: config.name });
 									} else {
+										if (!this.plugin.isActive()) return;
 										this.plugin.notices.show('model_test_failed', { name: config.name });
 									}
 								} catch {
+									if (!this.plugin.isActive()) return;
 									this.plugin.notices.show('model_test_error', {
 										message: 'The connection test failed. Check the provider configuration.',
 									});

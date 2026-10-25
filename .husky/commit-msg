@@ -1,1 +1,1 @@
-pnpm exec commitlint --edit $1
+bun x --bun --no-install commitlint --edit "$1"

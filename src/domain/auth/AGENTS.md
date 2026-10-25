@@ -5,24 +5,23 @@
 
 ## Purpose
 
-Pure domain logic for OAuth token management, PKCE flow, and authentication constants. NO Obsidian imports. Handles token expiry checking, JWT parsing, token refresh lifecycle, and OAuth provider configuration.
+Pure domain logic for token validation, expiry, and authentication constants. NO Obsidian imports. Device-flow networking and UI belong in `ui/auth/`; there is no local listener or local PKCE implementation.
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `token-manager.ts` | Token validation, expiry checking, JWT claim parsing, token lifecycle utilities |
-| `oauth-server.ts` | PKCE server implementation for OAuth authorization code flow |
-| `pkce.ts` | PKCE challenge generation (code challenge, code verifier) |
-| `oauth-constants.ts` | OAuth provider configurations (Codex/Anthropic OAuth endpoints) |
-| `index.ts` | Barrel export of public auth APIs |
+| File                 | Purpose                                                                         |
+| -------------------- | ------------------------------------------------------------------------------- |
+| `token-manager.ts`   | Token validation, expiry checking, JWT claim parsing, token lifecycle utilities |
+| `oauth-constants.ts` | Fixed Codex device authorization, token, and inference endpoints                |
+| `index.ts`           | Barrel export of public auth APIs                                               |
 
 ## For AI Agents
 
 - All functions are pure and deterministic
 - Token validation happens before API requests in `ui/` layer
-- PKCE server runs locally; no external dependencies
-- JWT parsing is defensive (no assumptions about token structure)
+- Never restore a loopback server, Node HTTP fallback, or local PKCE flow
+- JWT parsing validates shape and expiry; it does not verify signatures or establish permission
+- Route with `chatgpt_account_id`, never a user identifier or `sub`
 - Unit tests require minimal setup (no mocks for pure functions)
 
 ## Dependencies

@@ -46,7 +46,9 @@ function parseOllamaResponse(data: unknown): GeneratedTags {
 }
 
 function extractOAuthTokens(provider: ProviderConfig): ProviderConfig['oauth'] {
-	return provider.auth?.type === 'oauth' ? provider.auth.oauth : provider.oauth;
+	if (provider.auth) return provider.auth.type === 'oauth' ? provider.auth.oauth : undefined;
+	if (provider.authType === 'apiKey') return undefined;
+	return provider.oauth;
 }
 
 function codexHeaders(_apiKey: string, provider?: ProviderConfig): Record<string, string> {
@@ -126,7 +128,7 @@ export const nativeProviderSpecs: Record<string, ProviderSpec> = {
 			generationConfig: {
 				temperature,
 				responseMimeType: 'application/json',
-				responseSchema: TAG_GENERATION_SCHEMA,
+				responseJsonSchema: TAG_GENERATION_SCHEMA,
 			},
 		}),
 		buildUrl: (baseUrl, model, apiKey) =>
@@ -145,7 +147,7 @@ export const nativeProviderSpecs: Record<string, ProviderSpec> = {
 				{ role: 'system', content: systemRole },
 				{ role: 'user', content: userPrompt },
 			],
-			temperature,
+			options: { temperature },
 			stream: false,
 			format: TAG_GENERATION_SCHEMA,
 		}),

@@ -33,7 +33,10 @@ function config(name: string): ProviderConfig {
 	return {
 		name,
 		apiKey: 'api-key-secret',
-		baseUrl: 'https://provider.example.test/v1/chat/completions',
+		baseUrl:
+			name === PROVIDER_NAMES.GEMINI
+				? 'https://generativelanguage.googleapis.com/v1beta'
+				: 'https://provider.example.test/v1/chat/completions',
 		models: [],
 		auth:
 			name === PROVIDER_NAMES.CODEX
@@ -71,8 +74,8 @@ const providerCases: Array<{ name: string; response: unknown; mode: string }> = 
 		},
 		mode: 'gemini',
 	},
-	{ name: PROVIDER_NAMES.OPENROUTER, response: chatResponse(generatedJson), mode: 'openai' },
-	{ name: PROVIDER_NAMES.DEEPSEEK, response: chatResponse(generatedJson), mode: 'openai' },
+	{ name: PROVIDER_NAMES.OPENROUTER, response: chatResponse(generatedJson), mode: 'openrouter' },
+	{ name: PROVIDER_NAMES.DEEPSEEK, response: chatResponse(generatedJson), mode: 'deepseek' },
 	{ name: PROVIDER_NAMES.LMSTUDIO, response: chatResponse(generatedJson), mode: 'openai' },
 	{
 		name: PROVIDER_NAMES.OLLAMA,
@@ -88,10 +91,18 @@ describe('UnifiedProvider generated-tags contract', () => {
 
 	beforeEach(() => vi.clearAllMocks());
 
-	it('requires completed chat output while accepting an explicit null refusal', () => {
+	it('requires completed chat output while accepting null or absent refusal', () => {
 		expect(provider.processApiResponse(chatResponse(generatedJson), PROVIDER_NAMES.OPENAI)).toEqual(
 			generated
 		);
+		expect(
+			provider.processApiResponse(
+				{
+					choices: [{ finish_reason: 'stop', message: { content: generatedJson } }],
+				},
+				PROVIDER_NAMES.OPENAI
+			)
+		).toEqual(generated);
 		for (const finish_reason of [undefined, 'length', 'content_filter']) {
 			expect(() =>
 				provider.processApiResponse(
@@ -120,6 +131,48 @@ describe('UnifiedProvider generated-tags contract', () => {
 				)
 			).toThrow();
 		}
+		for (const input of [{ tags: ['new/tag'], extra: true }, { tags: [1] }]) {
+			expect(() =>
+				provider.processApiResponse(
+					{
+						stop_reason: 'tool_use',
+						content: [{ type: 'tool_use', name: 'generate_tags', input }],
+					},
+					PROVIDER_NAMES.ANTHROPIC
+				)
+			).toThrow();
+		}
+		expect(() =>
+			provider.processApiResponse(
+				{
+					stop_reason: 'tool_use',
+					content: [
+						{ type: 'tool_use', name: 'generate_tags', input: generated },
+						{ type: 'tool_use', name: 'generate_tags', input: generated },
+					],
+				},
+				PROVIDER_NAMES.ANTHROPIC
+			)
+		).toThrow();
+	});
+
+	it('keeps DeepSeek JSON mode strict at the local acceptance boundary', () => {
+		expect(
+			provider.processApiResponse(chatResponse(generatedJson), PROVIDER_NAMES.DEEPSEEK)
+		).toEqual(generated);
+		for (const content of ['', '{"tags":["new/tag"],"extra":true}', '{"tags":[1]}', '{"tags":']) {
+			expect(() =>
+				provider.processApiResponse(chatResponse(content), PROVIDER_NAMES.DEEPSEEK)
+			).toThrow();
+		}
+		expect(() =>
+			provider.processApiResponse(
+				{
+					choices: [{ finish_reason: 'length', message: { content: generatedJson } }],
+				},
+				PROVIDER_NAMES.DEEPSEEK
+			)
+		).toThrow();
 	});
 
 	it('parses Gemini answer text separately from optional reasoning parts', () => {
@@ -161,6 +214,7 @@ describe('UnifiedProvider generated-tags contract', () => {
 		'$name returns strict generated tags with its native schema placement',
 		async ({ name, response, mode }) => {
 			const providerConfig = config(name);
+			if (name === PROVIDER_NAMES.OLLAMA) providerConfig.temperature = 0.23;
 			if (name === PROVIDER_NAMES.CODEX) {
 				mockSendStreamingRequest.mockResolvedValueOnce(response as string);
 			} else {
@@ -184,18 +238,44 @@ describe('UnifiedProvider generated-tags contract', () => {
 					? mockSendStreamingRequest.mock.calls[0]
 					: mockSendRequest.mock.calls[0];
 			const requestBody = call?.[2] as Record<string, unknown>;
-			if (mode === 'openai') {
+			if (mode === 'openai' || mode === 'openrouter') {
 				const responseFormat = requestBody.response_format as Record<string, unknown>;
 				const schemaConfig = responseFormat.json_schema as Record<string, unknown>;
 				expect(schemaConfig).toMatchObject({ strict: true, schema: TAG_GENERATION_SCHEMA });
+				if (mode === 'openrouter') {
+					expect(requestBody.provider).toEqual({ require_parameters: true });
+				}
+			} else if (mode === 'deepseek') {
+				expect(requestBody.response_format).toEqual({ type: 'json_object' });
+				expect(requestBody.messages).toEqual([
+					{
+						role: 'system',
+						content:
+							'tag system\n\nReturn only JSON with exactly one property named "tags", whose value is an array of strings. Example: {"tags": ["tag1"]}.',
+					},
+					{ role: 'user', content: 'tag prompt' },
+				]);
 			} else if (mode === 'anthropic') {
 				const tools = requestBody.tools as Array<Record<string, unknown>>;
-				expect(tools[0].input_schema).toEqual(TAG_GENERATION_SCHEMA);
+				expect(tools).toHaveLength(1);
+				expect(tools[0]).toMatchObject({ input_schema: TAG_GENERATION_SCHEMA, strict: true });
+				expect(requestBody.tool_choice).toEqual({
+					type: 'tool',
+					name: 'generate_tags',
+					disable_parallel_tool_use: true,
+				});
 			} else if (mode === 'gemini') {
 				const generationConfig = requestBody.generationConfig as Record<string, unknown>;
-				expect(generationConfig.responseSchema).toEqual(TAG_GENERATION_SCHEMA);
+				expect(generationConfig.responseMimeType).toBe('application/json');
+				expect(generationConfig.responseJsonSchema).toEqual(TAG_GENERATION_SCHEMA);
+				expect(generationConfig.responseSchema).toBeUndefined();
+				expect(
+					(generationConfig.responseJsonSchema as Record<string, unknown>).additionalProperties
+				).toBe(false);
 			} else if (mode === 'ollama') {
 				expect(requestBody.format).toEqual(TAG_GENERATION_SCHEMA);
+				expect(requestBody.options).toEqual({ temperature: 0.23 });
+				expect(requestBody).not.toHaveProperty('temperature');
 			} else {
 				const text = requestBody.text as Record<string, unknown>;
 				expect(text.format).toMatchObject({
@@ -229,9 +309,19 @@ describe('UnifiedProvider generated-tags contract', () => {
 		});
 		await provider.callAPI('sys', 'prompt', config(PROVIDER_NAMES.GEMINI), 'gemini-pro');
 		expect(mockSendRequest.mock.calls[1]?.[0]).toBe(
-			'https://provider.example.test/v1/chat/completions/models/gemini-pro:generateContent?key=api-key-secret'
+			'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=api-key-secret'
 		);
 		expect(mockSendRequest.mock.calls[1]?.[1]).toEqual({ 'Content-Type': 'application/json' });
+	});
+
+	it('does not retry OpenRouter when an endpoint rejects required parameters', async () => {
+		const unsupportedEndpoint = new HttpError('HTTP_ERROR', 404);
+		mockSendRequest.mockRejectedValueOnce(unsupportedEndpoint);
+
+		await expect(
+			provider.callAPI('system', 'prompt', config(PROVIDER_NAMES.OPENROUTER), 'model')
+		).rejects.toBe(unsupportedEndpoint);
+		expect(mockSendRequest).toHaveBeenCalledTimes(1);
 	});
 
 	it('rejects unknown names instead of falling back to OpenAI-compatible parsing', async () => {
@@ -262,10 +352,26 @@ describe('UnifiedProvider generated-tags contract', () => {
 	it('rejects refusal and incomplete provider results without exposing response data', () => {
 		const cases: Array<[unknown, string?]> = [
 			[
-				{ choices: [{ message: { refusal: 'private refusal', content: null } }] },
+				{
+					choices: [
+						{
+							finish_reason: 'stop',
+							message: { refusal: 'private refusal', content: generatedJson },
+						},
+					],
+				},
 				PROVIDER_NAMES.OPENAI,
 			],
-			[{ content: [{ type: 'refusal', refusal: 'private refusal' }] }, PROVIDER_NAMES.ANTHROPIC],
+			[
+				{
+					stop_reason: 'tool_use',
+					content: [
+						{ type: 'refusal', refusal: 'private refusal' },
+						{ type: 'tool_use', name: 'generate_tags', input: generated },
+					],
+				},
+				PROVIDER_NAMES.ANTHROPIC,
+			],
 			[
 				{ candidates: [{ finishReason: 'SAFETY', content: { parts: [{ text: generatedJson }] } }] },
 				PROVIDER_NAMES.GEMINI,
@@ -333,6 +439,7 @@ describe('UnifiedProvider generated-tags contract', () => {
 		mockCodexOAuth.mockImplementation(function () {
 			return { refreshTokens } as unknown as CodexOAuth;
 		});
+		const requestOptions = { deadline, assertCurrent: vi.fn() };
 		const onTokenRefresh = vi.fn(async () => {
 			await Promise.resolve();
 			refreshCallbackCompleted = true;
@@ -346,18 +453,217 @@ describe('UnifiedProvider generated-tags contract', () => {
 				'model',
 				undefined,
 				onTokenRefresh,
-				{ deadline }
+				requestOptions
 			)
 		).resolves.toEqual(generated);
 		expect(mockSendStreamingRequest).toHaveBeenCalledTimes(2);
-		expect(mockSendStreamingRequest.mock.calls[0]?.[4]).toEqual({ deadline });
-		expect(mockSendStreamingRequest.mock.calls[1]?.[4]).toEqual({ deadline });
+		expect(mockSendStreamingRequest.mock.calls[0]?.[4]).toEqual(requestOptions);
+		expect(mockSendStreamingRequest.mock.calls[1]?.[4]).toEqual(requestOptions);
+		expect(refreshTokens).toHaveBeenCalledWith('refresh-token-secret', requestOptions);
 		expect(mockSendStreamingRequest.mock.calls[1]?.[1]).toMatchObject({
 			Authorization: 'Bearer new-codex-token',
 			'ChatGPT-Account-Id': 'account-id',
 		});
 		expect(onTokenRefresh).toHaveBeenCalledWith(tokens);
 		expect(CODEX_OAUTH.API_ENDPOINT).toBe(mockSendStreamingRequest.mock.calls[0]?.[0]);
+	});
+
+	it('serializes refreshes across instances and holds ownership through token persistence', async () => {
+		mockSendStreamingRequest
+			.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401))
+			.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401))
+			.mockResolvedValueOnce(generatedJson);
+		const tokens = {
+			accessToken: 'rotated-access-token',
+			refreshToken: 'rotated-refresh-token',
+			expiresAt: Date.now() / 1000 + 7200,
+			accountId: 'account-id',
+		};
+		const refreshTokens = vi.fn().mockResolvedValue(tokens);
+		mockCodexOAuth.mockImplementation(function () {
+			return { refreshTokens } as unknown as CodexOAuth;
+		});
+		let releasePersistence!: () => void;
+		let markPersistenceStarted!: () => void;
+		const persistenceStarted = new Promise<void>((resolve) => {
+			markPersistenceStarted = resolve;
+		});
+		const persist = vi.fn(
+			() =>
+				new Promise<void>((resolve) => {
+					releasePersistence = resolve;
+					markPersistenceStarted();
+				})
+		);
+		const firstCall = new UnifiedProvider().callAPI(
+			'system',
+			'prompt',
+			config(PROVIDER_NAMES.CODEX),
+			'model',
+			undefined,
+			persist
+		);
+
+		try {
+			await persistenceStarted;
+			const competingError = await new UnifiedProvider()
+				.callAPI('system', 'prompt', config(PROVIDER_NAMES.CODEX), 'model', undefined, vi.fn())
+				.then(
+					() => new Error('Unexpected competing refresh success'),
+					(error: unknown) => error
+				);
+			expect(competingError).toBeInstanceOf(Error);
+			expect((competingError as Error).message).toBe('Codex token refresh is already in progress');
+			expect((competingError as Error).message).not.toContain('refresh-token-secret');
+			expect(refreshTokens).toHaveBeenCalledTimes(1);
+			expect(mockSendStreamingRequest).toHaveBeenCalledTimes(2);
+
+			releasePersistence();
+			await expect(firstCall).resolves.toEqual(generated);
+			expect(mockSendStreamingRequest).toHaveBeenCalledTimes(3);
+		} finally {
+			releasePersistence?.();
+			await firstCall.catch(() => undefined);
+		}
+	});
+
+	it.each(['refresh', 'persistence'] as const)(
+		'releases refresh ownership after %s failure without retrying the failed operation',
+		async (failure) => {
+			mockSendStreamingRequest
+				.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401))
+				.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401))
+				.mockResolvedValueOnce(generatedJson);
+			const tokens = {
+				accessToken: 'rotated-access-token',
+				refreshToken: 'rotated-refresh-token',
+				expiresAt: Date.now() / 1000 + 7200,
+				accountId: 'account-id',
+			};
+			const refreshTokens = vi.fn().mockResolvedValue(tokens);
+			if (failure === 'refresh') {
+				refreshTokens.mockRejectedValueOnce(new Error('synthetic refresh failure'));
+			}
+			mockCodexOAuth.mockImplementation(function () {
+				return { refreshTokens } as unknown as CodexOAuth;
+			});
+			const persist = vi.fn().mockResolvedValue(undefined);
+			if (failure === 'persistence') {
+				persist.mockRejectedValueOnce(new Error('synthetic persistence failure'));
+			}
+
+			const firstError = await new UnifiedProvider()
+				.callAPI('system', 'prompt', config(PROVIDER_NAMES.CODEX), 'model', undefined, persist)
+				.then(
+					() => new Error('Unexpected failed refresh success'),
+					(error: unknown) => error
+				);
+			expect(firstError).toBeInstanceOf(Error);
+			expect((firstError as Error).message).not.toContain('refresh-token-secret');
+			expect(refreshTokens).toHaveBeenCalledTimes(1);
+			expect(mockSendStreamingRequest).toHaveBeenCalledTimes(1);
+
+			await expect(
+				new UnifiedProvider().callAPI(
+					'system',
+					'prompt',
+					config(PROVIDER_NAMES.CODEX),
+					'model',
+					undefined,
+					vi.fn()
+				)
+			).resolves.toEqual(generated);
+			expect(refreshTokens).toHaveBeenCalledTimes(2);
+			expect(mockSendStreamingRequest).toHaveBeenCalledTimes(3);
+		}
+	);
+
+	it('does not use legacy Codex OAuth when explicit API-key auth is selected', async () => {
+		const providerConfig = config(PROVIDER_NAMES.CODEX);
+		providerConfig.oauth =
+			providerConfig.auth?.type === 'oauth' ? providerConfig.auth.oauth : undefined;
+		providerConfig.auth = { type: 'apiKey', apiKey: 'api-key-secret' };
+
+		await expect(
+			provider.callAPI('system', 'prompt', providerConfig, 'model', undefined, vi.fn())
+		).rejects.toThrow('Provider authentication mode is unsupported');
+		expect(mockSendStreamingRequest).not.toHaveBeenCalled();
+		expect(mockCodexOAuth).not.toHaveBeenCalled();
+	});
+
+	it('does not rotate credentials without a persistence callback', async () => {
+		mockSendStreamingRequest.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401));
+		await expect(
+			provider.callAPI('system', 'prompt', config(PROVIDER_NAMES.CODEX), 'model')
+		).rejects.toThrow('Codex token persistence is unavailable');
+		expect(mockCodexOAuth).not.toHaveBeenCalled();
+		expect(mockSendStreamingRequest).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not persist or retry with a different refreshed account', async () => {
+		mockSendStreamingRequest.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401));
+		const refreshed = {
+			accessToken: 'new-token',
+			refreshToken: 'new-refresh',
+			expiresAt: Date.now() / 1000 + 3600,
+			accountId: 'different-account',
+		};
+		mockCodexOAuth.mockImplementationOnce(function () {
+			return { refreshTokens: vi.fn().mockResolvedValue(refreshed) } as unknown as CodexOAuth;
+		});
+		const persist = vi.fn();
+		await expect(
+			provider.callAPI(
+				'system',
+				'prompt',
+				config(PROVIDER_NAMES.CODEX),
+				'model',
+				undefined,
+				persist
+			)
+		).rejects.toThrow('Codex account changed during refresh');
+		expect(persist).not.toHaveBeenCalled();
+		expect(mockSendStreamingRequest).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps the shared timeout when refresh fails after expiry', async () => {
+		mockSendStreamingRequest.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401));
+		const clock = vi.spyOn(Date, 'now');
+		mockCodexOAuth.mockImplementationOnce(function () {
+			return {
+				refreshTokens: vi.fn(async () => {
+					clock.mockReturnValue(deadline);
+					throw new Error('synthetic-private-refresh-error');
+				}),
+			} as unknown as CodexOAuth;
+		});
+		const persist = vi.fn();
+		try {
+			await expect(
+				provider.callAPI(
+					'system',
+					'prompt',
+					config(PROVIDER_NAMES.CODEX),
+					'model',
+					undefined,
+					persist,
+					{ deadline }
+				)
+			).rejects.toMatchObject({ code: 'TIMEOUT' });
+			expect(persist).not.toHaveBeenCalled();
+			expect(mockSendStreamingRequest).toHaveBeenCalledTimes(1);
+		} finally {
+			clock.mockRestore();
+		}
+	});
+
+	it('does not use stored API keys when OAuth is explicitly selected for an API-key provider', async () => {
+		const configured = config(PROVIDER_NAMES.OPENAI);
+		configured.auth = config(PROVIDER_NAMES.CODEX).auth;
+		await expect(provider.callAPI('system', 'prompt', configured, 'model')).rejects.toThrow(
+			'Provider authentication mode is unsupported'
+		);
+		expect(mockSendRequest).not.toHaveBeenCalled();
 	});
 
 	it('does not replace a safe non-401 transport error', async () => {

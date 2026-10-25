@@ -5,6 +5,7 @@ Metadata classification for Obsidian using Jev to select existing tags and front
 > The more context you give, the more accurate the classification.
 
 ## Example
+
 ![Usage Example](./assets/usecase.gif)
 
 ## Features
@@ -50,35 +51,44 @@ Configure the Jev API key and model first. A generation provider is unnecessary 
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| Fetch tags using current provider | Classify tags for the captured active note |
+| Command                                      | Description                                |
+| -------------------------------------------- | ------------------------------------------ |
+| Fetch tags using current provider            | Classify tags for the captured active note |
 | Fetch all frontmatter using current provider | Populate all configured frontmatter fields |
-| Fetch [field] using current provider | Update a specific frontmatter field |
+| Fetch [field] using current provider         | Update a specific frontmatter field        |
 
 ## Settings
 
-| Setting | Description |
-|---------|-------------|
-| Jev API key and model | Configure candidate classification independently of generation |
-| Optional provider and model | Configure generation of new tags only |
-| Generate new tags | Opt in for the exact `tags` field; ordinary fields cannot generate values |
-| Custom frontmatter fields | Define candidate fields, references, count limits, append/overwrite, and WikiLink formatting |
-| Classification rules | Set semantic guidance; existing instructions are preserved |
-| Field-specific prompts | Provide per-field context to guide AI output |
+| Setting                     | Description                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| Jev API key and model       | Configure candidate classification independently of generation                               |
+| Optional provider and model | Configure generation of new tags only                                                        |
+| Generate new tags           | Opt in for the exact `tags` field; ordinary fields cannot generate values                    |
+| Custom frontmatter fields   | Define candidate fields, references, count limits, append/overwrite, and WikiLink formatting |
+| Classification rules        | Set semantic guidance; existing instructions are preserved                                   |
+| Field-specific prompts      | Provide per-field context to guide AI output                                                 |
 
 Jev accepts yes probabilities at or above 0.7 and no probabilities at or below 0.3. Zero yes results with any abstention stop without generation or writing. The maximum count limits the current operation, not the total existing values in append mode. See [Classification workflow](./docs/Classification-Workflow.md) for safety and verification boundaries.
 
+### Generation authentication and model limits
+
+- Codex sign-in displays a device code and an explicit link to the official verification page. It does not start a local callback server, automatically open a browser, or copy the code. Closing the dialog cancels the flow.
+- OAuth refresh must preserve the account and save current credentials before retrying. Editing the provider or unloading the plugin invalidates an in-flight operation.
+- Models must support their provider's required output protocol. DeepSeek uses JSON mode with strict application validation; schema/tool-capable providers use their documented structured-output controls. Unsupported models fail rather than silently changing protocols or models.
+- Local Ollama and LM Studio servers may omit API keys; installed models and engine capabilities still matter. Bundled suggestions do not migrate saved models or endpoints and do not guarantee account access, free pricing, or local installation.
+
+Real-account device login, mobile behavior, and live provider compatibility are not yet certified. The retained Codex backend also has unresolved model and streaming-terminal compatibility limits.
+
 ## Tech Stack
 
-| Category | Technology |
-|----------|------------|
-| Platform | Obsidian 1.13.0 or later |
-| Language | TypeScript 5 |
-| Bundler | esbuild |
-| AI | Jev classification; optional generation providers |
-| Testing | Vitest (with coverage) |
-| Linting | ESLint 9 (flat config) + Prettier |
+| Category | Technology                                        |
+| -------- | ------------------------------------------------- |
+| Platform | Obsidian 1.13.0 or later                          |
+| Language | TypeScript 5                                      |
+| Bundler  | esbuild                                           |
+| AI       | Jev classification; optional generation providers |
+| Testing  | Vitest (with coverage)                            |
+| Linting  | ESLint 9 (flat config) + Prettier                 |
 
 ## Project Structure
 

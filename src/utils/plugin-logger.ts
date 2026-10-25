@@ -1,10 +1,6 @@
 const EVENT_NAMES = [
 	'initialization-failed',
-	'oauth-refreshed',
-	'oauth-refresh-failed',
-	'oauth-server-started',
-	'oauth-server-stopped',
-	'settings-migration',
+
 	'api-error',
 	'validation-error',
 	'unexpected-error',

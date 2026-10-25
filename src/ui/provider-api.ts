@@ -7,6 +7,7 @@ import {
 import { HttpError } from './request';
 import type { OnTokenRefreshCallback, ProviderConfig } from '../types';
 import { UnifiedProvider } from './UnifiedProvider';
+import type { HttpRequestOptions } from './request';
 
 export interface GenerateTagsInput {
 	fieldName: string;
@@ -32,13 +33,18 @@ function assertGenerationCurrent(input: GenerateTagsInput): void {
 
 export const testModel = async (
 	providerConfig: ProviderConfig,
-	modelName: string
+	modelName: string,
+	onTokenRefresh?: OnTokenRefreshCallback,
+	requestOptions?: HttpRequestOptions
 ): Promise<boolean> => {
 	await new UnifiedProvider().callAPI(
 		COMMON_CONSTANTS.VERIFY_CONNECTION_SYSTEM_PROMPT,
 		COMMON_CONSTANTS.VERIFY_CONNECTION_USER_PROMPT,
 		providerConfig,
-		modelName
+		modelName,
+		undefined,
+		onTokenRefresh,
+		requestOptions
 	);
 	return true;
 };

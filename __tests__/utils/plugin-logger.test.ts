@@ -33,9 +33,9 @@ describe('closed diagnostic allowlist', () => {
 			throw new Error('synthetic-secret');
 		});
 		const metrics = Object.defineProperty({}, 'status', { get: getter });
-		new PluginLogger().info('oauth-refreshed', metrics);
+		new PluginLogger().info('api-error', metrics);
 		expect(getter).not.toHaveBeenCalled();
-		expect(spy).toHaveBeenCalledWith('[MAC] info | oauth-refreshed');
+		expect(spy).toHaveBeenCalledWith('[MAC] info | api-error');
 	});
 
 	it('handles hostile metric proxies without disclosing exceptions', () => {

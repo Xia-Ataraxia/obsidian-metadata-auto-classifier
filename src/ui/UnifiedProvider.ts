@@ -9,9 +9,12 @@ import type { ProviderSpec } from './provider-chat-specs';
 import { nativeProviderSpecs } from './provider-native-specs';
 
 const REQUEST_TIMEOUT_MS = 60_000;
+const inFlightCodexRefreshTokens = new Set<string>();
 
 function extractOAuthTokens(provider: ProviderConfig) {
-	return provider.auth?.type === 'oauth' ? provider.auth.oauth : provider.oauth;
+	if (provider.auth) return provider.auth.type === 'oauth' ? provider.auth.oauth : undefined;
+	if (provider.authType === 'apiKey') return undefined;
+	return provider.oauth;
 }
 
 function getProviderSpec(providerName: string): ProviderSpec {
@@ -36,6 +39,7 @@ function requestOptionsWithDeadline(options?: HttpRequestOptions): HttpRequestOp
 }
 
 function assertDeadline(options: HttpRequestOptions): void {
+	if (options.signal?.aborted) throw new HttpError('CANCELLED');
 	if (
 		options.deadline === undefined ||
 		!Number.isFinite(options.deadline) ||
@@ -64,6 +68,10 @@ export class UnifiedProvider implements APIProvider {
 		requestOptions?: HttpRequestOptions
 	): Promise<GeneratedTags> {
 		const spec = getProviderSpec(provider.name);
+		const expectedAuth = provider.name === PROVIDER_NAMES.CODEX ? 'oauth' : 'apiKey';
+		const configuredAuth = provider.auth?.type ?? provider.authType;
+		if (configuredAuth && configuredAuth !== expectedAuth)
+			throw new Error('Provider authentication mode is unsupported');
 		const deadlineOptions = requestOptionsWithDeadline(requestOptions);
 		assertDeadline(deadlineOptions);
 		const apiKey =
@@ -125,42 +133,54 @@ export class UnifiedProvider implements APIProvider {
 	): Promise<GeneratedTags> {
 		const oauth = extractOAuthTokens(provider);
 		if (!oauth) throw new Error('Codex authentication is unavailable');
+		if (inFlightCodexRefreshTokens.has(oauth.refreshToken))
+			throw new Error('Codex token refresh is already in progress');
+		if (!onTokenRefresh) throw new Error('Codex token persistence is unavailable');
 
-		let newTokens: Awaited<ReturnType<CodexOAuth['refreshTokens']>>;
+		inFlightCodexRefreshTokens.add(oauth.refreshToken);
 		try {
-			newTokens = await new CodexOAuth().refreshTokens(oauth);
-		} catch {
-			throw new Error('Codex authentication refresh failed');
-		}
-		assertDeadline(requestOptions);
-		const updatedProvider: ProviderConfig = {
-			...provider,
-			auth: { type: 'oauth', oauth: newTokens },
-			oauth: newTokens,
-		};
-		if (onTokenRefresh) await onTokenRefresh(newTokens);
-		assertDeadline(requestOptions);
+			let newTokens: Awaited<ReturnType<CodexOAuth['refreshTokens']>>;
+			try {
+				newTokens = await new CodexOAuth().refreshTokens(oauth.refreshToken, requestOptions);
+			} catch (error) {
+				assertDeadline(requestOptions);
+				if (error instanceof HttpError) throw error;
+				throw new Error('Codex authentication refresh failed');
+			}
+			assertDeadline(requestOptions);
+			if (newTokens.accountId !== oauth.accountId)
+				throw new Error('Codex account changed during refresh');
+			const updatedProvider: ProviderConfig = {
+				...provider,
+				auth: { type: 'oauth', oauth: newTokens },
+				oauth: newTokens,
+			};
+			await onTokenRefresh(newTokens);
+			assertDeadline(requestOptions);
 
-		const spec = getProviderSpec(provider.name);
-		const headers = spec.buildHeaders('', updatedProvider);
-		const body = spec.buildRequestBody(
-			systemRole,
-			userPrompt,
-			selectedModel,
-			provider.temperature ?? temperature
-		);
-		const url = spec.buildUrl(provider.baseUrl, selectedModel, '');
-		if (!spec.parseStreamEvent || !spec.parseStreamResponse)
-			throw new Error('Invalid streaming provider');
-		const text = await sendStreamingRequest(
-			url,
-			headers,
-			body,
-			spec.parseStreamEvent,
-			requestOptions
-		);
-		assertDeadline(requestOptions);
-		return spec.parseStreamResponse(text);
+			const spec = getProviderSpec(provider.name);
+			const headers = spec.buildHeaders('', updatedProvider);
+			const body = spec.buildRequestBody(
+				systemRole,
+				userPrompt,
+				selectedModel,
+				provider.temperature ?? temperature
+			);
+			const url = spec.buildUrl(provider.baseUrl, selectedModel, '');
+			if (!spec.parseStreamEvent || !spec.parseStreamResponse)
+				throw new Error('Invalid streaming provider');
+			const text = await sendStreamingRequest(
+				url,
+				headers,
+				body,
+				spec.parseStreamEvent,
+				requestOptions
+			);
+			assertDeadline(requestOptions);
+			return spec.parseStreamResponse(text);
+		} finally {
+			inFlightCodexRefreshTokens.delete(oauth.refreshToken);
+		}
 	}
 
 	processApiResponse(

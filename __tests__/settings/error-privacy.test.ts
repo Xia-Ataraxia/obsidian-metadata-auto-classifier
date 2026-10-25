@@ -32,6 +32,8 @@ describe('settings error privacy', () => {
 		};
 		const plugin = {
 			settings: { selectedProvider: '', providers: [provider] },
+			isActive: () => true,
+			saveSettings: vi.fn().mockResolvedValue(undefined),
 			notices: { show },
 		} as unknown as AutoClassifierPlugin;
 		const node = { createEl: vi.fn() };

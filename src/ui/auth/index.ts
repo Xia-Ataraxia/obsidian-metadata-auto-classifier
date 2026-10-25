@@ -9,4 +9,4 @@ export {
 	parseJwtClaims,
 	extractAccountId,
 } from '../../domain/auth/token-manager';
-export type { OAuthTokens, PKCEChallenge, TokenResponse } from '../../types/auth';
+export type { OAuthTokens, TokenResponse } from '../../types/auth';
