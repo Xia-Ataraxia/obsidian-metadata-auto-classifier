@@ -31,6 +31,15 @@ describe('toApiErrorNotice', () => {
 		expect(toApiErrorNotice(new Error('Unexpected failure with sk-secret123 in text'), 'Fake')).toBe(
 			'Classification failed. See the console for details.'
 		);
+		expect(
+			toApiErrorNotice(new Error('Codex OAuth tokens not found. Please reconnect your account.'), 'Codex')
+		).toBe('Reconnect your Codex account in settings.');
+		expect(
+			toApiErrorNotice(new Error('Codex OAuth tokens incomplete. Please reconnect your account in settings.'), 'Codex')
+		).toBe('Reconnect your Codex account in settings.');
+		expect(toApiErrorNotice(new Error('Token refresh failed: invalid_grant'), 'Codex')).toBe(
+			'Reconnect your Codex account in settings.'
+		);
 		expect(toApiErrorNotice('boom', 'Fake')).toBe('Classification failed. See the console for details.');
 	});
 });
