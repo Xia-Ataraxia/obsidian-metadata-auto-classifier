@@ -18,7 +18,7 @@ export default tseslint.config(
 			globals: { ...globals.browser, ...globals.nodeBuiltin },
 			parserOptions: {
 				projectService: {
-					allowDefaultProject: ['eslint.config.js', 'vitest.config.ts', 'manifest.json'],
+					allowDefaultProject: ['manifest.json'],
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json'],
@@ -101,6 +101,8 @@ export default tseslint.config(
 		},
 		rules: {
 			'import/no-nodejs-modules': 'off',
+			// Node has no `window`; the autofix would break these scripts.
+			'obsidianmd/prefer-window-timers': 'off',
 		},
 	},
 	// Test files: relax rules that don't apply to test code.
@@ -130,5 +132,6 @@ export default tseslint.config(
 			'import/no-nodejs-modules': 'off',
 		},
 	},
-	globalIgnores(['**/main.js', 'dist/', 'node_modules/', 'coverage/']),
+	// Node tooling and root configs are not plugin code and sit outside tsconfig (type-aware rules need it).
+	globalIgnores(['**/main.js', 'dist/', 'node_modules/', 'coverage/', 'tooling/', 'scripts/', '**/*.mjs', '*.config.ts', '*.config.mts']),
 );

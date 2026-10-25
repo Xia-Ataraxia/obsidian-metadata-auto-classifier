@@ -10,8 +10,8 @@ function getPnpmCommand() {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }
 
-function run(command, args) {
-  const result = spawnSync(command, args, { stdio: 'inherit' });
+function run(command, args, env) {
+  const result = spawnSync(command, args, { stdio: 'inherit', env: env ? { ...process.env, ...env } : undefined });
   if (result.error) {
     console.error(`Failed to run ${command}: ${result.error.message}`);
     process.exit(1);
@@ -46,4 +46,5 @@ if (fs.existsSync('manifest.json')) {
   }
 }
 
-run(pnpm, ['version', level]);
+// Disable husky during version commit — lint-staged can interfere with pnpm version's staging.
+run(pnpm, ['version', level], { HUSKY: '0' });
