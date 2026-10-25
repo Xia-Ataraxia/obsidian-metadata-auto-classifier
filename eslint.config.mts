@@ -108,6 +108,7 @@ export default tseslint.config(
 			'@typescript-eslint/no-explicit-any': 'off',
 			'@typescript-eslint/no-misused-promises': 'off',
 			'@typescript-eslint/no-redundant-type-constituents': 'off',
+			'no-undef': 'off',
 			'@typescript-eslint/no-unsafe-assignment': 'off',
 			'@typescript-eslint/no-unsafe-argument': 'off',
 			'@typescript-eslint/no-unsafe-member-access': 'off',
@@ -116,9 +117,10 @@ export default tseslint.config(
 			'@typescript-eslint/require-await': 'off',
 			'@typescript-eslint/unbound-method': 'off',
 			'obsidianmd/hardcoded-config-path': 'off',
+			'obsidianmd/prefer-window-timers': 'off',
 			'import/no-nodejs-modules': 'off',
 		},
 	},
 	// Node tooling and root configs are not plugin code and sit outside tsconfig (type-aware rules need it).
-	globalIgnores(['**/main.js', 'dist/', 'node_modules/', 'coverage/', 'scripts/', '**/*.mjs', '*.config.ts', '*.config.mts']),
+	globalIgnores(['dist/', 'node_modules/', 'coverage/', 'scripts/', '**/*.mjs', '*.config.ts', '*.config.mts']),
 );

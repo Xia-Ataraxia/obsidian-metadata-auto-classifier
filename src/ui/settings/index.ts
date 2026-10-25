@@ -1,5 +1,6 @@
 import type AutoClassifierPlugin from '../../main';
 import { PluginSettingTab, Setting as ObsidianSetting } from 'obsidian';
+import type { SettingDefinitionItem } from 'obsidian';
 
 import type { FrontmatterField } from '../../types';
 import { generateId } from '../../utils/lib-utils';
@@ -23,9 +24,9 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 		super(plugin.app, plugin);
 		this.plugin = plugin;
 
-		this.apiContainer = document.createElement('div');
-		this.tagContainer = document.createElement('div');
-		this.frontmatterContainer = document.createElement('div');
+		this.apiContainer = createDiv();
+		this.tagContainer = createDiv();
+		this.frontmatterContainer = createDiv();
 
 		this.api = new Api(plugin, this.apiContainer);
 		this.tagSetting = new Tag(plugin, this.tagContainer);
@@ -35,7 +36,24 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		this.renderSupport(containerEl);
+		this.renderApi(containerEl);
+		this.renderFrontmatters(containerEl);
+	}
 
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		const mount = (render: (el: HTMLElement) => void) => (setting: ObsidianSetting) => {
+			setting.settingEl.empty();
+			render(setting.settingEl.createDiv({ cls: 'mac-setting-mount' }));
+		};
+		return [
+			{ name: 'Support Auto Classifier', render: mount((el) => this.renderSupport(el)) },
+			{ name: 'API configuration', aliases: ['provider', 'model'], render: mount((el) => this.renderApi(el)) },
+			{ name: 'Frontmatters', aliases: ['tags'], render: mount((el) => this.renderFrontmatters(el)) },
+		];
+	}
+
+	private renderSupport(containerEl: HTMLElement): void {
 		Setting.create(containerEl, {
 			name: 'Support Auto Classifier',
 			desc: 'If you find Auto Classifier valuable, consider supporting its development!',
@@ -49,11 +67,15 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 				},
 			},
 		});
+	}
 
+	private renderApi(containerEl: HTMLElement): void {
 		this.apiContainer = containerEl.createDiv({ cls: 'api-section' });
 		this.api = new Api(this.plugin, this.apiContainer);
 		this.api.display();
+	}
 
+	private renderFrontmatters(containerEl: HTMLElement): void {
 		new ObsidianSetting(containerEl).setName('Frontmatters').setHeading();
 
 		this.tagContainer = containerEl.createDiv({ cls: 'tag-section' });

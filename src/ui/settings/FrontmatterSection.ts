@@ -1,3 +1,4 @@
+import { confirmAction } from './modals/ConfirmModal';
 import type { FrontmatterActions, FrontmatterField, SettingsComponentOptions } from '../../types';
 import { BaseSettingsComponent } from './components/BaseSettings';
 
@@ -37,8 +38,8 @@ export class Frontmatter extends BaseSettingsComponent {
 	}
 
 	private async handleDelete(frontmatterSetting: FrontmatterField): Promise<void> {
-		// eslint-disable-next-line no-alert -- confirm() is used intentionally for destructive action; modal refactor is out of scope
-		const confirmed = confirm(
+		const confirmed = await confirmAction(
+			this.plugin.app,
 			`Are you sure you want to delete "${frontmatterSetting.name}" frontmatter?`
 		);
 		if (!confirmed) {

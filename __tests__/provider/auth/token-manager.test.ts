@@ -11,7 +11,6 @@ import type { OAuthTokens, TokenResponse } from '../../../src/types/auth';
 describe('token-manager', () => {
 	// Mock Date.now for consistent testing
 	const mockNow = 1700000000000; // Fixed timestamp
-	const originalDateNow = Date.now;
 
 	beforeEach(() => {
 		vi.spyOn(Date, 'now').mockImplementation(() => mockNow);

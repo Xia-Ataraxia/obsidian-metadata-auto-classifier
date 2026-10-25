@@ -1,74 +1,36 @@
 # CLAUDE.md — Metadata Auto Classifier
 
-> Git strategy, branch naming, commit convention, and release management are defined in the **root CLAUDE.md**. This file covers plugin-specific details only.
+Obsidian plugin (`metadata-auto-classifier`): AI-powered frontmatter classification. Entry: `src/main.ts` → `AutoClassifierPlugin`. Repo/package name: `obsidian-metadata-auto-classifier`. Root `AGENTS.md` rules apply.
 
-## Project Overview
-
-Obsidian plugin: AI-powered automatic metadata classification and generation. Automatically classifies and generates note frontmatter via AI providers.
-
-- Entry: `src/main.ts` → `AutoClassifierPlugin extends Plugin`
-- Package manager: **pnpm** (do NOT use npm or yarn)
-
-## Build & Dev Commands
+## Commands (Bun only)
 
 ```bash
-pnpm run dev            # vault selection + esbuild watch + hot reload
-pnpm run dev:build      # esbuild watch only (no vault)
-pnpm run build          # tsc type-check + esbuild production (single-shot)
-pnpm run test           # Vitest unit tests
-pnpm run test:watch     # Vitest watch mode
-pnpm run lint           # ESLint (flat config v9)
-pnpm run lint:fix       # ESLint auto-fix
-pnpm run ci             # build + lint + test
-pnpm run release:patch  # run CI → patch bump → auto-push tag
-pnpm run release:minor  # run CI → minor bump → auto-push tag
-pnpm run release:major  # run CI → major bump → auto-push tag
+bun install
+bun run dev        # esbuild watch -> dist/
+bun run build      # production build -> dist/ (main.js, manifest.json, styles.css)
+bun run ci         # build + typecheck + lint + test
+bun run release    # central release script (CI-only; never run locally)
 ```
 
-## Architecture (4-module boundary)
+CI/release are thin callers of `GoBeromsu/obsidian-boiler-template` reusable workflows. Required check: `ci / report`.
+
+## Architecture
 
 ```
 src/
-├── provider/     # Pure API layer (HTTP, OAuth, prompt generation)
-├── classifier/   # Business logic (ClassificationService, CommandService)
-├── settings/     # UI layer (settings tabs, modals, components)
-├── lib/          # Pure utilities (frontmatter, sanitizer, ErrorHandler)
-└── main.ts       # Plugin entry point
+├── domain/   # pure: constants, presets, prompt, settings migration, auth (pkce, token-manager)
+├── types/    # shared types
+├── utils/    # pure helpers: logger, redaction, sanitizer, ErrorHandler
+├── ui/       # Obsidian-facing: services, providers/requests, OAuth, notices, settings tab + modals
+└── main.ts   # lifecycle and wiring
 ```
 
-**ESLint boundary rules enforced**:
-- `settings` cannot import from `provider` directly
-- `provider` cannot import from `settings` or `classifier`
-- `lib` cannot import from any domain module
-- `classifier` can orchestrate across `provider` + `lib` + `settings`
+`domain/`, `types/`, `utils/` must not import `obsidian` (lint-enforced).
 
-## Testing
+## Gotchas
 
-- Framework: Vitest
-- Test location: `__tests__/` (mirrors src/ structure)
-- Config: `vitest.config.ts`
-
-## TypeScript Path Aliases
-
-```
-main       → src/main
-provider   → src/provider/index
-lib        → src/lib/index
-settings   → src/settings/index
-classifier → src/classifier/index
-```
-
-## Tooling
-
-- ESLint flat config v9 + `eslint-plugin-boundaries` + `eslint-plugin-sonarjs`
-- Prettier (2 spaces, semicolons, trailing commas)
-- Husky pre-commit → lint-staged (changed .ts files only)
-- `boiler.config.mjs` — configures dev deploy (copy mode), version staging (`manifest.json`, `versions.json`), and release artifact packaging
-
-## Release
-
-1. `pnpm run ci` — MUST pass (build + lint + test)
-2. `pnpm release:patch|minor|major` — run CI → version bump → auto-push tag
-3. GitHub Actions handles CI + Release workflows
-
-**DENIED by settings.json:** `git tag`, `git push --tags`, `gh release` — only `pnpm release:*` is allowed.
+- Tests live in `__tests__/` (Vitest, node env).
+- `manifest.json` `minAppVersion` is 1.5.7 (`getFrontMatterInfo`). Never change the manifest `id`.
+- Settings tab exposes `getSettingDefinitions()` (Obsidian 1.13+) with render rows that mount the imperative sections; `display()` remains for older versions.
+- Node `http`/`https` are loaded via `require` behind `Platform.isDesktop` (OAuth callback server, Codex streaming).
+- Destructive confirmations use `confirmAction` (`src/ui/settings/modals/ConfirmModal.ts`), not `confirm()`.

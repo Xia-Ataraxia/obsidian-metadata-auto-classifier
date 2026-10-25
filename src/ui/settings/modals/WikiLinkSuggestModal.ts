@@ -22,7 +22,7 @@ export class WikiLinkSuggestModal extends FuzzySuggestModal<TFile> {
 	}
 
 	renderSuggestion(file: FuzzyMatch<TFile>, el: HTMLElement): void {
-		el.createEl('div', { text: file.item.basename });
+		el.createDiv({ text: file.item.basename });
 		el.createEl('small', { text: file.item.path });
 	}
 

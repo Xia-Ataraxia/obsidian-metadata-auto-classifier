@@ -11,9 +11,9 @@ import { PluginNotices } from './ui/plugin-notices';
 import { PluginLogger } from './utils/plugin-logger';
 
 export default class AutoClassifierPlugin extends Plugin {
-	settings: AutoClassifierSettings;
-	logger: PluginLogger;
-	notices: PluginNotices;
+	settings!: AutoClassifierSettings;
+	logger!: PluginLogger;
+	notices!: PluginNotices;
 
 	private classificationService: ClassificationService | null = null;
 	private commandService: CommandService | null = null;
@@ -184,7 +184,6 @@ export default class AutoClassifierPlugin extends Plugin {
 					this.logger.info('Migrated codexConnection to Codex provider oauth field');
 				}
 				// Remove legacy field
-				// eslint-disable-next-line @typescript-eslint/no-unused-vars
 				const { codexConnection: _removed, ...rest } = data;
 				return rest;
 			},

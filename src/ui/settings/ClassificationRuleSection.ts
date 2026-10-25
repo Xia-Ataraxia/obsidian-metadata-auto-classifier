@@ -42,7 +42,6 @@ export class ClassificationRuleSection {
 			});
 
 		textAreaComponent.inputEl.rows = 10;
-		// eslint-disable-next-line obsidianmd/no-static-styles-assignment -- textarea width must be set inline; no CSS class available for dynamic sizing
-		textAreaComponent.inputEl.style.width = '100%';
+		textAreaComponent.inputEl.addClass('mac-full-width');
 	}
 }

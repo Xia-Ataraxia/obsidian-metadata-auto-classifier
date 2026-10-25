@@ -10,7 +10,7 @@ import { WikiLinkSelector } from '../components/WikiLinkSelector';
 export class ConfigurableSettingModal extends Modal {
 	private readonly props: FrontmatterEditorModalProps;
 	private readonly localState: FrontmatterField;
-	private textAreaComponent: TextAreaComponent;
+	private textAreaComponent!: TextAreaComponent;
 
 	constructor(app: App, props: FrontmatterEditorModalProps) {
 		super(app);
@@ -97,7 +97,6 @@ export class ConfigurableSettingModal extends Modal {
 			slider
 				.setLimits(1, 10, 1)
 				.setValue(this.localState.count.max)
-				.setDynamicTooltip()
 				.onChange((value) => {
 					this.localState.count.min = 1;
 					this.localState.count.max = value;
@@ -136,8 +135,7 @@ export class ConfigurableSettingModal extends Modal {
 
 			this.textAreaComponent = new ObsidianTextArea(containerEl);
 			this.textAreaComponent
-				// eslint-disable-next-line obsidianmd/ui/sentence-case -- placeholder text uses example values; sentence case does not apply
-				.setPlaceholder('Option1, Option2, Option3...')
+				.setPlaceholder('Add options separated by commas')
 				.setValue(displayValue)
 				.onChange((value) => {
 					const inputOptions = value

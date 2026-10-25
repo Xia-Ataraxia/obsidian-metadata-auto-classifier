@@ -1,3 +1,4 @@
+import { confirmAction } from './modals/ConfirmModal';
 import type { App } from 'obsidian';
 
 import type AutoClassifierPlugin from '../../main';
@@ -14,7 +15,7 @@ export class ModelSection {
 	) {}
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[], selectedModel: string): void {
-		const modelSection = containerEl.createEl('div', { cls: 'model-section' });
+		const modelSection = containerEl.createDiv({ cls: 'model-section' });
 		modelSection.createEl('h3', { text: 'Models' });
 
 		this.renderModelList(modelSection, providers, selectedModel);
@@ -94,8 +95,8 @@ export class ModelSection {
 							icon: 'trash',
 							text: 'Delete',
 							onClick: async () => {
-								// eslint-disable-next-line no-alert -- confirm() used intentionally for destructive action
-								const confirmed = confirm(
+								const confirmed = await confirmAction(
+									this.app,
 									`Are you sure you want to delete "${config.name}" model?`
 								);
 								if (!confirmed) return;

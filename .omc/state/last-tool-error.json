@@ -1,7 +1,0 @@
-{
-  "tool_name": "Read",
-  "tool_input_preview": "{\"file_path\":\"/Users/beomsu/Documents/Dev/Obsidian-Plugins/Metadata-Auto-Classifier/eslint.config.js\"}",
-  "error": "File does not exist. Note: your current working directory is /Users/beomsu/Documents/Dev/Obsidian-Plugins/Metadata-Auto-Classifier. Did you mean eslint.config.mjs?",
-  "timestamp": "2026-03-26T12:18:23.958Z",
-  "retry_count": 1
-}

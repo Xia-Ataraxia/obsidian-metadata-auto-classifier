@@ -30,3 +30,7 @@ data.json
 # test
 coverage
 .claude/
+
+dist/
+.omc/
+.env
