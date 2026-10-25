@@ -27,12 +27,10 @@ describe('toApiErrorNotice', () => {
 		);
 		expect(
 			toApiErrorNotice(new Error('Failed to parse API response: x. Raw content: note body'), 'Fake')
-		).toBe("Fake sent a response that couldn't be read.");
-		expect(
-			toApiErrorNotice(new Error('Codex OAuth tokens not found. Please reconnect your account.'), 'Codex')
-		).toBe('Codex OAuth tokens not found. Please reconnect your account.');
-		const long = toApiErrorNotice(new Error('x'.repeat(500)), 'Fake');
-		expect(long).toHaveLength(120);
-		expect(long.endsWith('…')).toBe(true);
+		).toBe('Fake returned an unexpected response. Try again.');
+		expect(toApiErrorNotice(new Error('Unexpected failure with sk-secret123 in text'), 'Fake')).toBe(
+			'Classification failed. See the console for details.'
+		);
+		expect(toApiErrorNotice('boom', 'Fake')).toBe('Classification failed. See the console for details.');
 	});
 });
