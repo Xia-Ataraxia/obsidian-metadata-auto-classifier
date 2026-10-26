@@ -1,13 +1,6 @@
-import { TAG_GENERATION_FORMAT } from '../domain/constants';
-import { parseGeneratedTags } from '../domain/tag-generation';
+
 import { PROVIDER_NAMES } from '../utils/lib-utils';
-import type {
-	APIProvider,
-	GeneratedTags,
-	OnTokenRefreshCallback,
-	ProviderConfig,
-	StructuredFormat,
-} from '../types';
+import type { APIProvider, GeneratedTags, OnTokenRefreshCallback, ProviderConfig } from '../types';
 import { HttpError, sendRequest } from './request';
 import { sendStreamingRequest } from './streaming-request';
 import type { HttpRequestOptions } from './request';
@@ -130,30 +123,6 @@ export class UnifiedProvider implements APIProvider {
 		onTokenRefresh?: OnTokenRefreshCallback,
 		requestOptions?: HttpRequestOptions
 	): Promise<GeneratedTags> {
-		return parseGeneratedTags(
-			await this.callStructured(
-				systemRole,
-				userPrompt,
-				provider,
-				selectedModel,
-				TAG_GENERATION_FORMAT,
-				temperature,
-				onTokenRefresh,
-				requestOptions
-			)
-		);
-	}
-
-	async callStructured(
-		systemRole: string,
-		userPrompt: string,
-		provider: ProviderConfig,
-		selectedModel: string,
-		format: StructuredFormat,
-		temperature?: number,
-		onTokenRefresh?: OnTokenRefreshCallback,
-		requestOptions?: HttpRequestOptions
-	): Promise<unknown> {
 		const spec = getProviderSpec(provider.name);
 		const apiKey = resolveApiKey(provider);
 		const deadlineOptions = requestOptionsWithDeadline(requestOptions);
@@ -163,8 +132,7 @@ export class UnifiedProvider implements APIProvider {
 			systemRole,
 			userPrompt,
 			selectedModel,
-			provider.temperature ?? temperature,
-			format
+			provider.temperature ?? temperature
 		);
 		const url = spec.buildUrl(provider.baseUrl, selectedModel, apiKey);
 
@@ -191,7 +159,6 @@ export class UnifiedProvider implements APIProvider {
 						systemRole,
 						userPrompt,
 						selectedModel,
-						format,
 						temperature,
 						onTokenRefresh,
 						deadlineOptions
@@ -203,7 +170,7 @@ export class UnifiedProvider implements APIProvider {
 
 		const response = await sendRequest(url, headers, body, deadlineOptions);
 		assertDeadline(deadlineOptions);
-		return spec.parseResponse(response, format);
+		return spec.parseResponse(response);
 	}
 
 	private async refreshCodexTokensAndRetry(
@@ -211,11 +178,10 @@ export class UnifiedProvider implements APIProvider {
 		systemRole: string,
 		userPrompt: string,
 		selectedModel: string,
-		format: StructuredFormat,
 		temperature: number | undefined,
 		onTokenRefresh: OnTokenRefreshCallback | undefined,
 		requestOptions: HttpRequestOptions
-	): Promise<unknown> {
+	): Promise<GeneratedTags> {
 		const oauth = extractOAuthTokens(provider);
 		if (!oauth) throw new Error('Codex authentication is unavailable');
 		if (!onTokenRefresh) throw new Error('Codex token persistence is unavailable');
@@ -254,8 +220,7 @@ export class UnifiedProvider implements APIProvider {
 				systemRole,
 				userPrompt,
 				selectedModel,
-				provider.temperature ?? temperature,
-				format
+				provider.temperature ?? temperature
 			);
 			const url = spec.buildUrl(provider.baseUrl, selectedModel, '');
 			if (!spec.parseStreamEvent || !spec.parseStreamResponse)
@@ -278,8 +243,6 @@ export class UnifiedProvider implements APIProvider {
 		responseData: unknown,
 		providerName: string = PROVIDER_NAMES.OPENAI
 	): GeneratedTags {
-		return parseGeneratedTags(
-			getProviderSpec(providerName).parseResponse(responseData, TAG_GENERATION_FORMAT)
-		);
+		return getProviderSpec(providerName).parseResponse(responseData);
 	}
 }

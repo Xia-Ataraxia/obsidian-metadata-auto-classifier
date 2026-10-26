@@ -1,4 +1,4 @@
-export type DecisionTransport = 'systemone' | 'openai-decisions' | 'chat';
+export type DecisionTransport = 'systemone' | 'openai-decisions';
 
 export interface DecisionQuestion {
 	type: 'noul';

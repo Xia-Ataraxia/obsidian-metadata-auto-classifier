@@ -81,7 +81,7 @@ const providerCases: Array<{ name: string; response: unknown; mode: string }> = 
 		name: PROVIDER_NAMES.ANTHROPIC,
 		response: {
 			stop_reason: 'tool_use',
-			content: [{ type: 'tool_use', name: 'generated_tags', input: generated }],
+			content: [{ type: 'tool_use', name: 'generate_tags', input: generated }],
 		},
 		mode: 'anthropic',
 	},
@@ -135,9 +135,9 @@ describe('UnifiedProvider generated-tags contract', () => {
 
 	it('requires one named completed Anthropic tool result', () => {
 		for (const [stop_reason, name] of [
-			['max_tokens', 'generated_tags'],
+			['max_tokens', 'generate_tags'],
 			['tool_use', 'unrequested_tool'],
-			[undefined, 'generated_tags'],
+			[undefined, 'generate_tags'],
 		]) {
 			expect(() =>
 				provider.processApiResponse(
@@ -154,7 +154,7 @@ describe('UnifiedProvider generated-tags contract', () => {
 				provider.processApiResponse(
 					{
 						stop_reason: 'tool_use',
-						content: [{ type: 'tool_use', name: 'generated_tags', input }],
+						content: [{ type: 'tool_use', name: 'generate_tags', input }],
 					},
 					PROVIDER_NAMES.ANTHROPIC
 				)
@@ -165,8 +165,8 @@ describe('UnifiedProvider generated-tags contract', () => {
 				{
 					stop_reason: 'tool_use',
 					content: [
-						{ type: 'tool_use', name: 'generated_tags', input: generated },
-						{ type: 'tool_use', name: 'generated_tags', input: generated },
+						{ type: 'tool_use', name: 'generate_tags', input: generated },
+						{ type: 'tool_use', name: 'generate_tags', input: generated },
 					],
 				},
 				PROVIDER_NAMES.ANTHROPIC
@@ -269,7 +269,7 @@ describe('UnifiedProvider generated-tags contract', () => {
 					{
 						role: 'system',
 						content:
-							`tag system\n\nReturn only JSON that matches this JSON schema: ${JSON.stringify(TAG_GENERATION_SCHEMA)}`,
+							'tag system\n\nReturn only JSON with exactly one property named "tags", whose value is an array of strings. Example: {"tags": ["tag1"]}.',
 					},
 					{ role: 'user', content: 'tag prompt' },
 				]);
@@ -279,7 +279,7 @@ describe('UnifiedProvider generated-tags contract', () => {
 				expect(tools[0]).toMatchObject({ input_schema: TAG_GENERATION_SCHEMA, strict: true });
 				expect(requestBody.tool_choice).toEqual({
 					type: 'tool',
-					name: 'generated_tags',
+					name: 'generate_tags',
 					disable_parallel_tool_use: true,
 				});
 			} else if (mode === 'gemini') {
@@ -312,7 +312,7 @@ describe('UnifiedProvider generated-tags contract', () => {
 	it('keeps official provider headers and endpoints', async () => {
 		mockSendRequest.mockResolvedValueOnce({
 			stop_reason: 'tool_use',
-			content: [{ type: 'tool_use', name: 'generated_tags', input: generated }],
+			content: [{ type: 'tool_use', name: 'generate_tags', input: generated }],
 		});
 		const anthropic = config(PROVIDER_NAMES.ANTHROPIC);
 		await provider.callAPI('sys', 'prompt', anthropic, 'claude');
@@ -427,7 +427,7 @@ describe('UnifiedProvider generated-tags contract', () => {
 					stop_reason: 'tool_use',
 					content: [
 						{ type: 'refusal', refusal: 'private refusal' },
-						{ type: 'tool_use', name: 'generated_tags', input: generated },
+						{ type: 'tool_use', name: 'generate_tags', input: generated },
 					],
 				},
 				PROVIDER_NAMES.ANTHROPIC,

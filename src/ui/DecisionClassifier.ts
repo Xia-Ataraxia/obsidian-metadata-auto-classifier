@@ -1,15 +1,11 @@
 import type { Model, OnTokenRefreshCallback, ProviderConfig } from '../types';
 import {
-	DECISION_CHAT_SYSTEM_ROLE,
-	decisionChatFormat,
-	decisionChatPrompt,
 	decisionEndpoint,
 	decisionTransport,
 	toOpenAIDecisionsRequest,
 } from '../domain/decision-formats';
 import { buildDecisionRequests } from '../domain/decision-questions';
 import {
-	decodeChatDecisionResponse,
 	decodeOpenAIDecisionsResponse,
 	decodeSystemOneResponse,
 	selectDecisionCandidates,
@@ -21,7 +17,7 @@ import type {
 	DecodeDecisionResult,
 } from '../types/decision';
 import { PROVIDER_NAMES } from '../utils/lib-utils';
-import { UnifiedProvider, resolveApiKey } from './UnifiedProvider';
+import { resolveApiKey } from './UnifiedProvider';
 import { sendRequest } from './request';
 
 export class DecisionClassificationError extends Error {
@@ -91,20 +87,8 @@ export class DecisionClassifier {
 		control: DecisionOperationControl
 	): Promise<DecodeDecisionResult> {
 		const transport = decisionTransport(provider.name, model);
+		if (!transport) throw new DecisionClassificationError('not-a-decision-model');
 		const requestOptions = { deadline: control.deadline, assertCurrent: control.assertCurrent };
-		if (transport === 'chat') {
-			const response = await new UnifiedProvider().callStructured(
-				DECISION_CHAT_SYSTEM_ROLE,
-				decisionChatPrompt(request),
-				provider,
-				model.id,
-				decisionChatFormat(ids),
-				undefined,
-				control.onTokenRefresh,
-				requestOptions
-			);
-			return decodeChatDecisionResponse(response, ids);
-		}
 		const apiKey = resolveApiKey(provider);
 		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 		if (apiKey) headers.Authorization = `Bearer ${apiKey}`;

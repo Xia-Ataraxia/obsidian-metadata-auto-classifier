@@ -40,7 +40,7 @@ export const testModel = async (
 	requestOptions?: HttpRequestOptions
 ): Promise<void> => {
 	const model = providerConfig.models.find((item) => item.id === modelName);
-	if (model && decisionTransport(providerConfig.name, model) !== 'chat') {
+	if (model && decisionTransport(providerConfig.name, model)) {
 		// A one-question probe exercises the same endpoint, auth and decoder as classification.
 		await new DecisionClassifier().classify(
 			{ body: 'Connection test', fieldName: 'test', instructions: '', candidates: ['ok'], max: 1 },

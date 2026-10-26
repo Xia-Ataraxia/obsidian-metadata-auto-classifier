@@ -1,13 +1,9 @@
 import {
-	decisionChatFormat,
 	decisionEndpoint,
 	decisionTransport,
 	toOpenAIDecisionsRequest,
 } from '../../src/domain/decision-formats';
-import {
-	decodeChatDecisionResponse,
-	decodeOpenAIDecisionsResponse,
-} from '../../src/domain/decision-selection';
+import { decodeOpenAIDecisionsResponse } from '../../src/domain/decision-selection';
 import { classificationTarget, generationTarget } from '../../src/domain/model-list';
 import type { AutoClassifierSettings, ProviderConfig } from '../../src/types';
 
@@ -17,11 +13,11 @@ describe('decisionTransport', () => {
 	test.each([
 		['TypeSafe', {}, 'systemone'],
 		['OpenAI', { decision: true }, 'openai-decisions'],
-		['OpenAI', {}, 'chat'],
+		['OpenAI', {}, undefined],
 		['OpenRouter', { decision: true }, 'systemone'],
 		['Custom', { decision: true }, 'systemone'],
-		['Anthropic', {}, 'chat'],
-		['Codex', { decision: true }, 'chat'],
+		['Anthropic', {}, undefined],
+		['Codex', { decision: true }, undefined],
 	] as const)('%s %j uses %s', (provider, model, transport) => {
 		expect(decisionTransport(provider, model)).toBe(transport);
 	});
@@ -41,7 +37,7 @@ describe('decisionEndpoint', () => {
 	});
 });
 
-test('maps typed questions to OpenAI predicates and a strict chat schema', () => {
+test('maps typed questions to OpenAI predicates', () => {
 	const request = {
 		model: 'gpt-6-luna',
 		state: { body: 'b', fieldName: 'tags', instructions: '' },
@@ -51,9 +47,6 @@ test('maps typed questions to OpenAI predicates and a strict chat schema', () =>
 		model: 'gpt-6-luna',
 		input: 'State (JSON):\n{"body":"b","fieldName":"tags","instructions":""}',
 		questions: [{ type: 'predicate', name: 'candidate_0000', instructions: 'fits?' }],
-	});
-	expect(decisionChatFormat(ids).schema).toMatchObject({
-		properties: { answers: { required: ids, additionalProperties: false } },
 	});
 });
 
@@ -106,22 +99,6 @@ describe('decodeOpenAIDecisionsResponse', () => {
 	});
 });
 
-describe('decodeChatDecisionResponse', () => {
-	test('reads numeric answers', () => {
-		const result = decodeChatDecisionResponse(
-			{ answers: { candidate_0000: 0.2, candidate_0001: 1 } },
-			ids
-		);
-		expect(result.ok && result.probabilities.candidate_0001).toBe(1);
-	});
-
-	test('rejects non-numeric answers', () => {
-		expect(
-			decodeChatDecisionResponse({ answers: { candidate_0000: 'yes', candidate_0001: 1 } }, ids)
-		).toEqual({ ok: false, error: { code: 'invalid-answer' } });
-	});
-});
-
 describe('model targets', () => {
 	const typesafe: ProviderConfig = {
 		name: 'TypeSafe',
@@ -138,8 +115,11 @@ describe('model targets', () => {
 	const settings = (selectedProvider: string, selectedModel: string, providers = [typesafe, anthropic]) =>
 		({ providers, selectedProvider, selectedModel }) as AutoClassifierSettings;
 
-	test('generation keeps a selected chat model', () => {
-		expect(generationTarget(settings('Anthropic', 'claude'))?.model.id).toBe('claude');
+	test('a selected chat model generates tags but never classifies', () => {
+		const s = settings('Anthropic', 'claude');
+		expect(generationTarget(s)?.model.id).toBe('claude');
+		expect(classificationTarget(s)?.model.id).toBe('jev-1.14.0');
+		expect(classificationTarget(settings('Anthropic', 'claude', [anthropic]))).toBeUndefined();
 	});
 
 	test('generation falls back to the first authenticated chat model when a decision model is selected', () => {
@@ -149,7 +129,8 @@ describe('model targets', () => {
 		expect(generationTarget(settings('TypeSafe', 'jev-1.14.0', [typesafe]))).toBeUndefined();
 	});
 
-	test('a missing selection has no classification target', () => {
-		expect(classificationTarget(settings('TypeSafe', 'gone'))).toBeUndefined();
+	test('a missing selection falls back to the first authenticated decision model', () => {
+		expect(classificationTarget(settings('TypeSafe', 'gone'))?.model.id).toBe('jev-1.14.0');
+		expect(classificationTarget(settings('TypeSafe', 'gone', [anthropic]))).toBeUndefined();
 	});
 });

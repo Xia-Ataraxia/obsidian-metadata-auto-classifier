@@ -69,7 +69,10 @@ function makeProvider(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
 	return {
 		name: 'OpenAI',
 		baseUrl: 'https://provider.invalid',
-		models: [{ id: 'model-1', name: 'Model 1' }],
+		models: [
+			{ id: 'model-1', name: 'Model 1', decision: true },
+			{ id: 'chat-1', name: 'Chat 1' },
+		],
 		temperature: 0.2,
 		auth: { type: 'apiKey', apiKey: 'provider-secret' },
 		...overrides,
@@ -210,7 +213,7 @@ describe('ClassificationService', () => {
 		expect(mocks.classify).not.toHaveBeenCalled();
 		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_setup', {
-			message: 'Select a classification model in settings. No changes were made.',
+			message: 'Add a decision API model in settings to classify. No changes were made.',
 		});
 	});
 
@@ -764,12 +767,13 @@ describe('ClassificationService', () => {
 		};
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [
+			makeProvider(),
 			makeProvider({
 				name: PROVIDER_NAMES.CODEX,
 				auth: { type: 'oauth', oauth: tokens },
 			}),
 		];
-		const provider = requireValue(settings.providers[0], 'OAuth provider');
+		const provider = requireValue(settings.providers[1], 'OAuth provider');
 		settings.selectedProvider = provider.name;
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockImplementation(async (_input, _provider, _model, refresh) => {

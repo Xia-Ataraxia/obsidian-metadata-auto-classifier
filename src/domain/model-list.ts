@@ -71,23 +71,30 @@ export function findModelTarget(
 	return provider && model ? { provider, model } : undefined;
 }
 
-/** The selected model classifies existing values. */
-export function classificationTarget(settings: AutoClassifierSettings): ModelTarget | undefined {
-	return findModelTarget(settings.providers, settings.selectedProvider, settings.selectedModel);
-}
-
-/** Decision models cannot write free text, so tag generation falls back to the first chat model. */
-export function generationTarget(settings: AutoClassifierSettings): ModelTarget | undefined {
-	const selected = classificationTarget(settings);
-	if (selected && decisionTransport(selected.provider.name, selected.model) === 'chat')
-		return selected;
+/** The selected model when it fits the role, otherwise the first authenticated model that does. */
+function roleTarget(settings: AutoClassifierSettings, decision: boolean): ModelTarget | undefined {
+	const fits = (target: ModelTarget) =>
+		!!decisionTransport(target.provider.name, target.model) === decision;
+	const selected = findModelTarget(settings.providers, settings.selectedProvider, settings.selectedModel);
+	if (selected && fits(selected)) return selected;
 	for (const provider of settings.providers) {
 		if (!providerHasAuth(provider)) continue;
-		const model = provider.models.find((item) => decisionTransport(provider.name, item) === 'chat');
-		const target = model && findModelTarget(settings.providers, provider.name, model.id);
-		if (target) return target;
+		for (const model of provider.models) {
+			const target = findModelTarget(settings.providers, provider.name, model.id);
+			if (target && fits(target)) return target;
+		}
 	}
 	return undefined;
+}
+
+/** Only decision API models classify; chat models never emulate decisions. */
+export function classificationTarget(settings: AutoClassifierSettings): ModelTarget | undefined {
+	return roleTarget(settings, true);
+}
+
+/** Decision models cannot write free text, so only chat models generate tags. */
+export function generationTarget(settings: AutoClassifierSettings): ModelTarget | undefined {
+	return roleTarget(settings, false);
 }
 
 /** 1.13 stored a standalone Jev key; it becomes a selected TypeSafe provider so classification keeps working. */

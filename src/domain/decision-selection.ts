@@ -98,16 +98,6 @@ export function decodeOpenAIDecisionsResponse(
 }
 
 /** Decode the structured-output emulation used by chat-only providers. */
-export function decodeChatDecisionResponse(
-	response: unknown,
-	expectedIds: readonly string[]
-): DecodeDecisionResult {
-	if (!isRecord(response)) return { ok: false, error: { code: 'invalid-response' } };
-	return decodeAnswers(response.answers, expectedIds, (answer) =>
-		typeof answer === 'number' ? answer : undefined
-	);
-}
-
 /** Select only confident yes candidates; uncertainty is never filled to satisfy a minimum. */
 export function selectDecisionCandidates(
 	candidates: readonly DecisionCandidateMapping[],

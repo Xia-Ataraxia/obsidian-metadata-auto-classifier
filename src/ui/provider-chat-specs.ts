@@ -1,7 +1,7 @@
-import { COMMON_CONSTANTS } from '../domain/constants';
-import { TagGenerationError } from '../domain/tag-generation';
+import { TAG_GENERATION_SCHEMA, COMMON_CONSTANTS } from '../domain/constants';
+import { parseGeneratedTags, TagGenerationError } from '../domain/tag-generation';
 import { PROVIDER_NAMES } from '../utils/lib-utils';
-import type { ProviderConfig, StructuredFormat } from '../types';
+import type { GeneratedTags, ProviderConfig } from '../types';
 import type { SSEEvent, SSEEventOutcome } from './streaming-request';
 
 export type ProviderRequestBody = Record<string, unknown>;
@@ -12,30 +12,30 @@ export interface ProviderSpec {
 		systemRole: string,
 		userPrompt: string,
 		model: string,
-		temperature: number | undefined,
-		format: StructuredFormat
+		temperature?: number
 	) => ProviderRequestBody;
 	buildUrl: (baseUrl: string, model: string, apiKey: string) => string;
-	/** Returns the parsed structured output; callers validate its shape. */
-	parseResponse: (data: unknown, format: StructuredFormat) => unknown;
+	parseResponse: (data: unknown) => GeneratedTags;
 	requiresStreaming?: boolean;
 	parseStreamEvent?: (event: SSEEvent) => SSEEventOutcome;
-	parseStreamResponse?: (text: string) => unknown;
+	parseStreamResponse?: (text: string) => GeneratedTags;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export function parseJsonText(content: unknown): unknown {
+export function parseTagsJson(content: unknown): GeneratedTags {
 	if (typeof content !== 'string') throw new TagGenerationError('invalid-response');
+	let parsed: unknown;
 	try {
-		return JSON.parse(content) as unknown;
+		parsed = JSON.parse(content) as unknown;
 	} catch {
 		throw new TagGenerationError('invalid-response');
 	}
+	return parseGeneratedTags(parsed);
 }
 
-function parseChatCompletion(data: unknown): unknown {
+function parseChatCompletion(data: unknown): GeneratedTags {
 	if (!isRecord(data) || !Array.isArray(data.choices) || data.choices.length !== 1) {
 		throw new TagGenerationError('invalid-response');
 	}
@@ -48,7 +48,7 @@ function parseChatCompletion(data: unknown): unknown {
 	) {
 		throw new TagGenerationError('invalid-response');
 	}
-	return parseJsonText(choice.message.content);
+	return parseTagsJson(choice.message.content);
 }
 
 function openAIHeaders(apiKey: string): Record<string, string> {
@@ -63,8 +63,7 @@ function openAIRequestBody(
 	systemRole: string,
 	userPrompt: string,
 	model: string,
-	temperature: number | undefined,
-	format: StructuredFormat
+	temperature?: number
 ): ProviderRequestBody {
 	return {
 		model,
@@ -75,7 +74,7 @@ function openAIRequestBody(
 		temperature,
 		response_format: {
 			type: 'json_schema',
-			json_schema: { name: format.name, strict: true, schema: format.schema },
+			json_schema: { name: 'generated_tags', strict: true, schema: TAG_GENERATION_SCHEMA },
 		},
 	};
 }
@@ -84,15 +83,14 @@ function deepSeekRequestBody(
 	systemRole: string,
 	userPrompt: string,
 	model: string,
-	temperature: number | undefined,
-	format: StructuredFormat
+	temperature?: number
 ): ProviderRequestBody {
 	return {
 		model,
 		messages: [
 			{
 				role: 'system',
-				content: `${systemRole}\n\nReturn only JSON that matches this JSON schema: ${JSON.stringify(format.schema)}`,
+				content: `${systemRole}\n\nReturn only JSON with exactly one property named "tags", whose value is an array of strings. Example: {"tags": ["tag1"]}.`,
 			},
 			{ role: 'user', content: userPrompt },
 		],
@@ -101,7 +99,14 @@ function deepSeekRequestBody(
 	};
 }
 
-function parseAnthropicResponse(data: unknown, format: StructuredFormat): unknown {
+const anthropicTool = {
+	name: 'generate_tags',
+	description: 'Return only newly generated Obsidian tags.',
+	input_schema: TAG_GENERATION_SCHEMA,
+	strict: true,
+} as const;
+
+function parseAnthropicResponse(data: unknown): GeneratedTags {
 	if (!isRecord(data) || data.stop_reason !== 'tool_use' || !Array.isArray(data.content)) {
 		throw new TagGenerationError('invalid-response');
 	}
@@ -112,9 +117,9 @@ function parseAnthropicResponse(data: unknown, format: StructuredFormat): unknow
 		(part) => isRecord(part) && part.type === 'tool_use'
 	);
 	const tool = tools[0];
-	if (tools.length !== 1 || !isRecord(tool) || tool.name !== format.name)
+	if (tools.length !== 1 || !isRecord(tool) || tool.name !== anthropicTool.name)
 		throw new TagGenerationError('invalid-response');
-	return tool.input;
+	return parseGeneratedTags(tool.input);
 }
 
 const openAICompatible = (): ProviderSpec => ({
@@ -134,8 +139,8 @@ export const chatProviderSpecs: Record<string, ProviderSpec> = {
 	[PROVIDER_NAMES.CUSTOM]: openAICompatible(),
 	[PROVIDER_NAMES.OPENROUTER]: {
 		...openAICompatible(),
-		buildRequestBody: (systemRole, userPrompt, model, temperature, format) => ({
-			...openAIRequestBody(systemRole, userPrompt, model, temperature, format),
+		buildRequestBody: (systemRole, userPrompt, model, temperature) => ({
+			...openAIRequestBody(systemRole, userPrompt, model, temperature),
 			provider: { require_parameters: true },
 		}),
 		buildHeaders: (apiKey) => ({
@@ -149,23 +154,16 @@ export const chatProviderSpecs: Record<string, ProviderSpec> = {
 			'x-api-key': apiKey,
 			'anthropic-version': '2023-06-01',
 		}),
-		buildRequestBody: (systemRole, userPrompt, model, temperature, format) => ({
+		buildRequestBody: (systemRole, userPrompt, model, temperature) => ({
 			model,
 			max_tokens: COMMON_CONSTANTS.DEFAULT_MAX_TOKENS,
 			system: systemRole,
 			messages: [{ role: 'user', content: userPrompt }],
 			temperature,
-			tools: [
-				{
-					name: format.name,
-					description: 'Return the requested structured result.',
-					input_schema: format.schema,
-					strict: true,
-				},
-			],
+			tools: [anthropicTool],
 			tool_choice: {
 				type: 'tool',
-				name: format.name,
+				name: anthropicTool.name,
 				disable_parallel_tool_use: true,
 			},
 		}),

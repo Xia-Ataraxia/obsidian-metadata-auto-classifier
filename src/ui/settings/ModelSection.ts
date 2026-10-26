@@ -26,7 +26,7 @@ export class ModelSection {
 		new ObsidianSetting(modelSection)
 			.setName('Models')
 			.setDesc(
-				'The selected model scores each existing value. Decision API models answer natively; chat models emulate the same yes/no scores. New tags use the selected model, or the first chat model when a decision API model is selected.'
+				'Decision API models classify notes by scoring each existing value. Chat models only generate new tags. The selected model is used for its role; the other role uses the first model of that kind.'
 			)
 			.setHeading();
 
@@ -70,7 +70,7 @@ export class ModelSection {
 				Setting.create(containerEl, {
 					name: config.name,
 					desc: `${provider.name} · ${
-						decisionTransport(provider.name, config) === 'chat' ? 'Chat scoring' : 'Decision API'
+						decisionTransport(provider.name, config) ? 'Decision API' : 'Chat'
 					}`,
 					buttons: [
 						{

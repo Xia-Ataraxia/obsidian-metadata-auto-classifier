@@ -26,7 +26,7 @@ describe('classification error statuses', () => {
 		expect(classificationNoticeKey('no_refs')).toBe('classification_setup');
 		expect(classificationNoticeKey('server_failed')).toBe('classification_status');
 		expect(CLASSIFICATION_MESSAGES.no_model).toBe(
-			'Select a classification model in settings. No changes were made.'
+			'Add a decision API model in settings to classify. No changes were made.'
 		);
 	});
 });

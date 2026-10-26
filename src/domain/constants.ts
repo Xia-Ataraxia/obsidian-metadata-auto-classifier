@@ -8,7 +8,6 @@ import type {
 	ProviderConfig,
 	AutoClassifierSettings,
 	NoticeCatalog,
-	StructuredFormat,
 } from '../types';
 
 // ==========================================
@@ -47,11 +46,6 @@ export const TAG_GENERATION_SCHEMA = {
 	required: ['tags'],
 	additionalProperties: false,
 } as const;
-
-export const TAG_GENERATION_FORMAT: StructuredFormat = {
-	name: 'generated_tags',
-	schema: TAG_GENERATION_SCHEMA,
-};
 
 // ==========================================
 // Default Settings

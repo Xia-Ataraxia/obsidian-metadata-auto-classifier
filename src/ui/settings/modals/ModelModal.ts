@@ -266,7 +266,7 @@ export class ModelModal extends Modal {
 		if (!this.offersDecisionChoice()) return;
 		CommonSetting.create(container, {
 			name: 'Decision API',
-			desc: 'Score values through the native decision endpoint instead of chat structured output.',
+			desc: 'Classify through the decision endpoint. Chat models only generate new tags.',
 			toggle: {
 				value: this.decision,
 				onChange: (value) => {

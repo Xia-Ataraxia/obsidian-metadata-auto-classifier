@@ -19,7 +19,7 @@ export const CLASSIFICATION_MESSAGES = {
 	selection_failed: 'Classification could not be completed safely. No changes were made.',
 	preparation_failed: 'Reference values could not be prepared. No changes were made.',
 	write_failed: 'The note could not be updated safely. No changes were made.',
-	no_model: 'Select a classification model in settings. No changes were made.',
+	no_model: 'Add a decision API model in settings to classify. No changes were made.',
 	invalid_settings: 'Classification settings are invalid. No changes were made.',
 	context_too_large: 'This note is too large to classify (limit about 24 KB). No changes were made.',
 	auth_failed: 'The provider rejected the API key. Check it in settings. No changes were made.',

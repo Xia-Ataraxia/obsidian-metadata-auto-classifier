@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DecisionClassificationError, DecisionClassifier } from '../../src/ui/DecisionClassifier';
 import { sendRequest } from '../../src/ui/request';
-import { UnifiedProvider } from '../../src/ui/UnifiedProvider';
 import type { Model, ProviderConfig } from '../../src/types';
 
 vi.mock('../../src/ui/request', () => ({ sendRequest: vi.fn() }));
@@ -165,34 +164,16 @@ describe('DecisionClassifier', () => {
 		);
 	});
 
-	it('emulates decisions with chat structured output for chat models', async () => {
-		const structured = vi
-			.spyOn(UnifiedProvider.prototype, 'callStructured')
-			.mockResolvedValue({ answers: { candidate_0000: 0.1, candidate_0001: 0.95 } });
+	it('refuses chat models instead of emulating decisions', async () => {
 		const anthropic: ProviderConfig = {
 			name: 'Anthropic',
 			baseUrl: 'https://api.anthropic.com/v1/messages',
 			models: [{ id: 'claude', name: 'Claude' }],
 			auth: { type: 'apiKey', apiKey: config.apiKey },
 		};
-		const result = await new DecisionClassifier().classify(
-			input,
-			anthropic,
-			{ id: 'claude', name: 'Claude' },
-			control()
-		);
-		expect(result).toEqual({ status: 'selected', values: ['second'] });
+		await expect(
+			new DecisionClassifier().classify(input, anthropic, { id: 'claude', name: 'Claude' }, control())
+		).rejects.toMatchObject({ code: 'not-a-decision-model' });
 		expect(request).not.toHaveBeenCalled();
-		expect(structured).toHaveBeenCalledWith(
-			expect.any(String),
-			expect.stringContaining('Candidate value (verbatim):\\nfirst'),
-			anthropic,
-			'claude',
-			expect.objectContaining({ name: 'decision_answers' }),
-			undefined,
-			undefined,
-			expect.objectContaining({ deadline: expect.any(Number) })
-		);
-		structured.mockRestore();
 	});
 });

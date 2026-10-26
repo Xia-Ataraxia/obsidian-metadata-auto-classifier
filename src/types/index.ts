@@ -54,7 +54,7 @@ export interface FrontMatter {
 export interface Model {
 	id: string;
 	name: string;
-	/** Served through a native decision endpoint instead of chat structured output. */
+	/** Classifies through a decision endpoint; chat models only generate tags. */
 	decision?: boolean;
 }
 
@@ -80,12 +80,6 @@ export interface ProviderBase {
 }
 
 export type ProviderConfig = ProviderBase;
-
-/** A named JSON schema a provider must answer with. */
-export interface StructuredFormat {
-	name: string;
-	schema: Record<string, unknown>;
-}
 
 export interface GeneratedTags {
 	tags: string[];

@@ -7,15 +7,15 @@ Automatically classifies and applies metadata to your notes.
 ## Features
 
 - Selects existing values for tags and other frontmatter fields with calibrated yes/no decisions: each candidate gets its own probability, and only confident yeses are written.
-- Works with any configured provider. Decision APIs (TypeSafe Jev, OpenAI Decisions, OpenRouter or a custom `/systemone` endpoint) answer natively; chat models (Anthropic, Gemini, OpenAI, Codex, Ollama, …) emulate the same scores through structured output.
+- Classification uses decision API models only: TypeSafe Jev, OpenAI Decisions, OpenRouter or a custom `/systemone` endpoint. Chat models (Anthropic, Gemini, OpenAI, Codex, Ollama, …) never classify; they only generate new tags.
 - Generates new values only for the exact `tags` field when **Generate new tags** is explicitly enabled; this is off by default.
 - Preserves field instructions, references, minimum/maximum counts, overwrite/append and WikiLink options. Writes preserve unrelated frontmatter and note text.
 - Providers include TypeSafe, OpenAI, Anthropic, Gemini, OpenRouter, Ollama, DeepSeek, LM Studio, Codex (OAuth), and an explicitly configured OpenAI-compatible custom endpoint.
 
 ## Usage
 
-1. Open **Settings**, **Metadata Auto Classifier**, add a provider and select a model. Mark a model as a decision API model in its editor when the provider serves one; otherwise it scores through chat.
-2. Define the fields, existing reference values, instructions and count limits. For optional new tags, edit the exact `tags` field, enable **Generate new tags**, New tags use the selected model, or the first chat model when a decision API model is selected. Local Ollama and LM Studio can be keyless.
+1. Open **Settings**, **Metadata Auto Classifier**, add a provider and a decision API model (mark it in the model editor; TypeSafe models always are). Add a chat model too if you want new tags.
+2. Define the fields, existing reference values, instructions and count limits. For optional new tags, edit the exact `tags` field, enable **Generate new tags**, New tags use the selected model when it is a chat model, otherwise the first chat model. Local Ollama and LM Studio can be keyless.
 3. Open a note and run **Fetch frontmatter: Fetch all frontmatter using current provider** from the command palette, or **Fetch frontmatter: tags** (or another field) for one field.
 4. Review the result in the note's properties.
 
@@ -29,7 +29,7 @@ Ordinary fields never generate new values. Ambiguous selection or a failed requi
 
 ## Disclosures
 
-- **Network use**: selection sends the note body, instructions and candidate values to the selected provider: `api.typesafe.ai/v1/systemone` for TypeSafe, `<base URL>/decisions` for OpenAI decision models, `<base URL>/systemone` for other decision models, and the provider's chat endpoint otherwise. Explicitly enabled tag generation sends the note body, instructions and excluded/existing values to the generation model. Reference values may come from metadata on other notes; those other note bodies are not sent by classification.
+- **Network use**: selection sends the note body, instructions and candidate values to the selected provider: `api.typesafe.ai/v1/systemone` for TypeSafe, `<base URL>/decisions` for OpenAI decision models, `<base URL>/systemone` for other decision models. Explicitly enabled tag generation sends the note body, instructions and excluded/existing values to the chat generation model. Reference values may come from metadata on other notes; those other note bodies are not sent by classification.
 - **Account or payment**: each provider uses its own credential. Settings from 1.13 that stored a separate Jev key become a selected TypeSafe provider. Providers bill usage according to the selected account/model; model presets do not guarantee availability or pricing. API keys and OAuth tokens are stored in the plugin's settings file; do not commit or share that file.
 - **Codex sign-in**: hosted device authorization contacts `auth.openai.com`; Codex inference contacts `chatgpt.com`. The verification page opens only after an explicit click. There is no local callback server or automatic clipboard copy. Refresh remains account-bound and must be saved before retrying.
 - **Transport**: requests use Obsidian's native `requestUrl`, not Node HTTP streaming. Cancellation prevents stale processing/writes but cannot physically cancel a request already dispatched by that API.
