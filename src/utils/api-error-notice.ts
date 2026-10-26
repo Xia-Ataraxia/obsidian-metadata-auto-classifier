@@ -22,5 +22,5 @@ export function toApiErrorNotice(error: unknown, provider: string): string {
 	if (status !== undefined && status >= 500) return `${provider} is unavailable (${status}). Try again later.`;
 	if (status !== undefined) return `Request to ${provider} failed (${status}).`;
 	if (NETWORK_ERROR_PATTERN.test(message)) return `Couldn't reach ${provider}.`;
-	return 'Classification failed. See the console for details.';
+	return 'Request failed. See the console for details.';
 }

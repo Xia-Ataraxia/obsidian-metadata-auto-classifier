@@ -59,6 +59,21 @@
     }
 }
 
+/* Inline field validation */
+.mac-field-error {
+    color: var(--text-error);
+    margin-top: var(--size-4-1);
+    animation: mac-fade-in 160ms ease-out;
+}
+
+.mac-field-error:empty {
+    display: none;
+}
+
+@keyframes mac-fade-in {
+    from { opacity: 0; }
+}
+
 /* Button Container for Modals */
 .mac-button-container {
     display: flex;

@@ -291,16 +291,12 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 	},
 	// Model section
 	model_test_success: {
-		template: '{{name}} connection test successful!',
+		template: '{{name}} is connected.',
 		timeout: 3000,
 		immutable: true,
 	},
-	model_test_failed: {
-		template: '{{name}} connection test failed!',
-		timeout: 5000,
-	},
 	model_test_error: {
-		template: '❌ {{message}}',
+		template: 'Test failed for {{name}}. {{message}}',
 		timeout: 5000,
 	},
 };
