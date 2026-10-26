@@ -126,7 +126,7 @@ describe('HTTP provider requests', () => {
 		await expect(sendRequest(url, headers, body)).resolves.toEqual({ answer: 42 });
 	});
 
-	it.each([400, 401, 403, 413, 415, 422, 500, 501, 502, 503, 504, 599])(
+	it.each([400, 401, 403, 404, 413, 415, 422, 500, 501, 502, 503, 504, 599])(
 		'rejects HTTP %i without exposing response content or retrying',
 		async (status) => {
 			vi.mocked(requestUrl).mockResolvedValueOnce(response(status, 'body-secret response-secret'));
@@ -200,6 +200,15 @@ describe('HTTP provider requests', () => {
 		expect(error).toMatchObject({ code: 'TRANSPORT_ERROR' });
 		expect((error as Error).message).not.toContain('secret');
 		expect(consoleError).not.toHaveBeenCalled();
+	});
+
+	it('sanitizes non-Error transport rejections', async () => {
+		vi.mocked(requestUrl).mockRejectedValueOnce('transport-secret');
+
+		const error = await sendRequest(url, headers, body).catch((caught: unknown) => caught);
+		expect(error).toBeInstanceOf(HttpError);
+		expect(error).toMatchObject({ code: 'TRANSPORT_ERROR' });
+		expect((error as Error).message).not.toContain('transport-secret');
 	});
 
 	it('times out an in-flight POST without retrying and rejects a late response', async () => {

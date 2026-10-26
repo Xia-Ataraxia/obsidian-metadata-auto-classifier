@@ -1,3 +1,4 @@
+import { confirmAction } from './ConfirmModal';
 import type { App } from 'obsidian';
 import { ButtonComponent, Modal } from 'obsidian';
 
@@ -67,8 +68,7 @@ export class ProviderModal extends Modal {
 		contentEl.setAttribute('aria-modal', 'true');
 		contentEl.setAttribute('aria-label', 'Provider settings');
 
-		// Modal title - unified
-		contentEl.createEl('h2', { text: 'Provider settings' });
+		this.setTitle('Provider settings');
 
 		// Always show preset selection
 		this.addPresetSetting(contentEl);
@@ -94,12 +94,14 @@ export class ProviderModal extends Modal {
 			display: preset.name,
 		}));
 
-		// Determine current preset value
-		const currentValue = this.providerConfig.name || 'Custom Provider';
+		// Match exact preset identity; custom URLs must not infer or rename a provider adapter.
+		const currentValue = presets.some((preset) => preset.name === this.providerConfig.name)
+			? this.providerConfig.name
+			: 'Custom Provider';
 
 		CommonSetting.create(containerEl, {
-			name: 'Provider Preset',
-			desc: 'Select a predefined provider',
+			name: 'Provider preset',
+			desc: 'Start from a known provider, or pick Custom Provider.',
 			dropdown: {
 				options: presetOptions,
 				value: currentValue,
@@ -226,14 +228,14 @@ export class ProviderModal extends Modal {
 		// Show the selected preset's provider name as a read-only setting.
 		const presets = getProviderPresets();
 		CommonSetting.create(containerEl, {
-			name: 'Provider Name',
-			desc: this.providerConfig.name,
+			name: 'Provider name',
+			desc: 'Filled in from the selected preset.',
 		});
 
 		// API URL
 		CommonSetting.create(containerEl, {
 			name: 'API URL',
-			desc: 'The complete API URL including endpoint (e.g., https://api.openai.com/v1/chat/completions)',
+			desc: 'The full endpoint URL, like https://api.openai.com/v1/chat/completions.',
 			textInput: {
 				placeholder: 'https://api.example.com/v1/chat/completions',
 				value: this.providerConfig.baseUrl,
@@ -256,10 +258,11 @@ export class ProviderModal extends Modal {
 			);
 		} else {
 			CommonSetting.create(containerEl, {
-				name: 'API Key',
-				desc: 'Your API key for this provider',
+				name: 'API key',
+				desc: 'Your API key for this provider.',
 				textInput: {
 					placeholder: 'Enter API key',
+					password: true,
 					value: this.getApiKey(),
 					onChange: (value) => {
 						this.providerConfig.authType = 'apiKey';
@@ -284,13 +287,12 @@ export class ProviderModal extends Modal {
 				const settingEl = containerEl.querySelector(
 					'.setting-item:last-child .setting-item-description'
 				);
-				if (settingEl) {
-					settingEl.createEl('a', {
-						text: 'Get your API key here',
-						cls: 'mac-api-key-link',
-						attr: { href: preset.apiKeyUrl, target: '_blank' },
-					});
-				}
+				settingEl?.createEl('a', {
+					cls: 'mac-api-key-link',
+					text: 'Get an API key',
+					href: preset.apiKeyUrl,
+					attr: { target: '_blank' },
+				});
 			}
 		}
 	}
@@ -355,7 +357,10 @@ export class ProviderModal extends Modal {
 	/**
 	 * Disconnect OAuth
 	 */
-	private disconnectOAuth(): void {
+	private async disconnectOAuth(): Promise<void> {
+		const modalGeneration = this.modalGeneration;
+		const confirmed = await confirmAction(this.app, 'Disconnect this account?', 'Disconnect');
+		if (!confirmed || !this.isCurrentModal(modalGeneration)) return;
 		this.invalidateOAuthFlow();
 		this.contentEl.querySelector('.oauth-device-code')?.remove();
 		this.oauthTokens = undefined;
@@ -470,7 +475,7 @@ export class ProviderModal extends Modal {
 		if (!this.providerConfig.name.trim()) {
 			this.notices.show('validation_error', {
 				component: 'Provider',
-				message: 'Provider name is required. Please enter a name for your provider.',
+				message: 'Enter a provider name.',
 			});
 			return false;
 		}
@@ -498,7 +503,7 @@ export class ProviderModal extends Modal {
 		if (!this.providerConfig.baseUrl.trim()) {
 			this.notices.show('validation_error', {
 				component: 'Provider',
-				message: 'API URL is required. Please enter a valid API endpoint URL.',
+				message: 'Enter an API URL.',
 			});
 			return false;
 		}
@@ -509,7 +514,7 @@ export class ProviderModal extends Modal {
 		} catch {
 			this.notices.show('validation_error', {
 				component: 'Provider',
-				message: 'Please enter a valid URL (e.g., https://api.example.com/v1/chat/completions)',
+				message: 'Enter a valid URL, like https://api.example.com/v1/chat/completions.',
 			});
 			return false;
 		}
@@ -519,7 +524,7 @@ export class ProviderModal extends Modal {
 			if (!this.oauthTokens && !this.disconnectedOAuth) {
 				this.notices.show('validation_error', {
 					component: 'Provider',
-					message: 'Please connect your account before saving.',
+					message: 'Connect your account before saving.',
 				});
 				return false;
 			}

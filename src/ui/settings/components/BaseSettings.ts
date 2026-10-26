@@ -28,21 +28,21 @@ export abstract class BaseSettingsComponent implements SettingsComponent {
 		const button = [
 			{
 				icon: 'pencil',
-				tooltip: 'Edit Frontmatter',
+				text: 'Edit',
 				onClick: () => actions.onEdit(frontmatterSetting),
 			},
 		];
 		if (showDeleteButton) {
 			button.push({
 				icon: 'trash',
-				tooltip: 'Delete Frontmatter',
+				text: 'Delete',
 				onClick: () => actions.onDelete(frontmatterSetting),
 			});
 		}
 
 		Setting.create(containerEl, {
-			name: frontmatterSetting.name || 'Please enter name',
-			desc: `Type: ${frontmatterSetting.linkType}, Max: ${frontmatterSetting.count?.max ?? 5}, Overwrite: ${frontmatterSetting.overwrite}`,
+			name: frontmatterSetting.name || 'Untitled',
+			desc: `${frontmatterSetting.linkType} · up to ${frontmatterSetting.count?.max ?? 5} · ${frontmatterSetting.overwrite ? 'overwrite' : 'append'}`,
 			buttons: button,
 		});
 	}

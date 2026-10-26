@@ -1,31 +1,24 @@
-import { generateId, getProviderPreset, findUniqueProvider } from 'lib';
+import { findUniqueProvider, generateId, getProviderPreset } from '../../src/utils/lib-utils';
 import type { ProviderConfig } from '../../src/types';
 
-// -------------------- generateId Tests --------------------
 describe('generateId', () => {
 	test('generates unique IDs based on timestamp', async () => {
 		const id1 = generateId();
 		await new Promise((resolve) => setTimeout(resolve, 10));
-		const id2 = generateId();
-
-		expect(id2).toBeGreaterThan(id1);
+		expect(generateId()).toBeGreaterThan(id1);
 	});
 });
 
-// -------------------- getProviderPreset Tests --------------------
 describe('getProviderPreset', () => {
 	test('returns correct preset for valid provider name', () => {
 		const preset = getProviderPreset('OpenAI');
-
 		expect(preset.name).toBe('OpenAI');
 		expect(preset.baseUrl).toBe('https://api.openai.com/v1/chat/completions');
 		expect(preset.apiKeyRequired).toBe(true);
 	});
 
 	test('throws error when provider name does not exist', () => {
-		expect(() => getProviderPreset('NonExistentProvider')).toThrow(
-			'Provider preset not found: NonExistentProvider'
-		);
+		expect(() => getProviderPreset('NonExistentProvider')).toThrow('Provider preset not found: NonExistentProvider');
 	});
 
 	test('throws error for case-sensitive provider names', () => {
@@ -34,11 +27,7 @@ describe('getProviderPreset', () => {
 });
 
 describe('findUniqueProvider', () => {
-	const provider = (name: string, baseUrl = 'https://example.invalid'): ProviderConfig => ({
-		name,
-		baseUrl,
-		models: [],
-	});
+	const provider = (name: string, baseUrl = 'https://example.invalid'): ProviderConfig => ({ name, baseUrl, models: [] });
 
 	test('returns the exact configured object without rewriting its endpoint', () => {
 		const first = provider('Anthropic');

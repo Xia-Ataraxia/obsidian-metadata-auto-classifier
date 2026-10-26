@@ -1,1 +1,0 @@
-bun x --bun --no-install lint-staged --allow-empty

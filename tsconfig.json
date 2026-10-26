@@ -1,38 +1,43 @@
 {
-	"compilerOptions": {
-		"baseUrl": ".",
-		"outDir": "dist",
-		"paths": {
-			"main": ["src/main"],
-			"domain": ["src/domain"],
-			"domain/*": ["src/domain/*"],
-			"ui": ["src/ui"],
-			"ui/*": ["src/ui/*"],
-			"types": ["src/types"],
-			"types/*": ["src/types/*"],
-			"utils": ["src/utils"],
-			"utils/*": ["src/utils/*"],
-			"shared/*": ["src/shared/*"]
-		},
-		"inlineSourceMap": true,
-		"inlineSources": true,
-		"module": "ESNext",
-		"target": "ES6",
-		"allowJs": true,
-		"noImplicitAny": true,
-		"moduleResolution": "bundler",
-		"importHelpers": true,
-		"isolatedModules": true,
-		"strictNullChecks": true,
-		"noUncheckedIndexedAccess": true,
-		"useUnknownInCatchVariables": true,
-		"strictBindCallApply": true,
-		"forceConsistentCasingInFileNames": true,
-		"lib": ["DOM", "ES5", "ES6", "ES7", "ES2017", "ES2019"],
-		"resolveJsonModule": true,
-		"esModuleInterop": true,
-		"types": ["vitest/globals", "node"]
-	},
-	"include": ["src/**/*.ts"],
-	"exclude": ["__tests__/**/*", "__mocks__/**/*", "node_modules"]
+  "compilerOptions": {
+    "inlineSourceMap": false,
+    "module": "ESNext",
+    "target": "ES6",
+    "allowJs": true,
+    "noImplicitAny": true,
+    "moduleResolution": "bundler",
+    "importHelpers": true,
+    "isolatedModules": true,
+    "strictNullChecks": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "allowSyntheticDefaultImports": true,
+    "useUnknownInCatchVariables": true,
+    "strictBindCallApply": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@domain/*": [
+        "./src/domain/*"
+      ],
+      "@ui/*": [
+        "./src/ui/*"
+      ],
+      "@utils/*": [
+        "./src/utils/*"
+      ]
+    },
+    "lib": [
+      "DOM",
+      "ES2020"
+    ],
+    "types": [
+      "node",
+      "vitest/globals"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "__tests__/**/*.ts"
+  ]
 }

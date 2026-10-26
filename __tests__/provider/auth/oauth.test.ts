@@ -8,7 +8,6 @@ import type { OAuthTokens } from '../../../src/types/auth';
 const sharedRequestMocks = vi.hoisted(() => ({ sendRequest: vi.fn() }));
 const tokenManagerMocks = vi.hoisted(() => ({
 	createTokensFromResponse: vi.fn(),
-	isTokenExpired: vi.fn(),
 }));
 
 vi.mock('../../../src/ui/request', async (importOriginal) => {
@@ -84,7 +83,6 @@ describe('CodexOAuth device authorization', () => {
 			}
 			return { ...tokens };
 		});
-		tokenManagerMocks.isTokenExpired.mockReturnValue(false);
 		oauth = new CodexOAuth();
 	});
 

@@ -1,6 +1,7 @@
 import { App, createMockTFile, type TFile } from 'obsidian';
 import AutoClassifierPlugin from '../src/main';
-import { DEFAULT_SETTINGS } from '../src/domain/constants';
+import { DEFAULT_SETTINGS, NOTICE_CATALOG } from '../src/domain/constants';
+import { Notice } from '../src/ui/settings/components/Notice';
 import type {
 	AutoClassifierSettings,
 	FrontmatterField,
@@ -14,13 +15,14 @@ const mocks = vi.hoisted(() => ({
 	classificationContexts: [] as unknown[],
 	noticeHosts: [] as unknown[],
 	settingTabPlugins: [] as unknown[],
+	noticeArguments: [] as unknown[][],
 	noticeShow: vi.fn(),
 	noticeUnload: vi.fn(),
 	loggerInfo: vi.fn(),
 	loggerError: vi.fn(),
-	isTokenExpired: vi.fn(),
-	refreshTokens: vi.fn(),
 }));
+
+vi.mock('obsidian');
 
 vi.mock('../src/ui/ClassificationService', () => ({
 	ClassificationService: class {
@@ -38,15 +40,6 @@ vi.mock('../src/ui/ClassificationService', () => ({
 	},
 }));
 
-vi.mock('../src/ui/auth', () => ({
-	CodexOAuth: class {
-		refreshTokens(...args: unknown[]) {
-			return mocks.refreshTokens(...args);
-		}
-	},
-	isTokenExpired: mocks.isTokenExpired,
-}));
-
 vi.mock('../src/ui/settings', () => ({
 	AutoClassifierSettingTab: class {
 		constructor(plugin: unknown) {
@@ -55,10 +48,17 @@ vi.mock('../src/ui/settings', () => ({
 	},
 }));
 
+vi.mock('../src/ui/settings/components/Notice', () => ({
+	Notice: class {
+		static head = '';
+	},
+}));
+
 vi.mock('../src/ui/plugin-notices', () => ({
 	PluginNotices: class {
-		constructor(host: unknown) {
-			mocks.noticeHosts.push(host);
+		constructor(...args: unknown[]) {
+			mocks.noticeHosts.push(args[0]);
+			mocks.noticeArguments.push(args);
 		}
 
 		show(...args: unknown[]) {
@@ -110,6 +110,7 @@ describe('AutoClassifierPlugin', () => {
 		vi.clearAllMocks();
 		mocks.classificationContexts.length = 0;
 		mocks.noticeHosts.length = 0;
+		mocks.noticeArguments.length = 0;
 		mocks.settingTabPlugins.length = 0;
 		mocks.classify.mockReset().mockResolvedValue(undefined);
 		mocks.deactivate.mockReset();
@@ -117,8 +118,6 @@ describe('AutoClassifierPlugin', () => {
 		mocks.noticeUnload.mockReset();
 		mocks.loggerInfo.mockReset();
 		mocks.loggerError.mockReset();
-		mocks.isTokenExpired.mockReset().mockReturnValue(false);
-		mocks.refreshTokens.mockReset();
 
 		app = new App();
 		plugin = new AutoClassifierPlugin(app);
@@ -192,7 +191,7 @@ describe('AutoClassifierPlugin', () => {
 		});
 	});
 
-	it('keeps expired stored auth intact and never refreshes it on startup or ordinary classification', async () => {
+	it('keeps expired canonical OAuth credentials intact on startup and ordinary classification', async () => {
 		const expiredTokens = {
 			accessToken: 'stored-expired-token',
 			refreshToken: 'stored-refresh-token',
@@ -201,7 +200,6 @@ describe('AutoClassifierPlugin', () => {
 		};
 		const provider: ProviderConfig = {
 			name: 'Codex',
-			apiKey: 'stored-user-key',
 			baseUrl: 'https://provider.invalid',
 			models: [{ id: 'model-1', name: 'Model 1' }],
 			auth: { type: 'oauth', oauth: expiredTokens },
@@ -223,10 +221,7 @@ describe('AutoClassifierPlugin', () => {
 		expect(mocks.classificationContexts).toHaveLength(1);
 		expect(mocks.classify).toHaveBeenNthCalledWith(1, file, 1);
 		expect(mocks.classify).toHaveBeenNthCalledWith(2, file, 1);
-		expect(mocks.isTokenExpired).not.toHaveBeenCalled();
-		expect(mocks.refreshTokens).not.toHaveBeenCalled();
 		expect(plugin.settings.providers[0].auth).toEqual({ type: 'oauth', oauth: expiredTokens });
-		expect(plugin.settings.providers[0].apiKey).toBe('stored-user-key');
 		expect(plugin.settings.classificationRule).toBe('stored user instructions');
 		expect(plugin.addSettingTab).toHaveBeenCalledOnce();
 
@@ -314,24 +309,23 @@ describe('AutoClassifierPlugin', () => {
 		expect(mocks.classify).not.toHaveBeenCalled();
 	});
 
-	it('preserves legacy Codex data and provider entries through startup', async () => {
+	it('preserves canonical Codex provider auth and provider entries through startup', async () => {
 		const tokens: OAuthTokens = {
-			accessToken: 'legacy-token',
-			refreshToken: 'legacy-refresh',
+			accessToken: 'stored-access-token',
+			refreshToken: 'stored-refresh-token',
 			expiresAt: 1,
 			accountId: 'synthetic-account',
 		};
 		const provider: ProviderConfig = {
 			name: 'Codex',
-			apiKey: 'stored-provider-key',
 			baseUrl: 'https://provider.invalid',
 			models: [{ id: 'model-1', name: 'Model 1' }],
+			auth: { type: 'oauth', oauth: tokens },
 		};
 		const providers = [provider];
 		(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue({
 			frontmatter: [makeField(1)],
 			providers,
-			codexConnection: tokens,
 		});
 
 		await plugin.onload();
@@ -340,12 +334,33 @@ describe('AutoClassifierPlugin', () => {
 		expect(plugin.settings.providers[0]).toBe(provider);
 		expect(plugin.settings.providers[0]).toEqual({
 			name: 'Codex',
-			apiKey: 'stored-provider-key',
 			baseUrl: 'https://provider.invalid',
 			models: [{ id: 'model-1', name: 'Model 1' }],
+			auth: { type: 'oauth', oauth: tokens },
 		});
-		expect(Reflect.get(plugin.settings, 'codexConnection')).toBe(tokens);
-		expect(Reflect.get(plugin.settings, 'codexConnection')).toEqual(tokens);
 		expect(plugin.saveData).toHaveBeenCalledWith(plugin.settings);
+	});
+
+	it('uses the manifest name for native notices and routes notice actions to settings', async () => {
+		const open = vi.fn();
+		const openTabById = vi.fn();
+		(app as App & { setting?: { open: () => void; openTabById: (id: string) => void } }).setting = {
+			open,
+			openTabById,
+		};
+
+		await plugin.onload();
+
+		expect(Notice.head).toBe(plugin.manifest.name);
+		const [host, catalog, head] = mocks.noticeArguments[0] as [
+			{ openSettings: () => void },
+			typeof NOTICE_CATALOG,
+			string,
+		];
+		expect(catalog).toBe(NOTICE_CATALOG);
+		expect(head).toBe(plugin.manifest.name);
+		host.openSettings();
+		expect(open).toHaveBeenCalledOnce();
+		expect(openTabById).toHaveBeenCalledWith(plugin.manifest.id);
 	});
 });

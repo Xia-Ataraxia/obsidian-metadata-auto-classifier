@@ -1,10 +1,12 @@
-import type { App } from 'obsidian';
+import { confirmAction } from './modals/ConfirmModal';
+import { Setting as ObsidianSetting, type App } from 'obsidian';
 
 import type AutoClassifierPlugin from '../../main';
 import { testModel } from '../provider-api';
+import { toApiErrorNotice } from '../../utils/api-error-notice';
 import type { Model, ProviderConfig } from '../../types';
 import { ClassificationStateError } from '../../domain/classification-state';
-import { findUniqueProvider } from '../../utils/lib-utils';
+import { findUniqueProvider, getProviderPresets } from '../../utils/lib-utils';
 import { createProviderSession } from '../provider-session';
 import { Setting } from './components/Setting';
 import { ModelModal, type ModelModalProps } from './modals/ModelModal';
@@ -19,8 +21,8 @@ export class ModelSection {
 	) {}
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[], selectedModel: string): void {
-		const modelSection = containerEl.createEl('div', { cls: 'model-section' });
-		modelSection.createEl('h3', { text: 'Models' });
+		const modelSection = containerEl.createDiv({ cls: 'model-section' });
+		new ObsidianSetting(modelSection).setName('Models').setHeading();
 
 		this.renderModelList(modelSection, providers, selectedModel);
 
@@ -43,7 +45,7 @@ export class ModelSection {
 		if (!hasModels) {
 			Setting.create(containerEl, {
 				name: 'No models configured',
-				desc: 'Add a model to get started',
+				desc: 'Add a model to get started.',
 			});
 			return;
 		}
@@ -86,8 +88,9 @@ export class ModelSection {
 							},
 						},
 						{
-							icon: 'check-circle',
+							icon: 'plug-zap',
 							text: 'Test',
+							busyText: 'Testing…',
 							onClick: async () => {
 								try {
 									const providerName = provider.name;
@@ -135,10 +138,16 @@ export class ModelSection {
 										if (!this.plugin.isActive()) return;
 										this.plugin.notices.show('model_test_failed', { name: config.name });
 									}
-								} catch {
-									if (!this.plugin.isActive()) return;
+								} catch (error) {
+									if (!this.plugin.isActive() || error instanceof ClassificationStateError) return;
+									const safeProviderName = getProviderPresets().some(
+										(preset) => preset.name === provider.name
+									)
+										? provider.name
+										: 'provider';
 									this.plugin.notices.show('model_test_error', {
-										message: 'The connection test failed. Check the provider configuration.',
+										name: config.name,
+										message: toApiErrorNotice(error, safeProviderName),
 									});
 								}
 							},
@@ -155,16 +164,17 @@ export class ModelSection {
 							icon: 'trash',
 							text: 'Delete',
 							onClick: async () => {
-								if (!this.plugin.isActive()) return;
-								// eslint-disable-next-line no-alert -- confirm() used intentionally for destructive action
-								const confirmed = confirm(
-									`Are you sure you want to delete "${config.name}" model?`
+								const confirmed = await confirmAction(
+									this.app,
+									`Delete "${config.name}"?`,
+									'Delete'
 								);
 								if (!confirmed) return;
 
 								const providers = this.plugin.settings.providers;
 								if (
 									!this.plugin.isActive() ||
+									findUniqueProvider(providers, provider.name) !== provider ||
 									providers.filter((item) => item === provider).length !== 1 ||
 									provider.models.filter((model) => model.id === config.id).length !== 1 ||
 									provider.models.find((model) => model.id === config.id) !== config
@@ -236,12 +246,17 @@ export class ModelSection {
 					)
 						return;
 
+					const selectionOwnedByOldModel =
+						this.plugin.settings.selectedProvider === oldModel.provider &&
+						this.plugin.settings.selectedModel === oldModel.model;
 					capturedSource.models = capturedSource.models.filter(
 						(model) => model.id !== oldModel.model
 					);
 					target.models.push(result.model);
-					this.plugin.settings.selectedProvider = result.provider;
-					this.plugin.settings.selectedModel = result.model.id;
+					if (selectionOwnedByOldModel) {
+						this.plugin.settings.selectedProvider = result.provider;
+						this.plugin.settings.selectedModel = result.model.id;
+					}
 				} else {
 					if (result.isEdit) return;
 					target.models.push(result.model);

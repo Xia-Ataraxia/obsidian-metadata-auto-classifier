@@ -1,5 +1,5 @@
-import { deepCloneFrontmatterField } from 'lib/frontmatter';
-import type { FrontmatterField } from 'types';
+import { deepCloneFrontmatterField } from '../../src/ui/frontmatter';
+import type { FrontmatterField } from '../../src/types';
 
 describe('deepCloneFrontmatterField', () => {
 	const createTestField = (): FrontmatterField => ({

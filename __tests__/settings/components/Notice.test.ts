@@ -1,51 +1,21 @@
-import { Notice as SettingsNotice } from 'settings/components/Notice';
+import { Notice as SettingsNotice } from '../../../src/ui/settings/components/Notice';
 import { Notice } from 'obsidian';
 import { PluginNotices } from '../../../src/ui/plugin-notices';
 
-const buttonComponents = vi.hoisted(() => ({ instances: [] as any[] }));
+const obsidianMocks = vi.hoisted(() => ({
+	Notice: vi.fn(),
+	setIcon: vi.fn(),
+	setTooltip: vi.fn(),
+}));
 
-vi.mock('obsidian', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('obsidian')>();
-	class ButtonComponentBoundary {
-		buttonEl: any;
-		private callback?: () => void;
-
-		constructor(containerEl: any) {
-			this.buttonEl = containerEl.ownerDocument.createElement('button');
-			this.buttonEl.click = () => this.callback?.();
-			containerEl.appendChild(this.buttonEl);
-			buttonComponents.instances.push(this);
-		}
-
-		setButtonText(text: string): this {
-			this.buttonEl.textContent = text;
-			return this;
-		}
-
-		setClass(className: string): this {
-			this.buttonEl.className = className;
-			return this;
-		}
-
-		setIcon(icon: string): this {
-			this.buttonEl.icon = icon;
-			return this;
-		}
-
-		onClick(callback: () => void): this {
-			this.callback = callback;
-			return this;
-		}
-	}
-
-	return { ...actual, ButtonComponent: ButtonComponentBoundary };
-});
+vi.mock('obsidian', () => obsidianMocks);
 
 (global as any).window = global;
 
 function createObsidianDocumentBoundary(): any {
 	let context: any;
 	const createElement = (tagName: string) => {
+		const listeners = new Map<string, (event: { stopPropagation: () => void }) => void>();
 		const element: any = {
 			tagName,
 			ownerDocument: context,
@@ -57,17 +27,38 @@ function createObsidianDocumentBoundary(): any {
 				this.children.push(child);
 				return child;
 			},
-			createEl(childTagName: string, options: { cls?: string; text?: string } = {}) {
+			createEl(childTagName: string, options: Record<string, unknown> = {}) {
 				const child = context.createElement(childTagName);
-				child.className = options.cls ?? '';
-				child.textContent = options.text ?? '';
+				child.className = (options['cls'] as string | undefined) ?? '';
+				child.textContent = (options['text'] as string | undefined) ?? '';
+				child.type = options['type'];
 				return this.appendChild(child);
 			},
-			createDiv(options: { cls?: string; text?: string } = {}) {
+			createDiv(options: Record<string, unknown> = {}) {
 				return this.createEl('div', options);
+			},
+			createSpan(options: Record<string, unknown> = {}) {
+				return this.createEl('span', options);
 			},
 			setAttribute(name: string, value: string) {
 				this.attributes[name] = value;
+			},
+			setText(text: string) {
+				this.textContent = text;
+			},
+			addClass(className: string) {
+				this.className = [this.className, className].filter(Boolean).join(' ');
+			},
+			addEventListener(
+				name: string,
+				callback: (event: { stopPropagation: () => void }) => void
+			) {
+				listeners.set(name, callback);
+			},
+			click() {
+				const stopPropagation = vi.fn();
+				listeners.get('click')?.({ stopPropagation });
+				return stopPropagation;
 			},
 		};
 		element.classList = {
@@ -80,6 +71,7 @@ function createObsidianDocumentBoundary(): any {
 		});
 		return element;
 	};
+
 	context = {
 		createDocumentFragment: vi.fn(() => createElement('#document-fragment')),
 		createElement: vi.fn((tagName: string) => createElement(tagName)),
@@ -87,14 +79,47 @@ function createObsidianDocumentBoundary(): any {
 	return context;
 }
 
+function installObsidianDocumentHelpers(): void {
+	vi.stubGlobal('createFragment', () => (global as any).activeDocument.createDocumentFragment());
+	vi.stubGlobal('createDiv', (options: Record<string, unknown> = {}) => {
+		const div = (global as any).activeDocument.createElement('div');
+		div.className = (options['cls'] as string | undefined) ?? '';
+		div.textContent = (options['text'] as string | undefined) ?? '';
+		return div;
+	});
+	vi.stubGlobal('createEl', (tagName: string, options: Record<string, unknown> = {}) => {
+		const element = (global as any).activeDocument.createElement(tagName);
+		element.className = (options['cls'] as string | undefined) ?? '';
+		element.textContent = (options['text'] as string | undefined) ?? '';
+		element.type = options['type'];
+		return element;
+	});
+}
+
 describe('Notice', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		buttonComponents.instances.length = 0;
+		obsidianMocks.Notice.mockImplementation(function (this: any, message: unknown, duration: number) {
+			this.message = message;
+			this.duration = duration;
+			this.setMessage = vi.fn();
+			this.hide = vi.fn();
+		});
+		obsidianMocks.setIcon.mockImplementation((element: any, icon: string) => {
+			element.icon = icon;
+		});
+		obsidianMocks.setTooltip.mockImplementation((element: any, tooltip: string) => {
+			element.tooltip = tooltip;
+		});
+		SettingsNotice.head = 'Metadata Auto Classifier';
+		vi.stubGlobal('activeDocument', createObsidianDocumentBoundary());
+		installObsidianDocumentHelpers();
 	});
 
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+		vi.useRealTimers();
 	});
 
 	test('error shows a safe generic notice and logs a static reason', () => {
@@ -154,41 +179,57 @@ describe('Notice', () => {
 		expect(Notice).toHaveBeenCalledWith('ok', 3000);
 	});
 
-	test('startProgress and endProgress manage notice', () => {
+	test('progress uses the plugin header and themed spinner, updates waiting copy, and expires safely', () => {
 		vi.useFakeTimers();
-		const notice: any = SettingsNotice.startProgress('Task');
-		expect(Notice).toHaveBeenCalledWith(expect.stringContaining('Task'), 0);
-		expect(notice.interval).toBeDefined();
-		vi.advanceTimersByTime(200);
-		expect(notice.setMessage).toHaveBeenCalled();
-		SettingsNotice.endProgress(notice);
-		expect(notice.hide).toHaveBeenCalled();
-		vi.useRealTimers();
+		const popoutDocument = createObsidianDocumentBoundary();
+		vi.stubGlobal('activeDocument', popoutDocument);
+
+		const progressNotice = SettingsNotice.startProgress('Task');
+		const fragment = Notice.mock.calls[0][0];
+		const root = fragment.children[0];
+		const content = root.children[1].children[0];
+
+		expect(Notice).toHaveBeenCalledWith(fragment, 0);
+		expect(root.className).toContain('metadata-auto-classifier-notice--progress');
+		expect(root.children[0].textContent).toBe('Metadata Auto Classifier');
+		expect(content.children[0].className).toBe('metadata-auto-classifier-notice-spinner');
+		expect(content.children[1].textContent).toBe('Task');
+		expect((progressNotice as any).waitingTimer).toBeDefined();
+		expect((progressNotice as any).capTimer).toBeDefined();
+
+		vi.advanceTimersByTime(15000);
+		expect(content.children[1].textContent).toBe('Task, still waiting…');
+		vi.advanceTimersByTime(105000);
+		expect((progressNotice as any).hide).toHaveBeenCalledTimes(1);
+		expect(vi.getTimerCount()).toBe(0);
 	});
 
-	test('withProgress wraps async function with progress notice', async () => {
+	test('withProgress preserves the result and cleans up its timers', async () => {
 		vi.useFakeTimers();
 		const fn = vi.fn().mockResolvedValue('done');
-		const promise = SettingsNotice.withProgress('file.md', 'tags', fn);
-		const result = await promise;
-		expect(result).toBe('done');
-		expect(fn).toHaveBeenCalled();
-		vi.runOnlyPendingTimers();
-		vi.useRealTimers();
+
+		await expect(SettingsNotice.withProgress('file.md', 'tags', fn)).resolves.toBe('done');
+
+		const progressNotice = Notice.mock.results[0].value;
+		expect(fn).toHaveBeenCalledTimes(1);
+		expect(progressNotice.hide).toHaveBeenCalledTimes(1);
+		expect(vi.getTimerCount()).toBe(0);
 	});
 
-	test('withProgress cleans up after a rejected operation without changing its rejection', async () => {
+	test('withProgress cleans up after rejection without changing its rejection', async () => {
 		vi.useFakeTimers();
 		const error = new Error('key=CANARY_KEY body=CANARY_BODY /private/CANARY_PATH');
-		const promise = SettingsNotice.withProgress('file.md', 'tags', () => Promise.reject(error));
-		const progressNotice = (Notice as any).mock.results[0].value;
 
-		await expect(promise).rejects.toBe(error);
-		expect(progressNotice.hide).toHaveBeenCalled();
-		vi.useRealTimers();
+		await expect(
+			SettingsNotice.withProgress('file.md', 'tags', () => Promise.reject(error))
+		).rejects.toBe(error);
+
+		const progressNotice = Notice.mock.results[0].value;
+		expect(progressNotice.hide).toHaveBeenCalledTimes(1);
+		expect(vi.getTimerCount()).toBe(0);
 	});
 
-	test('plugin notices use the active document and ButtonComponent actions', () => {
+	test('plugin notices render the manifest name and an accessible inline mute action', () => {
 		const popoutDocument = createObsidianDocumentBoundary();
 		const primaryDocument = createObsidianDocumentBoundary();
 		vi.stubGlobal('activeDocument', popoutDocument);
@@ -197,39 +238,63 @@ describe('Notice', () => {
 		const pluginNotices = new PluginNotices(
 			{ settings: {}, saveSettings: vi.fn() },
 			{ 'notice-id': { template: 'A fixed notice.' } },
-			'CANARY_PREFIX'
+			'Metadata Auto Classifier'
 		);
 
 		const notice = pluginNotices.show(
 			'notice-id',
 			{},
-			{
-				timeout: 0,
-				button: { text: 'Retry', callback: action },
-			}
+			{ timeout: 0, button: { text: 'Retry', callback: action } }
 		);
 
 		expect(popoutDocument.createDocumentFragment).toHaveBeenCalledTimes(1);
 		expect(primaryDocument.createDocumentFragment).not.toHaveBeenCalled();
-		const fragment = (Notice as any).mock.calls[0][0];
-		expect(fragment.ownerDocument).toBe(popoutDocument);
-		expect(fragment.children[0].className).toBe('plugin-notice');
-		expect(fragment.children[0].children[0].textContent).toBe('[CANARY_PREFIX]');
-		expect(fragment.children[0].children[1].textContent).toBe('A fixed notice.');
+		const fragment = Notice.mock.calls[0][0];
+		const root = fragment.children[0];
+		const row = root.children[1];
+		const muteButton = row.children[1];
+		const actionButton = root.children[2].children[0];
 
-		const [actionButton, muteButton] = buttonComponents.instances.map(
-			(component) => component.buttonEl
-		);
-		expect(actionButton.ownerDocument).toBe(popoutDocument);
-		expect(actionButton.className).toBe('plugin-notice-btn');
+		expect(fragment.ownerDocument).toBe(popoutDocument);
+		expect(root.className).toBe('metadata-auto-classifier-notice');
+		expect(root.children[0].textContent).toBe('Metadata Auto Classifier');
+		expect(row.children[0].textContent).toBe('A fixed notice.');
+		expect(muteButton.tagName).toBe('button');
+		expect(muteButton.className).toBe('metadata-auto-classifier-notice-mute');
+		expect(muteButton.type).toBe('button');
+		expect(muteButton.icon).toBe('bell-off');
+		expect(muteButton.tooltip).toBe('Mute this notice');
+		expect(muteButton.attributes['aria-label']).toBe('Mute notice: notice-id');
+		expect(actionButton.className).toBe('metadata-auto-classifier-notice-action');
 		expect(actionButton.textContent).toBe('Retry');
 		expect(actionButton.type).toBe('button');
-		expect(muteButton.className).toBe('plugin-notice-btn plugin-notice-btn--mute');
-		expect(muteButton.icon).toBe('bell-off');
-		expect(muteButton.attributes['aria-label']).toBe('Mute notice: notice-id');
+		expect(obsidianMocks.setIcon).toHaveBeenCalledWith(muteButton, 'bell-off');
+		expect(obsidianMocks.setTooltip).toHaveBeenCalledWith(muteButton, 'Mute this notice');
 
-		actionButton.click();
+		const stopPropagation = actionButton.click();
 		expect(action).toHaveBeenCalledTimes(1);
+		expect(stopPropagation).toHaveBeenCalledTimes(1);
+		expect((notice as any).hide).toHaveBeenCalledTimes(1);
+	});
+
+	test('plugin action cleanup runs even when its callback throws', () => {
+		const popoutDocument = createObsidianDocumentBoundary();
+		vi.stubGlobal('activeDocument', popoutDocument);
+		const pluginNotices = new PluginNotices(
+			{ settings: {}, saveSettings: vi.fn() },
+			{ 'notice-id': { template: 'A fixed notice.' } },
+			'Metadata Auto Classifier'
+		);
+		const callback = vi.fn(() => {
+			throw new Error('callback failed');
+		});
+		const notice = pluginNotices.show('notice-id', {}, {
+			timeout: 0,
+			button: { text: 'Retry', callback },
+		});
+		const actionButton = Notice.mock.calls[0][0].children[0].children[2].children[0];
+
+		expect(() => actionButton.click()).toThrow('callback failed');
 		expect((notice as any).hide).toHaveBeenCalledTimes(1);
 	});
 
@@ -240,17 +305,66 @@ describe('Notice', () => {
 		const settings: Record<string, unknown> = {};
 		const popoutDocument = createObsidianDocumentBoundary();
 		vi.stubGlobal('activeDocument', popoutDocument);
-		const pluginNotices = new PluginNotices({ settings, saveSettings }, {}, 'CANARY_PREFIX');
-		pluginNotices.show('notice-id', {}, { timeout: 0 });
-		const muteButton = buttonComponents.instances[0].buttonEl;
+		const pluginNotices = new PluginNotices(
+			{ settings, saveSettings },
+			{},
+			'Metadata Auto Classifier'
+		);
+		const notice = pluginNotices.show('notice-id', {}, { timeout: 0 });
+		const muteButton = Notice.mock.calls[0][0].children[0].children[1].children[1];
 
 		muteButton.click();
 		await vi.waitFor(() => expect(log).toHaveBeenCalledWith('[MAC] Failed to mute notice.'));
 
 		expect(pluginNotices.isMuted('notice-id')).toBe(true);
 		expect(pluginNotices.listMuted()).toEqual(['notice-id']);
+		expect(saveSettings).toHaveBeenCalledTimes(1);
+		expect((notice as any).hide).not.toHaveBeenCalled();
+		expect(Notice).toHaveBeenCalledTimes(1);
 		expect(log).toHaveBeenCalledWith('[MAC] Failed to mute notice.');
 		expect(JSON.stringify(log.mock.calls)).not.toContain(canary);
-		expect(JSON.stringify(log.mock.calls)).not.toContain('CANARY_PREFIX');
+		expect(JSON.stringify(log.mock.calls)).not.toContain('Metadata Auto Classifier');
+	});
+
+	test('notice-muted action opens settings and immutable notice has no mute control', () => {
+		const popoutDocument = createObsidianDocumentBoundary();
+		vi.stubGlobal('activeDocument', popoutDocument);
+		const openSettings = vi.fn();
+		const pluginNotices = new PluginNotices(
+			{ settings: {}, saveSettings: vi.fn(), openSettings },
+			{},
+			'Metadata Auto Classifier'
+		);
+
+		const notice = pluginNotices.show('notice_muted');
+		const fragment = Notice.mock.calls[0][0];
+		const root = fragment.children[0];
+		const row = root.children[1];
+		const actionButton = root.children[2].children[0];
+
+		expect(row.children).toHaveLength(1);
+		expect(root.children[0].textContent).toBe('Metadata Auto Classifier');
+		expect(row.children[0].textContent).toBe('Notice muted. Reset it in settings.');
+		expect(actionButton.textContent).toBe('Open settings');
+		actionButton.click();
+		expect(openSettings).toHaveBeenCalledTimes(1);
+		expect((notice as any).hide).toHaveBeenCalledTimes(1);
+	});
+
+	test('repeated plugin notices are freshly re-announced', () => {
+		const popoutDocument = createObsidianDocumentBoundary();
+		vi.stubGlobal('activeDocument', popoutDocument);
+		const pluginNotices = new PluginNotices(
+			{ settings: {}, saveSettings: vi.fn() },
+			{ 'notice-id': { template: 'A fixed notice.' } },
+			'Metadata Auto Classifier'
+		);
+
+		const first = pluginNotices.show('notice-id');
+		const second = pluginNotices.show('notice-id');
+
+		expect(second).not.toBe(first);
+		expect((first as any).hide).toHaveBeenCalledTimes(1);
+		expect(Notice).toHaveBeenCalledTimes(2);
 	});
 });

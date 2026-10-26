@@ -1,3 +1,5 @@
+import { replaceFrontmatterById } from '../../utils/lib-utils';
+import { confirmAction } from './modals/ConfirmModal';
 import type { FrontmatterActions, FrontmatterField, SettingsComponentOptions } from '../../types';
 import { BaseSettingsComponent } from './components/BaseSettings';
 
@@ -25,6 +27,12 @@ export class Frontmatter extends BaseSettingsComponent {
 
 	private handleEdit(frontmatterSetting: FrontmatterField): void {
 		this.openEditModal(frontmatterSetting, async (updatedFrontmatter) => {
+			// The modal edits a clone, so write it back by id
+			this.plugin.settings.frontmatter = replaceFrontmatterById(
+				this.plugin.settings.frontmatter,
+				updatedFrontmatter
+			);
+
 			// Register command for the updated frontmatter
 			this.plugin.registerCommand(
 				updatedFrontmatter.name,
@@ -37,9 +45,10 @@ export class Frontmatter extends BaseSettingsComponent {
 	}
 
 	private async handleDelete(frontmatterSetting: FrontmatterField): Promise<void> {
-		// eslint-disable-next-line no-alert -- confirm() is used intentionally for destructive action; modal refactor is out of scope
-		const confirmed = confirm(
-			`Are you sure you want to delete "${frontmatterSetting.name}" frontmatter?`
+		const confirmed = await confirmAction(
+			this.plugin.app,
+			`Delete "${frontmatterSetting.name}"?`,
+			'Delete'
 		);
 		if (!confirmed) {
 			return;

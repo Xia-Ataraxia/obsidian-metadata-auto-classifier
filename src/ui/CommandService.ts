@@ -20,10 +20,12 @@ export class CommandService {
 		});
 
 		// Register "fetch all" command
-		this.registerCommand(
-			'Fetch all frontmatter using current provider',
-			async () => await this.handler.processAllFrontmatter()
-		);
+		// The id predates the rename and must stay stable for user hotkeys.
+		this.plugin.addCommand({
+			id: 'fetch-frontmatter-Fetch all frontmatter using current provider',
+			name: 'Fetch all frontmatter',
+			callback: async () => await this.handler.processAllFrontmatter(),
+		});
 	}
 
 	registerCommand(name: string, callback: () => Promise<void>): void {

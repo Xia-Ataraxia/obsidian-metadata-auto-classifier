@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
 	generate: vi.fn(),
 }));
 
+vi.mock('obsidian');
+
 vi.mock('../../src/ui/JevClassifier', () => ({
 	JevClassifier: class {
 		classify(...args: unknown[]) {
@@ -46,10 +48,10 @@ function makeField(overrides: Partial<FrontmatterField> = {}): FrontmatterField 
 function makeProvider(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
 	return {
 		name: 'Test provider',
-		apiKey: 'provider-secret',
 		baseUrl: 'https://provider.invalid',
 		models: [{ id: 'model-1', name: 'Model 1' }],
 		temperature: 0.2,
+		auth: { type: 'apiKey', apiKey: 'provider-secret' },
 		...overrides,
 	};
 }
@@ -142,7 +144,7 @@ describe('ClassificationService', () => {
 
 	it.each(['Ollama', 'LM Studio'])('allows documented keyless %s generation', async (name) => {
 		settings.frontmatter = [makeField({ name: 'tags', refs: [], generateNewTags: true })];
-		settings.providers = [makeProvider({ name, apiKey: '' })];
+		settings.providers = [makeProvider({ name, auth: { type: 'apiKey', apiKey: '' } })];
 		settings.selectedProvider = name;
 		settings.selectedModel = 'model-1';
 		await service.classify(file, 9);
@@ -225,12 +227,12 @@ describe('ClassificationService', () => {
 		const first = makeProvider({
 			name: 'Duplicate provider',
 			baseUrl: 'https://first.invalid',
-			apiKey: 'first-profile-key',
+			auth: { type: 'apiKey', apiKey: 'first-profile-key' },
 		});
 		const second = makeProvider({
 			name: 'Duplicate provider',
 			baseUrl: 'https://second.invalid',
-			apiKey: 'second-profile-key',
+			auth: { type: 'apiKey', apiKey: 'second-profile-key' },
 		});
 		settings.providers = [first, second];
 		settings.selectedProvider = 'Duplicate provider';
@@ -245,12 +247,12 @@ describe('ClassificationService', () => {
 		expect(first).toMatchObject({
 			name: 'Duplicate provider',
 			baseUrl: 'https://first.invalid',
-			apiKey: 'first-profile-key',
+			auth: { type: 'apiKey', apiKey: 'first-profile-key' },
 		});
 		expect(second).toMatchObject({
 			name: 'Duplicate provider',
 			baseUrl: 'https://second.invalid',
-			apiKey: 'second-profile-key',
+			auth: { type: 'apiKey', apiKey: 'second-profile-key' },
 		});
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'New tags could not be generated safely. No changes were made.',
@@ -696,14 +698,14 @@ describe('ClassificationService', () => {
 		settings.selectedProvider = 'Test provider';
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockImplementation(async (input: { assertCurrent: () => void }) => {
-			settings.providers[0].apiKey = 'user-replaced-key';
+			settings.providers[0].auth = { type: 'apiKey', apiKey: 'user-replaced-key' };
 			input.assertCurrent();
 			return ['fresh-tag'];
 		});
 
 		await service.classify(file, 9);
 
-		expect(settings.providers[0].apiKey).toBe('user-replaced-key');
+		expect(settings.providers[0].auth).toEqual({ type: 'apiKey', apiKey: 'user-replaced-key' });
 		expect((app.vault as any).process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
@@ -721,7 +723,6 @@ describe('ClassificationService', () => {
 		settings.providers = [
 			makeProvider({
 				name: PROVIDER_NAMES.CODEX,
-				apiKey: '',
 				auth: { type: 'oauth', oauth: tokens },
 			}),
 		];

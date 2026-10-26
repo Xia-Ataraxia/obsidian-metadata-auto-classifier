@@ -80,7 +80,7 @@ export const DEFAULT_TAG_SETTING: FrontmatterField = {
 	refs: [],
 	count: { min: 1, max: 5 },
 	overwrite: false,
-	linkType: 'Normal' as LinkType,
+	linkType: 'Normal',
 	customQuery: '',
 	generateNewTags: false,
 };
@@ -97,7 +97,7 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 	},
 	// Error notices
 	init_failed: {
-		template: 'Plugin initialization failed: could not setup commands',
+		template: 'Could not set up commands. Reload the plugin to try again.',
 		timeout: 5000,
 	},
 	no_active_file: {
@@ -105,39 +105,44 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 		timeout: 5000,
 	},
 	no_provider_selected: {
-		template: 'No provider selected.',
+		template: 'No provider selected. Select one in settings.',
 		timeout: 5000,
+		action: 'open-settings',
 	},
 	no_frontmatter_setting: {
-		template: 'No setting found for frontmatter ID {{id}}.',
+		template: 'This frontmatter no longer exists. Check your frontmatter list in settings.',
 		timeout: 5000,
+		action: 'open-settings',
 	},
 	validation_error: {
-		template: '[{{component}}] {{message}}',
+		template: '{{message}}',
 		timeout: 5000,
 		immutable: true,
 	},
 	api_error: {
-		template: '❌ {{message}}',
+		template: '{{message}}',
 		timeout: 5000,
 	},
 	no_refs: {
 		template:
-			'Tagging {{file}} ({{frontmatter}}) - No reference values found. Please add some reference tags/categories in the plugin settings.',
+			'{{frontmatter}} has no reference values to choose from. Add some in settings.',
 		timeout: 5000,
+		action: 'open-settings',
 	},
 	no_auth: {
 		template: '{{message}}',
 		timeout: 5000,
 	},
 	no_model: {
-		template: 'No model selected. Please select a model in the plugin settings.',
+		template: 'No model selected. Select one in settings.',
 		timeout: 5000,
+		action: 'open-settings',
 	},
 	model_not_for_provider: {
 		template:
-			'Model "{{model}}" is not available for provider {{provider}}. Please select a valid model in settings.',
+			'{{model}} is not available for {{provider}}. Select another model in settings.',
 		timeout: 5000,
+		action: 'open-settings',
 	},
 	// Success notices
 	classify_success: {
@@ -147,41 +152,37 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 	},
 	// Auth notices
 	oauth_opening_browser: {
-		template: 'Opening browser for authentication...',
+		template: 'Opening your browser to sign in…',
 		timeout: 3000,
 		immutable: true,
 	},
 	oauth_connected: {
-		template: 'Successfully connected!',
+		template: 'Connected.',
 		timeout: 3000,
 		immutable: true,
 	},
 	oauth_cancelled: {
-		template: 'Authentication cancelled',
+		template: 'Sign-in cancelled.',
 		timeout: 3000,
 		immutable: true,
 	},
 	oauth_failed: {
-		template: 'Failed to connect: {{message}}',
+		template: 'Could not connect. {{message}}',
 		timeout: 5000,
 	},
 	oauth_disconnected: {
-		template: 'Disconnected',
+		template: 'Disconnected.',
 		timeout: 3000,
 		immutable: true,
 	},
 	// Model section
 	model_test_success: {
-		template: '{{name}} connection test successful!',
+		template: '{{name}} is connected.',
 		timeout: 3000,
 		immutable: true,
 	},
-	model_test_failed: {
-		template: '{{name}} connection test failed!',
-		timeout: 5000,
-	},
 	model_test_error: {
-		template: '❌ {{message}}',
+		template: 'Test failed for {{name}}. {{message}}',
 		timeout: 5000,
 	},
 };

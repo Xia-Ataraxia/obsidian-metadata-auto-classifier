@@ -2,15 +2,16 @@ import { PROVIDER_NAMES } from '../../src/utils/lib-utils';
 import type { ProviderConfig } from '../../src/types';
 import { TAG_GENERATION_SCHEMA } from '../../src/domain/constants';
 import { copyProvider, providerHasAuth } from '../../src/domain/classification-state';
-import { HttpError, sendRequest } from '../../src/ui/request';
+import { sendRequest } from '../../src/ui/request';
+import { HttpError } from '../../src/ui/request-control';
 import { sendStreamingRequest } from '../../src/ui/streaming-request';
 import { UnifiedProvider } from '../../src/ui/UnifiedProvider';
 import { CODEX_OAUTH } from '../../src/domain/auth/oauth-constants';
 import { CodexOAuth } from '../../src/ui/auth/oauth';
 
-vi.mock('../../src/ui/request', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('../../src/ui/request')>();
-	return { ...actual, sendRequest: vi.fn() };
+vi.mock('../../src/ui/request', async () => {
+	const { HttpError } = await import('../../src/ui/request-control');
+	return { HttpError, sendRequest: vi.fn() };
 });
 
 vi.mock('../../src/ui/streaming-request', () => ({
@@ -346,6 +347,50 @@ describe('UnifiedProvider generated-tags contract', () => {
 			provider.callAPI('system', 'prompt', config('Unsupported secret name'), 'model')
 		).rejects.toThrow('Unsupported provider');
 		expect(mockSendRequest).not.toHaveBeenCalled();
+	});
+
+	it('rejects cancelled, expired, and stale requests before dispatch', async () => {
+		const controller = new AbortController();
+		controller.abort();
+		await expect(
+			provider.callAPI(
+				'system',
+				'prompt',
+				config(PROVIDER_NAMES.OPENAI),
+				'model',
+				undefined,
+				undefined,
+				{ deadline, signal: controller.signal }
+			)
+		).rejects.toMatchObject({ code: 'CANCELLED' });
+
+		await expect(
+			provider.callAPI(
+				'system',
+				'prompt',
+				config(PROVIDER_NAMES.OPENAI),
+				'model',
+				undefined,
+				undefined,
+				{ deadline: Date.now() - 1 }
+			)
+		).rejects.toMatchObject({ code: 'TIMEOUT' });
+
+		const staleOperation = new Error('Operation is no longer current');
+		await expect(
+			provider.callAPI(
+				'system',
+				'prompt',
+				config(PROVIDER_NAMES.OPENAI),
+				'model',
+				undefined,
+				undefined,
+				{ deadline, assertCurrent: () => { throw staleOperation; } }
+			)
+		).rejects.toBe(staleOperation);
+
+		expect(mockSendRequest).not.toHaveBeenCalled();
+		expect(mockSendStreamingRequest).not.toHaveBeenCalled();
 	});
 
 	it('rejects legacy schemas and extra fields without echoing response data', () => {

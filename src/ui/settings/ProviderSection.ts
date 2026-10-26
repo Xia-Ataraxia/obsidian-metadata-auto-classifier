@@ -1,9 +1,11 @@
-import type { App } from 'obsidian';
+import { confirmAction } from './modals/ConfirmModal';
+import { Setting as ObsidianSetting, type App } from 'obsidian';
 
 import type AutoClassifierPlugin from '../../main';
-import { copyProvider, sameProvider } from '../../domain/classification-state';
+import { copyProvider, providerHasAuth, sameProvider } from '../../domain/classification-state';
 import type { ProviderConfig } from '../../types';
 import { formatTokenExpiry, isTokenExpired } from '../auth';
+import { findUniqueProvider } from '../../utils/lib-utils';
 import { Setting } from './components/Setting';
 import { ProviderModal } from './modals/ProviderModal';
 
@@ -18,19 +20,29 @@ export class ProviderSection {
 	 * Get display name with OAuth status for a provider
 	 */
 	private getProviderDisplayInfo(provider: ProviderConfig): { name: string; desc: string } {
-		if (provider.authType === 'oauth' || provider.oauth) {
-			const isConnected = provider.oauth && !isTokenExpired(provider.oauth);
+		const authType =
+			provider.auth !== undefined
+				? provider.auth.type
+				: (provider.authType ?? (provider.oauth ? 'oauth' : undefined));
+		if (authType === 'oauth') {
+			const oauthTokens =
+				provider.auth !== undefined
+					? provider.auth.type === 'oauth'
+						? provider.auth.oauth
+						: undefined
+					: provider.oauth;
+			const isConnected = oauthTokens && !isTokenExpired(oauthTokens);
 			const status = isConnected
-				? `OAuth Connected (${formatTokenExpiry(provider.oauth!)})`
-				: 'OAuth Not Connected';
+				? `Signed in · ${formatTokenExpiry(oauthTokens!)}`
+				: 'Not signed in';
 			return { name: provider.name, desc: status };
 		}
-		return { name: provider.name, desc: '' };
+		return { name: provider.name, desc: providerHasAuth(provider) ? 'Connected' : 'No API key' };
 	}
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[]): void {
-		const providerSection = containerEl.createEl('div', { cls: 'provider-section' });
-		providerSection.createEl('h3', { text: 'Providers' });
+		const providerSection = containerEl.createDiv({ cls: 'provider-section' });
+		new ObsidianSetting(providerSection).setName('Providers').setHeading();
 
 		providers.forEach((provider) => {
 			const displayInfo = this.getProviderDisplayInfo(provider);
@@ -47,13 +59,15 @@ export class ProviderSection {
 						icon: 'trash',
 						text: 'Delete',
 						onClick: async () => {
-							// eslint-disable-next-line no-alert -- confirm() used intentionally for destructive action
-							const confirmed = confirm(
-								`Are you sure you want to delete "${provider.name}" provider?`
+							const confirmed = await confirmAction(
+								this.app,
+								`Delete "${provider.name}"?`,
+								'Delete'
 							);
-							if (!confirmed) return;
+							if (!confirmed || !this.plugin.isActive()) return;
 
 							const providers = this.plugin.settings.providers;
+							if (findUniqueProvider(providers, provider.name) !== provider) return;
 							const selectedProvider = this.plugin.settings.selectedProvider;
 							const selectedModel = this.plugin.settings.selectedModel;
 							const removedSnapshot = copyProvider(provider);
@@ -98,6 +112,7 @@ export class ProviderSection {
 								}
 								throw error;
 							}
+							if (!this.plugin.isActive()) return;
 							this.onRefresh();
 						},
 					},
@@ -139,6 +154,7 @@ export class ProviderSection {
 					const index = providers.indexOf(previousTarget);
 					if (
 						index === -1 ||
+						findUniqueProvider(providers, previousTarget.name) !== previousTarget ||
 						providers.filter((provider) => provider === previousTarget).length !== 1 ||
 						!previousTargetBaseline ||
 						!sameProvider(previousTarget, previousTargetBaseline)

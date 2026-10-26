@@ -1,10 +1,10 @@
 import type { App } from 'obsidian';
-import { ButtonComponent, Modal } from 'obsidian';
+import { ButtonComponent, Modal, Setting } from 'obsidian';
 
+import { isDuplicateModel } from '../../../domain/model-list';
 import { getProviderPresets } from '../../../utils/lib-utils';
 import type { Model, ProviderConfig, ProviderPreset } from '../../../types';
 import { ModalAccessibilityHelper } from '../components/ModalAccessibilityHelper';
-import { Notice } from '../components/Notice';
 import type { PluginNotices } from '../../plugin-notices';
 import type { DropdownOption } from '../components/Setting';
 import { Setting as CommonSetting } from '../components/Setting';
@@ -29,6 +29,7 @@ export class ModelModal extends Modal {
 	private selectedProvider: string = '';
 	private modelName: string = '';
 	private modelId: string = '';
+	private idErrorEl: HTMLElement | null = null;
 
 	constructor(app: App, props: ModelModalProps) {
 		super(app);
@@ -54,11 +55,10 @@ export class ModelModal extends Modal {
 		// Accessibility: Set modal role and label
 		contentEl.setAttribute('role', 'dialog');
 		contentEl.setAttribute('aria-modal', 'true');
-		const title = this.props.editTarget ? 'Edit Model' : 'Add Model';
+		const title = this.props.editTarget ? 'Edit model' : 'Add model';
 		contentEl.setAttribute('aria-label', title);
 
-		// Modal title
-		contentEl.createEl('h2', { text: title });
+		this.setTitle(title);
 
 		// Provider selection
 		this.addProviderSetting(contentEl);
@@ -97,14 +97,15 @@ export class ModelModal extends Modal {
 				onChange: (value) => {
 					this.selectedProvider = value;
 					this.updatePopularModels();
+					this.updateDuplicateError();
 				},
 			},
 		});
 	}
 
 	private addPopularModelsSection(containerEl: HTMLElement): void {
-		const popularSection = containerEl.createEl('div', { cls: 'popular-models-section' });
-		popularSection.createEl('h3', { text: 'Popular models' });
+		const popularSection = containerEl.createDiv({ cls: 'popular-models-section' });
+		new Setting(popularSection).setName('Popular models').setHeading();
 		popularSection.createEl('p', {
 			text: 'Choose from commonly used models or enter custom model details.',
 			cls: 'setting-item-description',
@@ -127,7 +128,7 @@ export class ModelModal extends Modal {
 			providerData = presets.find((preset) => preset.name === this.selectedProvider) || null;
 		}
 
-		const modelsContainer = containerEl.createEl('div', {
+		const modelsContainer = containerEl.createDiv({
 			cls: 'popular-models-container mac-grid-container',
 		});
 
@@ -152,7 +153,7 @@ export class ModelModal extends Modal {
 					}
 				});
 
-				modelOption.createEl('span', { text: model.name });
+				modelOption.createSpan({ text: model.name });
 			});
 		}
 
@@ -175,7 +176,8 @@ export class ModelModal extends Modal {
 				this.updateRadioSelection();
 			}
 		});
-		customOption.createEl('span', { text: 'Custom model' });
+		customOption.createSpan({ text: 'Custom model' });
+		this.syncRadioWithInputs();
 	}
 
 	private updateRadioSelection(): void {
@@ -222,9 +224,32 @@ export class ModelModal extends Modal {
 					this.modelId = value;
 					// When user types, update radio selection
 					this.syncRadioWithInputs();
+					this.updateDuplicateError();
 				},
 			},
 		});
+
+		const idDesc = formContainer.querySelector('.setting-item:last-child .setting-item-description');
+		this.idErrorEl =
+			(idDesc as HTMLElement | null)?.createDiv({
+				cls: 'mac-field-error',
+				attr: { 'aria-live': 'polite' },
+			}) ?? null;
+		this.updateDuplicateError();
+	}
+
+	private updateDuplicateError(): boolean {
+		const duplicate = isDuplicateModel(
+			this.props.providers,
+			this.selectedProvider,
+			this.modelId.trim(),
+			this.props.editTarget
+		);
+		this.idErrorEl?.setText(duplicate ? `${this.selectedProvider} already has this model.` : '');
+		this.contentEl
+			.querySelector('input[placeholder="Enter model ID"]')
+			?.toggleAttribute('aria-invalid', duplicate);
+		return duplicate;
 	}
 
 	/**
@@ -283,6 +308,7 @@ export class ModelModal extends Modal {
 		if (modelIdInput) {
 			modelIdInput.value = this.modelId;
 		}
+		this.updateDuplicateError();
 	}
 
 	private addButtons(containerEl: HTMLElement): void {
@@ -290,37 +316,29 @@ export class ModelModal extends Modal {
 
 		new ButtonComponent(buttonContainer).setButtonText('Cancel').onClick(() => this.close());
 
-		const saveBtn = new ButtonComponent(buttonContainer)
+		new ButtonComponent(buttonContainer)
 			.setButtonText('Save')
 			.setCta()
 			.onClick(() => {
-				const notice = Notice.startProgress('Saving model...');
-				saveBtn.setDisabled(true);
-				try {
-					if (this.validateForm()) {
-						const model: Model = {
-							id: this.modelId,
-							name: this.modelName,
-						};
+				if (!this.validateForm()) return;
+				const model: Model = {
+					id: this.modelId,
+					name: this.modelName,
+				};
 
-						// Use callback to handle business logic
-						void this.props.onSave({
-							provider: this.selectedProvider,
-							model: model,
-							isEdit: !!this.props.editTarget,
-							oldModel: this.props.editTarget
-								? {
-										model: this.props.editTarget.model,
-										provider: this.props.editTarget.provider,
-									}
-								: undefined,
-						});
-						this.close();
-					}
-				} finally {
-					Notice.endProgress(notice);
-					saveBtn.setDisabled(false);
-				}
+				// Use callback to handle business logic
+				void this.props.onSave({
+					provider: this.selectedProvider,
+					model: model,
+					isEdit: !!this.props.editTarget,
+					oldModel: this.props.editTarget
+						? {
+								model: this.props.editTarget.model,
+								provider: this.props.editTarget.provider,
+							}
+						: undefined,
+				});
+				this.close();
 			});
 	}
 
@@ -335,7 +353,7 @@ export class ModelModal extends Modal {
 		if (!this.selectedProvider) {
 			this.props.notices.show('validation_error', {
 				component: 'Model',
-				message: 'Provider is required',
+				message: 'Select a provider.',
 			});
 			return false;
 		}
@@ -343,7 +361,7 @@ export class ModelModal extends Modal {
 		if (!this.modelId.trim()) {
 			this.props.notices.show('validation_error', {
 				component: 'Model',
-				message: 'Model ID is required',
+				message: 'Enter a model ID.',
 			});
 			return false;
 		}
@@ -351,8 +369,15 @@ export class ModelModal extends Modal {
 		if (!this.modelName.trim()) {
 			this.props.notices.show('validation_error', {
 				component: 'Model',
-				message: 'Display name is required',
+				message: 'Enter a display name.',
 			});
+			return false;
+		}
+
+		if (this.updateDuplicateError()) {
+			// Re-announce the inline error on every blocked Save.
+			this.contentEl.querySelector<HTMLInputElement>('input[placeholder="Enter model ID"]')?.focus();
+			this.idErrorEl?.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 320, easing: 'ease-out' });
 			return false;
 		}
 

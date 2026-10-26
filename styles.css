@@ -2,113 +2,231 @@
 
 /* Grid Container for Popular Models */
 .mac-grid-container {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-	gap: 8px;
-	margin-top: 10px;
-	margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(calc(var(--size-4-12) * 4), 1fr));
+    gap: var(--size-4-2);
+    margin-top: var(--size-4-2);
+    margin-bottom: var(--size-4-5);
 }
 
 /* Model Option (Radio Button) */
 .mac-model-option {
-	display: flex;
-	align-items: center;
-	padding: 8px 12px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 4px;
-	cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: var(--size-4-2) var(--size-4-3);
+    border: var(--border-width) solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    cursor: pointer;
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        color 150ms ease,
+        transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
 }
 
-.mac-model-option input[type='radio'] {
-	margin-right: 8px;
+.mac-model-option:hover {
+    background-color: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+}
+
+.mac-model-option:active {
+    transform: scale(0.97);
+    transition-duration: 60ms;
+}
+
+.mac-model-option input[type="radio"] {
+    margin-right: var(--size-4-2);
 }
 
 .mac-model-option.selected {
-	background-color: var(--interactive-accent);
-	color: var(--text-on-accent);
-	border-color: var(--interactive-accent);
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+    animation: mac-select-pop 220ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+@keyframes mac-select-pop {
+    from { transform: scale(0.96); }
+}
+
+@keyframes mac-select-fade {
+    from { opacity: 0.6; }
+}
+
+/* Reduced motion keeps the feedback as a soft fade instead of a scale pop. */
+@media (prefers-reduced-motion: reduce) {
+    .mac-model-option:active {
+        transform: none;
+        opacity: 0.8;
+    }
+
+    .mac-model-option.selected {
+        animation: mac-select-fade 220ms ease-out;
+    }
+}
+
+/* Inline field validation */
+.mac-field-error {
+    color: var(--text-error);
+    margin-top: var(--size-4-1);
+    animation: mac-fade-in 160ms ease-out;
+}
+
+.mac-field-error:empty {
+    display: none;
+}
+
+@keyframes mac-fade-in {
+    from { opacity: 0; }
 }
 
 /* Button Container for Modals */
 .mac-button-container {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
-	margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--size-4-2);
+    margin-top: var(--size-4-5);
 }
 
 /* Custom Prompt Container */
 .mac-custom-prompt-container {
-	width: 100%;
-	margin-top: 8px;
-	margin-bottom: 16px;
+    width: 100%;
+    margin-top: var(--size-4-2);
+    margin-bottom: var(--size-4-4);
 }
 
 .mac-classification-rule-textarea {
 	width: 100%;
 }
 
-/* Provider/Model Section Headings */
-.mac-section-heading {
-	margin-top: 16px;
-	margin-bottom: 8px;
-}
-
 /* API Key Link Styling */
 .mac-api-key-link {
-	color: var(--interactive-accent);
-	margin-left: 4px;
+    color: var(--interactive-accent);
+    margin-left: var(--size-4-1);
 }
 
 /* Plugin notice styles */
-.plugin-notice {
+.metadata-auto-classifier-notice {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
-	min-width: 260px;
+	gap: var(--size-4-1);
 	color: inherit;
 }
 
-.plugin-notice-head {
-	margin: 0;
-	font-size: var(--font-smallest, 11px);
-	font-weight: 600;
-	color: inherit;
-	opacity: 0.6;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
+.metadata-auto-classifier-notice-row {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--size-4-2);
 }
 
-.plugin-notice-content {
+.metadata-auto-classifier-notice-head {
 	margin: 0;
-	font-size: var(--font-ui-small, 13px);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: inherit;
+	opacity: 0.7;
+}
+
+.metadata-auto-classifier-notice-content {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
+	font-size: var(--font-ui-small);
 	color: inherit;
 	white-space: pre-wrap;
 }
 
-.plugin-notice-actions {
+.metadata-auto-classifier-notice-actions {
 	display: flex;
-	align-items: center;
-	gap: 6px;
+	margin-top: var(--size-4-1);
 }
 
-.plugin-notice-btn {
-	border-radius: var(--radius-s, 6px);
-	font-size: var(--font-smallest, 11px);
-	padding: 2px 8px;
+.notice .metadata-auto-classifier-notice-action {
+	height: auto;
+	padding: var(--size-4-1) var(--size-4-3);
+	border: none;
+	border-radius: var(--radius-s);
+	background: color-mix(in srgb, currentColor 16%, transparent);
+	box-shadow: none;
+	color: inherit;
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
 	cursor: pointer;
+	transition: background-color 120ms ease-out;
 }
 
-.plugin-notice-btn--mute {
+.notice .metadata-auto-classifier-notice-action:hover {
+	background: color-mix(in srgb, currentColor 26%, transparent);
+}
+
+.notice .metadata-auto-classifier-notice-mute {
 	display: inline-flex;
+	flex: 0 0 auto;
 	align-items: center;
 	justify-content: center;
-	width: 24px;
-	height: 24px;
+	width: var(--size-4-6);
+	height: var(--size-4-6);
+	/* Centre the bell on the first message line. */
+	margin-block: calc((var(--font-ui-small) * var(--line-height-normal) - var(--size-4-6)) / 2);
 	padding: 0;
+	border: none;
+	border-radius: var(--radius-s);
+	background: transparent;
+	box-shadow: none;
+	color: inherit;
+	opacity: 0.8;
+	cursor: pointer;
+	transition: opacity 120ms ease-out, background-color 120ms ease-out;
+	--icon-size: var(--icon-xs);
 }
 
-.plugin-notice-btn--mute svg {
-	width: 14px;
-	height: 14px;
+.notice .metadata-auto-classifier-notice-mute:hover,
+.notice .metadata-auto-classifier-notice-mute:focus-visible {
+	background: color-mix(in srgb, currentColor 14%, transparent);
+	opacity: 1;
+}
+
+.metadata-auto-classifier-notice--progress .metadata-auto-classifier-notice-content {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.metadata-auto-classifier-notice-spinner {
+	flex: 0 0 auto;
+	width: var(--size-4-3);
+	height: var(--size-4-3);
+	border: var(--border-width) solid color-mix(in srgb, currentColor 30%, transparent);
+	border-top-color: currentColor;
+	border-radius: 50%;
+	animation: metadata-auto-classifier-spin 800ms linear infinite;
+}
+
+@keyframes metadata-auto-classifier-spin {
+	to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.metadata-auto-classifier-notice-spinner {
+		animation: metadata-auto-classifier-pulse 1600ms ease-in-out infinite alternate;
+	}
+}
+
+@keyframes metadata-auto-classifier-pulse {
+	from { opacity: 0.35; }
+}
+
+
+.mac-setting-mount {
+	flex: 1 1 100%;
+}
+
+.mac-full-width {
+	width: 100%;
+}
+
+.oauth-connection-info {
+	margin-top: calc(-1 * var(--size-4-2));
+	margin-bottom: var(--size-4-4);
+	color: var(--text-muted);
 }

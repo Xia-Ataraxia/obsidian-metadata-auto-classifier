@@ -1,6 +1,6 @@
 import { Platform, requestUrl } from 'obsidian';
 import type { RequestUrlResponse } from 'obsidian';
-import { HttpError } from 'provider/request';
+import { HttpError } from '../../src/ui/request';
 import { sendStreamingRequest } from '../../src/ui/streaming-request';
 import type { SSEEvent, SSEEventOutcome } from '../../src/ui/streaming-request';
 

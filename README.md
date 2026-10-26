@@ -1,135 +1,41 @@
 # Metadata Auto Classifier
 
-Metadata classification for Obsidian using Jev to select existing tags and frontmatter values. New tags can optionally be generated through a separately configured provider.
+Automatically classifies and applies metadata to your notes.
 
-> The more context you give, the more accurate the classification.
-
-## Example
-
-![Usage Example](./assets/usecase.gif)
+![The Auto Classifier settings: the classification rule, the provider editor with an empty API key field, the model list and the tags frontmatter rule. No API key is entered, so no classification result is shown.](https://raw.githubusercontent.com/Xia-Ataraxia/obsidian-metadata-auto-classifier/main/docs/assets/demo.webp)
 
 ## Features
 
-- **Candidate classification** -- Jev selects relevant existing values without inventing categories
-- **Optional new tags** -- enable generation explicitly for the exact `tags` field; disabled by default
-- **Custom frontmatter fields** -- select values from configured or collected references
-- **Classification rules** -- set custom rules, tag categories, and field-specific guidelines for accurate metadata
-- **Per-field context prompts** -- provide additional context per metadata field to guide AI classification
-- **Source-preserving writes** -- recheck concurrent changes and edit only the target YAML entry
-- **Optional generation providers** -- use OpenAI, Gemini, Ollama, or other supported providers for new tags, not ordinary candidate selection
-
-## Installation
-
-### Community Plugin (Recommended)
-
-1. Open Obsidian and navigate to **Settings > Community Plugins**
-2. Disable Safe Mode if currently enabled
-3. Click **Browse** and search for "Metadata Auto Classifier"
-4. Click **Install**, then **Enable** to activate the plugin
-
-### Manual Installation (Beta)
-
-Using [BRAT](https://github.com/TfTHacker/obsidian42-brat):
-
-1. Install BRAT from the Obsidian Community Plugins browser
-2. In BRAT settings, click **Add Beta plugin**
-3. Enter the repository URL: `https://github.com/GoBeromsu/Metadata-Auto-Classifier`
-4. Click **Add Plugin** to install
-
-![BRAT Installation](./assets/brat-install.gif)
+- Generates tags and any custom frontmatter fields from the note's content.
+- Classification rules, tag categories, and per-field context prompts guide the result. The more context you give, the more accurate it is.
+- Presets for OpenAI, Anthropic, Gemini, OpenRouter, Ollama, DeepSeek, LM Studio and Codex (OAuth), plus custom providers and models.
 
 ## Usage
 
-Configure the Jev API key and model first. A generation provider is unnecessary unless **Generate new tags** is enabled and additional slots remain.
+1. Open **Settings**, **Metadata Auto Classifier**, pick a provider and model, and enter its API key (not needed for Ollama or LM Studio).
+2. Define the frontmatter fields to fill, and optionally rules and per-field prompts.
+3. Open a note and run **Fetch frontmatter: Fetch all frontmatter using current provider** from the command palette, or **Fetch frontmatter: tags** (or another field) for one field.
+4. Review the result in the note's properties.
 
-1. Open any note you want to classify
-2. Access commands via the Command Palette (Cmd/Ctrl + P):
-   - **Fetch tags using current provider** -- classify existing tags, with optional new-tag generation
-   - **Fetch all frontmatter using current provider** -- populate all custom frontmatter fields
-   - **Individual field commands** -- update specific frontmatter fields one at a time
-3. Review the resulting metadata. Uncertain results, insufficient counts, generation failures, or conflicting edits leave the note unchanged.
+## Installation
 
-## Commands
+**Community plugins**: open Settings, Community plugins, Browse, search for "Metadata Auto Classifier", then Install and Enable.
 
-| Command                                      | Description                                |
-| -------------------------------------------- | ------------------------------------------ |
-| Fetch tags using current provider            | Classify tags for the captured active note |
-| Fetch all frontmatter using current provider | Populate all configured frontmatter fields |
-| Fetch [field] using current provider         | Update a specific frontmatter field        |
+**Manual**: download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/Xia-Ataraxia/obsidian-metadata-auto-classifier/releases/latest) into `<vault>/<configDir>/plugins/metadata-auto-classifier/`, then enable the plugin. `<configDir>` is your vault's configuration folder (`.obsidian` by default).
 
-## Settings
+## Disclosures
 
-| Setting                     | Description                                                                                  |
-| --------------------------- | -------------------------------------------------------------------------------------------- |
-| Jev API key and model       | Configure candidate classification independently of generation                               |
-| Optional provider and model | Configure generation of new tags only                                                        |
-| Generate new tags           | Opt in for the exact `tags` field; ordinary fields cannot generate values                    |
-| Custom frontmatter fields   | Define candidate fields, references, count limits, append/overwrite, and WikiLink formatting |
-| Classification rules        | Set semantic guidance; existing instructions are preserved                                   |
-| Field-specific prompts      | Provide per-field context to guide AI output                                                 |
-
-Jev accepts yes probabilities at or above 0.7 and no probabilities at or below 0.3. Zero yes results with any abstention stop without generation or writing. The maximum count limits the current operation, not the total existing values in append mode. See [Classification workflow](./docs/Classification-Workflow.md) for safety and verification boundaries.
-
-### Generation authentication and model limits
-
-- Provider names identify the nine supported protocols. Choose a preset rather than renaming a provider; arbitrary labels and duplicate names are not supported. Existing unsupported records are not silently rewritten.
-- Codex sign-in displays a device code and an explicit link to the official verification page. It does not start a local callback server, automatically open a browser, or copy the code. Closing the dialog cancels the flow.
-- OAuth refresh must preserve the account and save current credentials before retrying. Editing the provider or unloading the plugin invalidates an in-flight operation.
-- Models must support their provider's required output protocol. DeepSeek uses JSON mode with strict application validation; schema/tool-capable providers use their documented structured-output controls. Unsupported models fail rather than silently changing protocols or models.
-- Local Ollama and LM Studio servers may omit API keys; installed models and engine capabilities still matter. Bundled suggestions do not migrate saved models or endpoints and do not guarantee account access, free pricing, or local installation.
-
-Real-account device login, mobile behavior, and live provider compatibility are not yet certified. Codex's supported terminal representations have synthetic coverage; model availability and actual backend behavior still require verification.
-
-## Tech Stack
-
-| Category | Technology                                        |
-| -------- | ------------------------------------------------- |
-| Platform | Obsidian 1.13.0 or later                          |
-| Language | TypeScript 5                                      |
-| Bundler  | esbuild                                           |
-| AI       | Jev classification; optional generation providers |
-| Testing  | Vitest (with coverage)                            |
-| Linting  | ESLint 9 (flat config) + Prettier                 |
-
-## Project Structure
-
-```
-Metadata-Auto-Classifier/
-├── src/
-│   ├── main.ts           # Plugin entry point (AutoClassifierPlugin)
-│   ├── domain/            # Pure classification, generation, and YAML rules
-│   ├── ui/                # Obsidian services, providers, atomic writes, settings
-│   ├── types/             # Type contracts
-│   └── utils/             # Local utilities and safe diagnostics
-├── __tests__/             # Vitest tests (mirrors src/ structure)
-├── __mocks__/             # Obsidian API mock
-├── scripts/               # dev.mjs, version.mjs, release.mjs
-├── boiler.config.mjs      # Per-repo config
-└── manifest.json          # Obsidian plugin manifest
-```
+- **Network use**: the active note's content and your classification rules are sent to the AI provider you select (OpenAI, Anthropic, Gemini, OpenRouter, DeepSeek, a custom endpoint, or `localhost` for Ollama and LM Studio) to generate metadata.
+- **Account or payment**: a provider API key, or a ChatGPT account for Codex sign-in. Usage is billed by the provider. Keys are stored in the plugin's settings file.
+- **Codex sign-in**: the OAuth flow contacts `auth.openai.com` and `chatgpt.com`, and briefly listens on `localhost:1455` for the callback.
+- **Node networking (desktop only)**: the plugin imports Node's `http` for that temporary local OAuth callback server (bound to `localhost`) and `https` to stream responses from your configured providers. Neither runs on mobile.
+- **Vault file list**: the plugin reads your vault's Markdown file list locally to offer wikilink suggestions and to build classification reference values. Nothing beyond the note being classified is sent to a provider.
+- **Telemetry**: none.
 
 ## Development
 
-Bun is required by the workspace rules. The lockfile, package scripts, and generated CI are still awaiting migration: their advertised upstream generator is unavailable. Do not treat the existing `ci` script as Bun-based; it still invokes pnpm.
-
-The following checks run with already-installed dependencies. They do not replace a verified Bun lockfile/frozen installation or the required hosted CI check:
-
-```bash
-bun x --bun --no-install tsc --noEmit
-bun x --bun --no-install vitest run
-bun x --bun --no-install eslint . --ignore-pattern 'coverage/**' --ignore-pattern '__tests__/**' --ignore-pattern '__mocks__/**'
-bun esbuild.config.mjs production
-```
-
-## Inspiration
-
-- UI design inspired by [Obsidian Web Clipper](https://obsidian.md/clipper)
-- Codex API integration inspired by [Smart Composer](https://github.com/glowingjade/obsidian-smart-composer)
-
-## Support
-
-For questions, issues, or feature requests, please visit the [GitHub repository](https://github.com/GoBeromsu/Metadata-Auto-Classifier).
+See the [dev contract](https://github.com/GoBeromsu/obsidian-boiler-template#dev-contract): `bun run dev`, `bun run build`, `bun run ci`.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT](LICENSE)

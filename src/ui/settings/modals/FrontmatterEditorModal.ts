@@ -3,15 +3,14 @@ import { Modal, Setting, TextAreaComponent as ObsidianTextArea } from 'obsidian'
 
 import { deepCloneFrontmatterField } from '../../frontmatter';
 import type { FrontmatterEditorModalProps, FrontmatterField, LinkType } from '../../../types';
-import { Notice } from '../components/Notice';
 import { Setting as CommonSetting } from '../components/Setting';
 import { WikiLinkSelector } from '../components/WikiLinkSelector';
 
 export class ConfigurableSettingModal extends Modal {
 	private readonly props: FrontmatterEditorModalProps;
 	private readonly localState: FrontmatterField;
-	private textAreaComponent: TextAreaComponent;
-	private generateNewTagsContainer: HTMLElement;
+	private textAreaComponent?: TextAreaComponent;
+	private generateNewTagsContainer?: HTMLElement;
 
 	constructor(app: App, props: FrontmatterEditorModalProps) {
 		super(app);
@@ -22,7 +21,7 @@ export class ConfigurableSettingModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 
-		this.setTitle(`Edit Setting: ${this.localState.name}`);
+		this.setTitle(`Edit ${this.localState.name || 'frontmatter'}`);
 
 		// Name setting (always shown)
 		CommonSetting.create(contentEl, {
@@ -70,6 +69,7 @@ export class ConfigurableSettingModal extends Modal {
 	}
 
 	private renderGenerateNewTagsSetting(): void {
+		if (!this.generateNewTagsContainer) return;
 		this.generateNewTagsContainer.empty();
 		if (this.localState.name !== 'tags') {
 			this.localState.generateNewTags = false;
@@ -89,7 +89,7 @@ export class ConfigurableSettingModal extends Modal {
 
 	private addLinkTypeSetting(containerEl: HTMLElement): void {
 		CommonSetting.create(containerEl, {
-			name: 'Link Type',
+			name: 'Link type',
 			className: 'control-setting',
 			dropdown: {
 				options: [
@@ -160,8 +160,7 @@ export class ConfigurableSettingModal extends Modal {
 
 			this.textAreaComponent = new ObsidianTextArea(containerEl);
 			this.textAreaComponent
-				// eslint-disable-next-line obsidianmd/ui/sentence-case -- placeholder text uses example values; sentence case does not apply
-				.setPlaceholder('Option1, Option2, Option3...')
+				.setPlaceholder('Add options separated by commas')
 				.setValue(displayValue)
 				.onChange((value) => {
 					const inputOptions = value
@@ -171,13 +170,12 @@ export class ConfigurableSettingModal extends Modal {
 					this.localState.refs = inputOptions;
 				});
 			this.textAreaComponent.inputEl.rows = 4;
-			this.textAreaComponent.inputEl.setCssStyles({ width: '100%' });
+			this.textAreaComponent.inputEl.addClass('mac-full-width');
 		}
 	}
 
 	private updateOptionsTextarea(): void {
-		// eslint-disable-next-line @typescript-eslint/no-misused-promises -- textAreaComponent is a class instance, not a Promise; rule incorrectly fires due to chainable .onChange() returning the component
-		if (this.textAreaComponent) {
+		if (this.textAreaComponent !== undefined) {
 			let displayValue = '';
 			if (this.localState.refs && this.localState.refs.length > 0) {
 				displayValue = this.localState.refs.join(', ');
@@ -193,13 +191,13 @@ export class ConfigurableSettingModal extends Modal {
 
 		const textArea = new ObsidianTextArea(containerEl);
 		textArea
-			.setPlaceholder('Enter specific classification rules or additional context here...')
+			.setPlaceholder('Enter specific classification rules or additional context here…')
 			.setValue(this.localState.customQuery || '')
 			.onChange((value) => {
 				this.localState.customQuery = value;
 			});
 		textArea.inputEl.rows = 4;
-		textArea.inputEl.setCssStyles({ width: '100%' });
+		textArea.inputEl.addClass('mac-full-width');
 	}
 
 	private addActionButtons(containerEl: HTMLElement): void {
@@ -214,14 +212,9 @@ export class ConfigurableSettingModal extends Modal {
 					.setButtonText('Save')
 					.setCta()
 					.onClick(async () => {
-						const notice = Notice.startProgress('Saving settings...');
 						btn.setDisabled(true);
-						try {
-							await this.props.onSave(this.localState);
-							this.close();
-						} finally {
-							Notice.endProgress(notice);
-						}
+						await this.props.onSave(this.localState);
+						this.close();
 					})
 			);
 	}

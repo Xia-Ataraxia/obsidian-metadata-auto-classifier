@@ -1,55 +1,66 @@
-import { ButtonComponent, Notice } from 'obsidian';
-import type { NoticeCatalog, NoticeShowOptions, PluginNoticesHost } from '../types';
+import { Notice, setIcon, setTooltip } from 'obsidian';
+import type {
+	NoticeCatalog,
+	NoticeDefinition,
+	NoticeShowOptions,
+	PluginNoticesHost,
+} from '../types';
 
-const BUILTIN_TEMPLATES: Record<string, string> = {
-	notice_muted: 'Notice muted. Undo in settings.',
+const CLS = 'metadata-auto-classifier-notice';
+
+const BUILTIN_NOTICES: NoticeCatalog = {
+	notice_muted: {
+		template: 'Notice muted. Reset it in settings.',
+		timeout: 4000,
+		immutable: true,
+		action: 'open-settings',
+	},
 };
+
+/** Builds the shared notice shell: plugin name head, body text, optional actions. */
+export function createNoticeShell(head: string): { root: HTMLElement; row: HTMLElement; content: HTMLElement } {
+	const root = createDiv({ cls: CLS });
+	root.createEl('p', { cls: `${CLS}-head`, text: head });
+	const row = root.createDiv({ cls: `${CLS}-row` });
+	const content = row.createEl('p', { cls: `${CLS}-content` });
+	return { root, row, content };
+}
 
 export class PluginNotices {
 	private readonly active = new Map<string, Notice>();
-	private readonly activeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 	constructor(
 		private readonly plugin: PluginNoticesHost,
 		private readonly catalog: NoticeCatalog,
-		private readonly prefix: string
+		private readonly head: string
 	) {}
 
 	show(id: string, params?: Record<string, unknown>, opts?: NoticeShowOptions): Notice | null {
 		if (this.isMuted(id)) return null;
 
-		const definition = this.catalog[id];
-		const template = definition?.template ?? BUILTIN_TEMPLATES[id] ?? id;
+		const definition: NoticeDefinition | undefined = this.catalog[id] ?? BUILTIN_NOTICES[id];
+		const template = definition?.template ?? id;
 		const timeout = opts?.timeout ?? definition?.timeout ?? 5000;
-		const immutable = definition?.immutable ?? false;
 		const message = this.interpolate(template, params ?? {});
-		const fragment = this.buildFragment(id, message, {
-			button: opts?.button,
-			immutable,
-		});
+		const button =
+			opts?.button ??
+			(definition?.action === 'open-settings' && this.plugin.openSettings
+				? { text: 'Open settings', callback: this.plugin.openSettings }
+				: undefined);
 
-		const existing = this.active.get(id);
-		if (existing) {
-			existing.setMessage(fragment);
-			this.scheduleCleanup(id, timeout);
-			return existing;
-		}
-
-		const notice = new Notice(fragment, timeout);
+		// A fresh notice each time so a repeated message is visibly re-announced.
+		this.active.get(id)?.hide();
+		const notice = new Notice(
+			this.buildFragment(id, message, { button, immutable: definition?.immutable ?? false }),
+			timeout
+		);
 		this.active.set(id, notice);
-		this.scheduleCleanup(id, timeout);
 		return notice;
 	}
 
 	remove(id: string): void {
 		this.active.get(id)?.hide();
 		this.active.delete(id);
-
-		const timer = this.activeTimers.get(id);
-		if (timer !== undefined) {
-			clearTimeout(timer);
-			this.activeTimers.delete(id);
-		}
 	}
 
 	async mute(id: string): Promise<void> {
@@ -130,67 +141,50 @@ export class PluginNotices {
 		text: string,
 		opts: { button?: { text: string; callback: () => void }; immutable: boolean }
 	): DocumentFragment {
-		const fragment = window.activeDocument.createDocumentFragment();
-		const wrapper = fragment.createDiv({ cls: 'plugin-notice' });
-		wrapper.createEl('p', { cls: 'plugin-notice-head', text: `[${this.prefix}]` });
-		wrapper.createEl('p', { cls: 'plugin-notice-content', text });
+		const fragment = createFragment();
+		const { root, row, content } = createNoticeShell(this.head);
+		content.setText(text);
 
-		const hasActionButton = opts.button?.text && typeof opts.button.callback === 'function';
-		if (hasActionButton || !opts.immutable) {
-			const actions = wrapper.createDiv({ cls: 'plugin-notice-actions' });
-
-			if (hasActionButton && opts.button) {
-				this.createActionButton(actions, opts.button.text, () => {
-					opts.button?.callback();
-					this.remove(id);
-				});
-			}
-
-			if (!opts.immutable) this.createMuteButton(actions, id);
+		if (!opts.immutable) {
+			row.appendChild(this.createMuteButton(id));
 		}
 
+		if (opts.button?.text && typeof opts.button.callback === 'function') {
+			const callback = opts.button.callback;
+			const btn = root
+				.createDiv({ cls: `${CLS}-actions` })
+				.createEl('button', { cls: `${CLS}-action`, text: opts.button.text, type: 'button' });
+			btn.addEventListener('click', (evt) => {
+				evt.stopPropagation();
+				try {
+					callback();
+				} finally {
+					this.remove(id);
+				}
+			});
+		}
+
+		fragment.appendChild(root);
 		return fragment;
 	}
 
-	private createActionButton(containerEl: HTMLElement, text: string, callback: () => void): void {
-		const button = new ButtonComponent(containerEl)
-			.setButtonText(text)
-			.setClass('plugin-notice-btn');
-		button.buttonEl.type = 'button';
-		button.onClick(() => callback());
-	}
-
-	private createMuteButton(containerEl: HTMLElement, id: string): void {
-		const button = new ButtonComponent(containerEl)
-			.setClass('plugin-notice-btn')
-			.setIcon('bell-off');
-		button.buttonEl.classList.add('plugin-notice-btn--mute');
-		button.buttonEl.type = 'button';
-		button.buttonEl.setAttribute('aria-label', `Mute notice: ${id}`);
-		button.onClick(() => {
+	private createMuteButton(id: string): HTMLButtonElement {
+		const button = createEl('button', { cls: `${CLS}-mute`, type: 'button' });
+		setIcon(button, 'bell-off');
+		setTooltip(button, 'Mute this notice');
+		button.setAttribute('aria-label', `Mute notice: ${id}`);
+		button.addEventListener('click', (evt) => {
+			// Keep the click from also dismissing the notice before the mute is saved.
+			evt.stopPropagation();
 			void this.mute(id)
 				.then(() => {
 					this.remove(id);
-					this.show('notice_muted', {}, { timeout: 2000 });
+					this.show('notice_muted');
 				})
 				.catch(() => {
 					console.error('[MAC] Failed to mute notice.');
 				});
 		});
-	}
-
-	private scheduleCleanup(id: string, timeout: number): void {
-		const existing = this.activeTimers.get(id);
-		if (existing !== undefined) {
-			clearTimeout(existing);
-			this.activeTimers.delete(id);
-		}
-		if (timeout <= 0) return;
-
-		const timer = setTimeout(() => {
-			this.active.delete(id);
-			this.activeTimers.delete(id);
-		}, timeout + 50);
-		this.activeTimers.set(id, timer);
+		return button;
 	}
 }

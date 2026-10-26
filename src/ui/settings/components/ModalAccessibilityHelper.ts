@@ -20,10 +20,10 @@ export class ModalAccessibilityHelper {
 				const firstElement = focusableElements[0] as HTMLElement;
 				const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
-				if (e.shiftKey && document.activeElement === firstElement) {
+				if (e.shiftKey && activeDocument.activeElement === firstElement) {
 					e.preventDefault();
 					lastElement.focus();
-				} else if (!e.shiftKey && document.activeElement === lastElement) {
+				} else if (!e.shiftKey && activeDocument.activeElement === lastElement) {
 					e.preventDefault();
 					firstElement.focus();
 				}
@@ -37,7 +37,7 @@ export class ModalAccessibilityHelper {
 	 * Focus the first focusable input element in the modal.
 	 */
 	focusFirstInput(contentEl: HTMLElement): void {
-		setTimeout(() => {
+		window.setTimeout(() => {
 			const firstInput = contentEl.querySelector('input, select, button, textarea') as HTMLElement;
 			if (firstInput) {
 				firstInput.focus();
