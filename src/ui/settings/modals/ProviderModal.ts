@@ -2,7 +2,7 @@ import { confirmAction } from './ConfirmModal';
 import type { App } from 'obsidian';
 import { ButtonComponent, Modal, Platform } from 'obsidian';
 
-import { getProviderPreset, getProviderPresets } from '../../../utils/lib-utils';
+import { findMatchingPreset, getProviderPreset, getProviderPresets } from '../../../utils/lib-utils';
 import { CodexOAuth, formatTokenExpiry, isTokenExpired, CODEX_OAUTH } from '../../auth';
 import type { OAuthTokens, ProviderConfig } from '../../../types';
 import { ModalAccessibilityHelper } from '../components/ModalAccessibilityHelper';
@@ -77,12 +77,12 @@ export class ProviderModal extends Modal {
 			display: preset.name,
 		}));
 
-		// Determine current preset value
-		const currentValue = this.providerConfig.name || 'Custom Provider';
+		// Unknown names (hand-made providers) fall back to Custom Provider so the dropdown is never blank.
+		const currentValue = findMatchingPreset(this.providerConfig);
 
 		CommonSetting.create(containerEl, {
 			name: 'Provider preset',
-			desc: 'Start from a known provider, or pick Custom.',
+			desc: 'Start from a known provider, or pick Custom Provider.',
 			dropdown: {
 				options: presetOptions,
 				value: currentValue,

@@ -59,7 +59,6 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 		Setting.create(containerEl, {
 			name: 'Support Auto Classifier',
 			desc: 'If Auto Classifier saves you time, consider supporting its development.',
-			heading: true,
 			className: 'auto-classifier-settings-support',
 			button: {
 				text: 'Buy me a coffee',
