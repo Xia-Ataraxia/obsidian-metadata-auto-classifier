@@ -405,7 +405,7 @@ export class ProviderModal extends Modal {
 				const draftRevision = this.draftRevision;
 				const saveSnapshot = copyProvider(this.providerConfig);
 				try {
-					notice = Notice.startProgress('Saving provider...');
+					notice = Notice.startProgress('Saving provider…');
 					this.activeProgressNotices.add(notice);
 					if (!this.validateForm()) return;
 					await this.onSave(saveSnapshot);

@@ -992,7 +992,7 @@ describe('ProviderModal device-code authentication UI', () => {
 		const save = saveButton.click() as Promise<void>;
 		expect(onSave).toHaveBeenCalledOnce();
 		expect(saveButton.disabled).toBe(true);
-		expect(Notice.startProgress).toHaveBeenCalledWith('Saving provider...');
+		expect(Notice.startProgress).toHaveBeenCalledWith('Saving provider…');
 		pending.reject(new Error('sensitive persistence details'));
 		await save;
 
@@ -1016,7 +1016,7 @@ describe('ProviderModal device-code authentication UI', () => {
 
 		const saveButton = getButton(modal, 'Save');
 		const save = saveButton.click() as Promise<void>;
-		expect(Notice.startProgress).toHaveBeenCalledWith('Saving provider...');
+		expect(Notice.startProgress).toHaveBeenCalledWith('Saving provider…');
 		modal.close();
 		expect(Notice.endProgress).toHaveBeenCalledOnce();
 		pending.reject(new Error('late persistence failure'));
