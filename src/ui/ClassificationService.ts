@@ -22,6 +22,7 @@ import {
 	CLASSIFICATION_MESSAGES,
 	ClassificationIssue,
 	classificationErrorStatus,
+	classificationNoticeKey,
 } from './classification-status';
 import type { ClassificationStatus } from './classification-status';
 import type { PluginNotices } from './plugin-notices';
@@ -177,7 +178,7 @@ export class ClassificationService {
 	}
 
 	private show(status: ClassificationStatus): void {
-		this.context.notices.show('classification_status', {
+		this.context.notices.show(classificationNoticeKey(status), {
 			message: CLASSIFICATION_MESSAGES[status],
 		});
 	}

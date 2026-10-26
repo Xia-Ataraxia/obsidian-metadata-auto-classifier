@@ -217,7 +217,7 @@ describe('ClassificationService', () => {
 		expect(mocks.classify).not.toHaveBeenCalled();
 		expect(mocks.generate).not.toHaveBeenCalled();
 		expect(app.vault.process).not.toHaveBeenCalled();
-		expect(show).toHaveBeenCalledWith('classification_status', {
+		expect(show).toHaveBeenCalledWith('classification_setup', {
 			message: 'No usable reference values were found. No changes were made.',
 		});
 	});
@@ -294,7 +294,7 @@ describe('ClassificationService', () => {
 		expect(mocks.classify).not.toHaveBeenCalled();
 		expect(mocks.generate).not.toHaveBeenCalled();
 		expect(app.vault.process).not.toHaveBeenCalled();
-		expect(show).toHaveBeenCalledWith('classification_status', {
+		expect(show).toHaveBeenCalledWith('classification_setup', {
 			message: 'No usable reference values were found. No changes were made.',
 		});
 	});
@@ -306,7 +306,7 @@ describe('ClassificationService', () => {
 
 		expect(mocks.generate).not.toHaveBeenCalled();
 		expect(app.vault.process).not.toHaveBeenCalled();
-		expect(show).toHaveBeenCalledWith('classification_status', {
+		expect(show).toHaveBeenCalledWith('classification_setup', {
 			message: 'No usable reference values were found. No changes were made.',
 		});
 	});

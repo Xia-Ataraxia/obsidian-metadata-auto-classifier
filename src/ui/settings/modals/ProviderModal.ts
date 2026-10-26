@@ -226,11 +226,25 @@ export class ProviderModal extends Modal {
 	}
 
 	private addProviderForm(containerEl: HTMLElement): void {
-		// Show the selected preset's provider name as a read-only setting.
+		// Presets keep their exact name (it selects the adapter); custom providers are named freely.
 		const presets = getProviderPresets();
+		const isFixedPreset = presets.some(
+			(preset) => preset.name === this.providerConfig.name && preset.name !== 'Custom Provider'
+		);
 		CommonSetting.create(containerEl, {
 			name: 'Provider name',
-			desc: this.providerConfig.name,
+			desc: isFixedPreset ? this.providerConfig.name : 'A unique name for this provider.',
+			...(isFixedPreset
+				? {}
+				: {
+						textInput: {
+							placeholder: 'Enter provider name',
+							value: this.providerConfig.name,
+							onChange: (value: string) => {
+								this.providerConfig.name = value;
+							},
+						},
+					}),
 		});
 
 		// API URL
@@ -484,13 +498,6 @@ export class ProviderModal extends Modal {
 			this.notices.show('validation_error', {
 				component: 'Provider',
 				message: 'Enter a provider name.',
-			});
-			return false;
-		}
-		if (!getProviderPresets().some((preset) => preset.name === this.providerConfig.name)) {
-			this.notices.show('validation_error', {
-				component: 'Provider',
-				message: 'Select a supported provider preset before saving.',
 			});
 			return false;
 		}

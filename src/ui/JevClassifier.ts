@@ -38,8 +38,10 @@ export class JevClassifier {
 		if (input.candidates.every((value) => value.trim().length === 0)) {
 			return { status: 'no-candidates' };
 		}
-		if (!config.apiKey || !config.model) throw new JevClassificationError('missing-config');
-		const built = buildJevRequests({ ...input, model: config.model });
+		const apiKey = config.apiKey.trim();
+		const model = config.model.trim();
+		if (!apiKey || !model) throw new JevClassificationError('missing-config');
+		const built = buildJevRequests({ ...input, model });
 		if (!built.ok) throw new JevClassificationError(built.error.code);
 		const candidates: JevCandidateMapping[] = [];
 		const probabilities: Record<string, number> = Object.create(null) as Record<string, number>;
@@ -47,7 +49,7 @@ export class JevClassifier {
 			assertCurrent();
 			const response = await sendRequest(
 				'https://api.typesafe.ai/v1/systemone',
-				{ Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+				{ Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
 				chunk.request,
 				{ deadline: control.deadline, assertCurrent }
 			);
@@ -55,7 +57,7 @@ export class JevClassifier {
 			const decoded = decodeJevResponse(
 				response,
 				chunk.candidates.map((candidate) => candidate.id),
-				config.model
+				model
 			);
 			if (!decoded.ok) throw new JevClassificationError(decoded.error.code);
 			candidates.push(...chunk.candidates);

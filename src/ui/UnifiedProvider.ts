@@ -92,7 +92,8 @@ function getProviderSpec(providerName: string): ProviderSpec {
 		? chatProviderSpecs[providerName]
 		: Object.prototype.hasOwnProperty.call(nativeProviderSpecs, providerName)
 			? nativeProviderSpecs[providerName]
-			: undefined;
+			: // Any non-preset name is a user-named OpenAI-compatible endpoint.
+				chatProviderSpecs[PROVIDER_NAMES.CUSTOM];
 	if (!spec) throw new Error('Unsupported provider');
 	return spec;
 }

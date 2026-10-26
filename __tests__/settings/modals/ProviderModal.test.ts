@@ -189,23 +189,14 @@ describe('ProviderModal', () => {
 			expect(result).toBe(true);
 		});
 
-		it('rejects provider names outside the supported preset list without rewriting them', () => {
+		it('accepts user-named providers without rewriting them', () => {
 			const modal = new ProviderModal(mockApp, mockOnSave, mockNotices);
 			const config = (modal as any).providerConfig as ProviderConfig;
-			config.name = 'Unsupported Backend';
-			config.baseUrl = 'https://api.example.com/v1/chat';
+			config.name = 'Local Ollama';
+			config.baseUrl = 'http://localhost:11434/v1/chat/completions';
 
-			const result = (modal as any).validateForm();
-
-			expect(result).toBe(false);
-			expect(config.name).toBe('Unsupported Backend');
-			expect(mockNotices.show).toHaveBeenCalledWith(
-				'validation_error',
-				expect.objectContaining({
-					component: 'Provider',
-					message: 'Select a supported provider preset before saving.',
-				})
-			);
+			expect((modal as any).validateForm()).toBe(true);
+			expect(config.name).toBe('Local Ollama');
 		});
 	});
 

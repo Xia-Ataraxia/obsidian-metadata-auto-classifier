@@ -108,8 +108,6 @@ describe('Api Container - Regression Tests', () => {
 			// Then: All basic UI components should be created
 			expect(mockContainer.empty).toHaveBeenCalled();
 			expect(settingsHarness.headings).toEqual([
-				'Classification instructions',
-				'Optional new-tag generation',
 				'Providers',
 				'Models',
 			]);

@@ -342,11 +342,9 @@ describe('UnifiedProvider generated-tags contract', () => {
 		expect(mockSendRequest).toHaveBeenCalledTimes(1);
 	});
 
-	it('rejects unknown names instead of falling back to OpenAI-compatible parsing', async () => {
-		await expect(
-			provider.callAPI('system', 'prompt', config('Unsupported secret name'), 'model')
-		).rejects.toThrow('Unsupported provider');
-		expect(mockSendRequest).not.toHaveBeenCalled();
+	it('sends user-named providers as OpenAI-compatible requests', async () => {
+		await provider.callAPI('system', 'prompt', config('Local Ollama'), 'model').catch(() => undefined);
+		expect(mockSendRequest).toHaveBeenCalledOnce();
 	});
 
 	it('rejects cancelled, expired, and stale requests before dispatch', async () => {

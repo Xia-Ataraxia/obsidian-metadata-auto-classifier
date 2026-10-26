@@ -95,6 +95,11 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 		timeout: 5000,
 		immutable: true,
 	},
+	classification_setup: {
+		template: '{{message}}',
+		timeout: 8000,
+		action: 'open-settings',
+	},
 	// Error notices
 	init_failed: {
 		template: 'Could not set up commands. Reload the plugin to try again.',

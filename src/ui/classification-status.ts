@@ -20,7 +20,22 @@ export const CLASSIFICATION_MESSAGES = {
 	preparation_failed: 'Reference values could not be prepared. No changes were made.',
 	write_failed: 'The note could not be updated safely. No changes were made.',
 	invalid_settings: 'Classification settings are invalid. No changes were made.',
+	missing_config: 'Add your Jev API key and model in settings. No changes were made.',
+	auth_failed: 'Jev rejected the API key. Check it in settings. No changes were made.',
+	network_failed: 'Could not reach Jev. Check your connection and try again. No changes were made.',
+	server_failed: 'Jev is unavailable right now. Try again later. No changes were made.',
 } as const;
+
+/** Statuses the user fixes in settings; shown as a mutable notice with an Open settings action. */
+const SETUP_STATUSES: ReadonlySet<ClassificationStatus> = new Set([
+	'missing_config',
+	'auth_failed',
+	'no_refs',
+]);
+
+export function classificationNoticeKey(status: ClassificationStatus): string {
+	return SETUP_STATUSES.has(status) ? 'classification_setup' : 'classification_status';
+}
 export type ClassificationStatus = keyof typeof CLASSIFICATION_MESSAGES;
 
 export class ClassificationIssue extends Error {
@@ -39,10 +54,20 @@ export function classificationErrorStatus(error: unknown): ClassificationStatus 
 	if (error instanceof FrontmatterCommitError)
 		return error.reason === 'process-failed' ? 'write_failed' : 'conflict';
 	if (error instanceof FrontmatterEditError) return 'write_failed';
-	if (error instanceof HttpError && error.code === 'TIMEOUT') return 'timeout';
+	if (error instanceof HttpError) return httpErrorStatus(error);
 	if (error instanceof TagGenerationError || error instanceof GenerationFailedError)
 		return 'generation_failed';
-	if (error instanceof JevClassificationError)
-		return error.code === 'expired' ? 'timeout' : 'selection_failed';
+	if (error instanceof JevClassificationError) {
+		if (error.code === 'expired') return 'timeout';
+		return error.code === 'missing-config' ? 'missing_config' : 'selection_failed';
+	}
 	return 'selection_failed';
+}
+
+function httpErrorStatus(error: HttpError): ClassificationStatus {
+	if (error.code === 'TIMEOUT') return 'timeout';
+	if (error.code === 'TRANSPORT_ERROR') return 'network_failed';
+	if (error.code !== 'HTTP_ERROR') return 'selection_failed';
+	if (error.status === 401 || error.status === 403) return 'auth_failed';
+	return 'server_failed';
 }

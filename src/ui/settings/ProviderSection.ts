@@ -44,7 +44,10 @@ export class ProviderSection {
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[]): void {
 		const providerSection = containerEl.createDiv({ cls: 'provider-section' });
-		new ObsidianSetting(providerSection).setName('Providers').setHeading();
+		new ObsidianSetting(providerSection)
+			.setName('Providers')
+			.setDesc('Used only when new-tag generation is enabled for tags.')
+			.setHeading();
 
 		providers.forEach((provider) => {
 			const displayInfo = this.getProviderDisplayInfo(provider);

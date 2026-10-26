@@ -538,37 +538,30 @@ describe('ProviderModal device-code authentication UI', () => {
 		expect(startAuthFlow).toHaveBeenCalledTimes(1);
 	});
 
-	it('keeps provider names read-only and changes them only through supported preset selection', () => {
+	it('keeps preset names fixed and lets Custom Provider be renamed', () => {
 		const modal = new ProviderModal(new App(), vi.fn(), {
 			show: vi.fn(),
 		} as unknown as PluginNotices);
 		modal.onOpen();
 
-		expect(getSettingDescription(modal, 'Provider name')).toBe('Custom Provider');
-		expect(() => getControl(modal, 'Provider name')).toThrow('Missing control: Provider name');
+		getControl(modal, 'Provider name').change('Local Ollama');
+		expect((modal as any).providerConfig.name).toBe('Local Ollama');
 		getControl(modal, 'Provider preset').change('OpenAI');
 		expect(getSettingDescription(modal, 'Provider name')).toBe('OpenAI');
-		expect((modal as any).providerConfig.name).toBe('OpenAI');
+		expect(() => getControl(modal, 'Provider name')).toThrow('Missing control: Provider name');
 	});
 
-	it('does not silently rewrite an unsupported existing provider name and rejects its save', async () => {
+	it('saves an existing custom-named provider', async () => {
 		const onSave = vi.fn();
-		const show = vi.fn();
-		const modal = new ProviderModal(new App(), onSave, { show } as unknown as PluginNotices);
-		(modal as any).providerConfig.name = 'Unsupported Backend';
-		(modal as any).providerConfig.baseUrl = 'https://unsupported.example/v1/chat';
+		const modal = new ProviderModal(new App(), onSave, { show: vi.fn() } as unknown as PluginNotices);
+		(modal as any).providerConfig.name = 'Local Ollama';
+		(modal as any).providerConfig.baseUrl = 'http://localhost:11434/v1/chat/completions';
 		modal.onOpen();
 
-		expect(getSettingDescription(modal, 'Provider name')).toBe('Unsupported Backend');
-		expect(() => getButton(modal, 'Connect Account')).toThrow('Missing button: Connect Account');
 		await getButton(modal, 'Save').click();
 
-		expect(onSave).not.toHaveBeenCalled();
-		expect((modal as any).providerConfig.name).toBe('Unsupported Backend');
-		expect(show).toHaveBeenCalledWith('validation_error', {
-			component: 'Provider',
-			message: 'Select a supported provider preset before saving.',
-		});
+		expect(onSave).toHaveBeenCalledOnce();
+		expect((modal as any).providerConfig.name).toBe('Local Ollama');
 	});
 
 	it('shows the required API-key control for OpenAI without reading structured OAuth fallbacks', async () => {
