@@ -128,6 +128,8 @@ export type NoticeCatalog = Record<string, NoticeDefinition>;
 export interface NoticeShowOptions {
 	timeout?: number;
 	button?: { text: string; callback: () => void };
+	/** Adds an inline Undo action ahead of the other button. */
+	undo?: () => void;
 }
 
 export interface PluginNoticesHost {
