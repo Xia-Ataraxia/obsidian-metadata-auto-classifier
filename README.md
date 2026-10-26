@@ -32,7 +32,7 @@ Ordinary fields never generate new values. Ambiguous selection or a failed requi
 - **Account or payment**: Jev and generation-provider credentials are separate. Providers bill usage according to the selected account/model; model presets do not guarantee availability or pricing. API keys and OAuth tokens are stored in the plugin's settings file; do not commit or share that file.
 - **Codex sign-in**: hosted device authorization contacts `auth.openai.com`; Codex inference contacts `chatgpt.com`. The verification page opens only after an explicit click. There is no local callback server or automatic clipboard copy. Refresh remains account-bound and must be saved before retrying.
 - **Transport**: requests use Obsidian's native `requestUrl`, not Node HTTP streaming. Cancellation prevents stale processing/writes but cannot physically cancel a request already dispatched by that API.
-- **Vault file list**: the plugin reads the Markdown file list and metadata cache locally for WikiLink suggestions and candidate collection.
+- **Folder contents**: the note picker for reference values lists one folder at a time as you browse. When a field has no reference values, the plugin reads the tags or property values used by notes in the classified note's own folder. It never scans the whole vault, and nothing beyond the note being classified is sent to a provider.
 - **Telemetry**: none.
 
 Offline tests do not certify live-account entitlement, mobile execution or semantic classification quality.

@@ -1,4 +1,5 @@
-import type { App, TFile } from 'obsidian';
+import { TFile } from 'obsidian';
+import type { App } from 'obsidian';
 import type { AutoClassifierSettings } from '../types';
 import {
 	ClassificationState,
@@ -34,6 +35,13 @@ export interface ClassificationContext {
 }
 
 const DEADLINE_MS = 60_000;
+
+// Empty refs fall back to values used in the note's own folder; never scan the whole vault.
+function siblingMarkdownFiles(file: TFile): TFile[] {
+	return (file.parent?.children ?? [file]).filter(
+		(item): item is TFile => item instanceof TFile && item.extension === 'md'
+	);
+}
 
 export class ClassificationService {
 	private readonly state = new ClassificationState();
@@ -147,7 +155,7 @@ export class ClassificationService {
 		try {
 			values = getFieldValues(
 				initial.name,
-				this.context.app.vault.getMarkdownFiles(),
+				siblingMarkdownFiles(file),
 				this.context.app.metadataCache
 			);
 		} catch {

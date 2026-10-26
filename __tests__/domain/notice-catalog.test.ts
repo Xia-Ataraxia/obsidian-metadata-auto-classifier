@@ -1,20 +1,17 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+/// <reference types="vite/client" />
 import { NOTICE_CATALOG } from '../../src/domain/constants';
 
-function sources(dir: string): string[] {
-	return readdirSync(dir).flatMap((name) => {
-		const path = join(dir, name);
-		return statSync(path).isDirectory() ? sources(path) : path.endsWith('.ts') ? [path] : [];
-	});
-}
+const sources = import.meta.glob<string>('../../src/**/*.ts', {
+	query: '?raw',
+	import: 'default',
+	eager: true,
+});
 
 describe('notice catalog', () => {
 	it('defines every notice key passed to notices.show', () => {
 		const used = new Set<string>();
-		for (const file of sources('src'))
-			for (const match of readFileSync(file, 'utf8').matchAll(/notices\.show\(\s*'([a-z_]+)'/g))
-				used.add(match[1] as string);
+		for (const text of Object.values(sources))
+			for (const match of text.matchAll(/notices\.show\(\s*'([a-z_]+)'/g)) used.add(match[1] as string);
 		expect(used.size).toBeGreaterThan(5);
 		expect([...used].filter((key) => !(key in NOTICE_CATALOG))).toEqual([]);
 	});
