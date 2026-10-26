@@ -49,10 +49,8 @@ vi.mock('../../src/ui/settings/modals/ProviderModal', () => ({
 	},
 }));
 
-import { testModel } from '../../src/ui/provider-api';
 import { Api } from '../../src/ui/settings/ApiSection';
 
-const mockTestModel = vi.mocked(testModel);
 
 const createMockPlugin = () => ({
 	app: { vault: { getMarkdownFiles: vi.fn() } },
@@ -165,20 +163,6 @@ describe('Api Container - Regression Tests', () => {
 			// Then: selected settings should be reset
 			expect(mockPlugin.settings.selectedProvider).toBe('');
 			expect(mockPlugin.settings.selectedModel).toBe('');
-		});
-	});
-
-	describe('Connection Test', () => {
-		test('returns correct result from testModel function', async () => {
-			// Success case
-			mockTestModel.mockResolvedValue(true);
-			const successResult = await testModel(mockPlugin.settings.providers[0], 'gpt-4');
-			expect(successResult).toBe(true);
-
-			// Failure case
-			mockTestModel.mockResolvedValue(false);
-			const failureResult = await testModel(mockPlugin.settings.providers[0], 'gpt-4');
-			expect(failureResult).toBe(false);
 		});
 	});
 

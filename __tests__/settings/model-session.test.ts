@@ -485,7 +485,7 @@ describe('model test session', () => {
 			assertCurrent,
 		};
 
-		await expect(testModel(provider, 'model-a', onTokenRefresh, options)).resolves.toBe(true);
+		await expect(testModel(provider, 'model-a', onTokenRefresh, options)).resolves.toBeUndefined();
 		expect(callAPI).toHaveBeenCalledWith(
 			COMMON_CONSTANTS.VERIFY_CONNECTION_SYSTEM_PROMPT,
 			COMMON_CONSTANTS.VERIFY_CONNECTION_USER_PROMPT,

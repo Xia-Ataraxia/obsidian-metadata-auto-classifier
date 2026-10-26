@@ -122,7 +122,7 @@ export class ModelSection {
 										saveSettings: () => this.plugin.saveSettings(),
 										assertCurrent: assertModelCurrent,
 									});
-									const success = await testModel(
+									await testModel(
 										session.provider,
 										modelId,
 										session.refreshTokens,
@@ -132,12 +132,7 @@ export class ModelSection {
 										}
 									);
 									session.assertCurrent();
-									if (success) {
-										this.plugin.notices.show('model_test_success', { name: config.name });
-									} else {
-										if (!this.plugin.isActive()) return;
-										this.plugin.notices.show('model_test_failed', { name: config.name });
-									}
+									this.plugin.notices.show('model_test_success', { name: config.name });
 								} catch (error) {
 									if (!this.plugin.isActive()) return;
 									if (error instanceof ClassificationStateError) {

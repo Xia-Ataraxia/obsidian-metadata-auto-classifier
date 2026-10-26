@@ -25,7 +25,7 @@ export function getFieldValues(
 		if (fieldName === 'tags') {
 			// tags requires getAllTags() to include inline tags (#tag in content)
 			// parseFrontMatterStringArray would only get frontmatter tags
-			getAllTags(cache)?.forEach((tag) => values.add(tag));
+			getAllTags(cache)?.forEach((tag) => values.add(tag.replace(/^#/, '')));
 		} else {
 			// Delegate to Obsidian API - handles both single values and arrays
 			parseFrontMatterStringArray(cache.frontmatter, fieldName)?.forEach((v) => values.add(v));

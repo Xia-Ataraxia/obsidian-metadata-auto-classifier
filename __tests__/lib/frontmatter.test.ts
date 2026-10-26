@@ -42,7 +42,7 @@ describe('getFieldValues', () => {
 		expect(getAllTags).not.toHaveBeenCalled();
 	});
 
-	test('collects frontmatter and inline tags through getAllTags', () => {
+	test('collects frontmatter and inline tags through getAllTags without the leading #', () => {
 		metadataCache.setFileCache(file1, {
 			frontmatter: { tags: ['#frontmatter', '#shared'] },
 			tags: [{ tag: '#inline' }, { tag: '#shared' }],
@@ -53,10 +53,10 @@ describe('getFieldValues', () => {
 		});
 
 		expect(getFieldValues('tags', [file1, file2], metadataCache.metadataCache)).toEqual([
-			'#frontmatter',
-			'#shared',
-			'#inline',
-			'#another',
+			'frontmatter',
+			'shared',
+			'inline',
+			'another',
 		]);
 		expect(getAllTags).toHaveBeenCalledTimes(2);
 		expect(parseFrontMatterStringArray).not.toHaveBeenCalled();

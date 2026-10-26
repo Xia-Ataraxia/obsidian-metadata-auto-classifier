@@ -8,6 +8,7 @@ import { CodexOAuth } from './auth/oauth';
 import { chatProviderSpecs } from './provider-chat-specs';
 import type { ProviderSpec } from './provider-chat-specs';
 import { nativeProviderSpecs } from './provider-native-specs';
+import { hasCredentialString, hasOAuthCredential, isRecord } from '../domain/credential-guards';
 
 const REQUEST_TIMEOUT_MS = 60_000;
 // Concurrent 401s on one refresh token share a single network refresh.
@@ -17,25 +18,6 @@ type ProviderAuthMode = 'apiKey' | 'oauth';
 
 const AUTH_MODE_ERROR = 'Provider authentication mode is unsupported';
 const AUTH_UNAVAILABLE_ERROR = 'Provider authentication is unavailable';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function hasCredentialString(value: unknown): value is string {
-	return typeof value === 'string' && value.trim().length > 0;
-}
-
-function hasOAuthCredential(value: unknown): boolean {
-	return (
-		isRecord(value) &&
-		hasCredentialString(value.accessToken) &&
-		hasCredentialString(value.refreshToken) &&
-		hasCredentialString(value.accountId) &&
-		typeof value.expiresAt === 'number' &&
-		Number.isFinite(value.expiresAt)
-	);
-}
 
 type CodexTokens = Awaited<ReturnType<CodexOAuth['refreshTokens']>>;
 

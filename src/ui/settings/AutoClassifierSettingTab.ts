@@ -106,9 +106,7 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 	private addNewFrontmatter(): void {
 		const newFrontmatter: FrontmatterField = {
 			id: generateId(),
-			...DEFAULT_FRONTMATTER_SETTING,
-			count: { ...DEFAULT_FRONTMATTER_SETTING.count },
-			refs: [...DEFAULT_FRONTMATTER_SETTING.refs],
+			...structuredClone(DEFAULT_FRONTMATTER_SETTING),
 		};
 		this.plugin.settings.frontmatter.push(newFrontmatter);
 		void this.plugin.saveSettings();

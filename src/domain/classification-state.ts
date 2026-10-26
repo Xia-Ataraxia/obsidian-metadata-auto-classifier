@@ -1,6 +1,7 @@
 import type { FrontmatterField, ProviderConfig } from '../types';
 import { PROVIDER_NAMES } from '../utils/lib-utils';
 import type { TargetFieldSnapshot } from './frontmatter-snapshot';
+import { hasOAuthCredential, isRecord } from './credential-guards';
 
 export type ClassificationStateErrorCode =
 	| 'invalid-field'
@@ -32,28 +33,9 @@ export interface FieldSnapshot {
 	readonly generateNewTags: boolean;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function hasCredentialString(value: unknown): value is string {
-	return typeof value === 'string' && value.trim().length > 0;
-}
-
 function hasApiKey(value: unknown, optional: boolean): boolean {
 	if (value === undefined) return optional;
 	return typeof value === 'string' && (optional || value.trim().length > 0);
-}
-
-function hasOAuthCredential(value: unknown): boolean {
-	return (
-		isRecord(value) &&
-		hasCredentialString(value.accessToken) &&
-		hasCredentialString(value.refreshToken) &&
-		hasCredentialString(value.accountId) &&
-		typeof value.expiresAt === 'number' &&
-		Number.isFinite(value.expiresAt)
-	);
 }
 
 export function findField(

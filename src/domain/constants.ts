@@ -113,11 +113,6 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 		template: 'No active file.',
 		timeout: 5000,
 	},
-	no_provider_selected: {
-		template: 'No provider selected. Select one in settings.',
-		timeout: 5000,
-		action: 'open-settings',
-	},
 	no_frontmatter_setting: {
 		template: 'This frontmatter no longer exists. Check your frontmatter list in settings.',
 		timeout: 5000,
@@ -128,42 +123,11 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 		timeout: 5000,
 		immutable: true,
 	},
-	api_error: {
-		template: '{{message}}',
-		timeout: 5000,
-	},
 	no_refs: {
 		template:
 			'{{frontmatter}} has no reference values to choose from. Add some in settings.',
 		timeout: 5000,
 		action: 'open-settings',
-	},
-	no_auth: {
-		template: '{{message}}',
-		timeout: 5000,
-	},
-	no_model: {
-		template: 'No model selected. Select one in settings.',
-		timeout: 5000,
-		action: 'open-settings',
-	},
-	model_not_for_provider: {
-		template:
-			'{{model}} is not available for {{provider}}. Select another model in settings.',
-		timeout: 5000,
-		action: 'open-settings',
-	},
-	// Success notices
-	classify_success: {
-		template: '{{message}}',
-		timeout: 3000,
-		immutable: true,
-	},
-	// Auth notices
-	oauth_opening_browser: {
-		template: 'Opening your browser to sign in…',
-		timeout: 3000,
-		immutable: true,
 	},
 	oauth_connected: {
 		template: 'Connected.',
@@ -189,10 +153,6 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 		template: '{{name}} is connected.',
 		timeout: 3000,
 		immutable: true,
-	},
-	model_test_failed: {
-		template: 'Could not connect to {{name}}. Check the provider and model.',
-		timeout: 5000,
 	},
 	model_test_error: {
 		template: 'Test failed for {{name}}. {{message}}',

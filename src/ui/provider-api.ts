@@ -36,7 +36,7 @@ export const testModel = async (
 	modelName: string,
 	onTokenRefresh?: OnTokenRefreshCallback,
 	requestOptions?: HttpRequestOptions
-): Promise<boolean> => {
+): Promise<void> => {
 	await new UnifiedProvider().callAPI(
 		COMMON_CONSTANTS.VERIFY_CONNECTION_SYSTEM_PROMPT,
 		COMMON_CONSTANTS.VERIFY_CONNECTION_USER_PROMPT,
@@ -46,7 +46,6 @@ export const testModel = async (
 		onTokenRefresh,
 		requestOptions
 	);
-	return true;
 };
 
 export async function generateTags(
