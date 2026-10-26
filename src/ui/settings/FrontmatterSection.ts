@@ -45,7 +45,7 @@ export class Frontmatter extends BaseSettingsComponent {
 	private async handleDelete(frontmatterSetting: FrontmatterField): Promise<void> {
 		const confirmed = await confirmAction(
 			this.plugin.app,
-			`Are you sure you want to delete "${frontmatterSetting.name}" frontmatter?`,
+			`Delete "${frontmatterSetting.name}"?`,
 			'Delete'
 		);
 		if (!confirmed) {

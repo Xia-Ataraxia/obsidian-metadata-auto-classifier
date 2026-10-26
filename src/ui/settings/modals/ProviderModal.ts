@@ -239,7 +239,7 @@ export class ProviderModal extends Modal {
 	 * Disconnect OAuth
 	 */
 	private async disconnectOAuth(): Promise<void> {
-		const confirmed = await confirmAction(this.app, 'Are you sure you want to disconnect?', 'Disconnect');
+		const confirmed = await confirmAction(this.app, 'Disconnect this account?', 'Disconnect');
 		if (!confirmed) return;
 
 		this.oauthTokens = undefined;
