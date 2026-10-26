@@ -83,7 +83,13 @@ export class PluginNotices {
 		const store = this.getMutedStore();
 		if (store[id]) {
 			delete store[id];
-			await this.plugin.saveSettings();
+			try {
+				await this.plugin.saveSettings();
+			} catch (error) {
+				// Keep memory in step with disk so Reset in settings can still clear it.
+				store[id] = true;
+				throw error;
+			}
 		}
 	}
 

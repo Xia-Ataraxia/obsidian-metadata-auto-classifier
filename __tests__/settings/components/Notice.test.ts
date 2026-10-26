@@ -589,6 +589,8 @@ describe('Notice', () => {
 		expect(noticeChildAt(noticeChildAt(noticeChildAt(noticeFragmentAt(2), 0), 1), 0).textContent).toBe(
 			'Notice could not be unmuted. Try again in settings.'
 		);
+		expect(pluginNotices.isMuted('notice-id')).toBe(true);
+		expect(pluginNotices.listMuted()).toEqual(['notice-id']);
 	});
 
 	test('repeated plugin notices are freshly re-announced', () => {
