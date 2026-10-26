@@ -1,11 +1,14 @@
 name: Release
+
 on:
   push:
     branches: [main]
+
 permissions:
   contents: write
   id-token: write
   attestations: write
+
 jobs:
   release:
     uses: GoBeromsu/obsidian-boiler-template/.github/workflows/plugin-release.yml@main

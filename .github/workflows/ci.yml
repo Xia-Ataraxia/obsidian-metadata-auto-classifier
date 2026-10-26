@@ -1,10 +1,13 @@
 name: CI
+
 on:
   pull_request:
   push:
     branches: [main]
+
 permissions:
   contents: read
+
 jobs:
   ci:
     uses: GoBeromsu/obsidian-boiler-template/.github/workflows/plugin-ci.yml@main
