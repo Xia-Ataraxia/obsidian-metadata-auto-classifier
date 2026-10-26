@@ -136,6 +136,17 @@ describe('Jev settings section', () => {
 		expect(requestUrl).not.toHaveBeenCalled();
 	});
 
+	test('saves the key and model trimmed', async () => {
+		const { plugin, saveSettings } = createPlugin();
+		displaySection(plugin);
+
+		await inputCallback(inputAt(0))('  padded-key \n');
+		await inputCallback(inputAt(1))(' jev-2 ');
+
+		expect(plugin.settings.jev).toEqual({ apiKey: 'padded-key', model: 'jev-2' });
+		expect(saveSettings).toHaveBeenCalledTimes(2);
+	});
+
 	test('persists Jev changes without mutating other settings', async () => {
 		const { plugin, saveSettings } = createPlugin();
 		const { providers, selectedProvider, selectedModel, frontmatter, classificationRule } =

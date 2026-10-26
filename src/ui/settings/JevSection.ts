@@ -21,7 +21,7 @@ export class JevSection {
 			text.setPlaceholder('Enter an API key');
 			text.setValue(this.plugin.settings.jev.apiKey);
 			text.onChange(async (apiKey) => {
-				this.plugin.settings.jev.apiKey = apiKey;
+				this.plugin.settings.jev.apiKey = apiKey.trim();
 				await this.plugin.saveSettings();
 			});
 		});
@@ -30,7 +30,7 @@ export class JevSection {
 			text.setPlaceholder('Enter a versioned model');
 			text.setValue(this.plugin.settings.jev.model);
 			text.onChange(async (model) => {
-				this.plugin.settings.jev.model = model;
+				this.plugin.settings.jev.model = model.trim();
 				await this.plugin.saveSettings();
 			});
 		});

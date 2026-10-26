@@ -889,7 +889,7 @@ describe('ProviderModal device-code authentication UI', () => {
 	});
 
 	it('accepts OAuth tokens into the explicit auth shape instead of stale legacy credentials', async () => {
-		const expiredTokens = { ...tokens, expiresAt: 0 };
+		const expiredTokens = { ...tokens, expiresAt: 0, refreshToken: '' };
 		const existingProvider: ProviderConfig = {
 			name: 'Codex',
 			apiKey: 'stale-legacy-key',
@@ -1029,7 +1029,7 @@ describe('ProviderModal device-code authentication UI', () => {
 	});
 
 	it('clears every credential source on disconnect and saves an intentional disconnected OAuth draft', async () => {
-		const expiredTokens = { ...tokens, expiresAt: 0 };
+		const expiredTokens = { ...tokens, expiresAt: 0, refreshToken: '' };
 		const existingProvider: ProviderConfig = {
 			name: 'Codex',
 			apiKey: 'stale-api-key',

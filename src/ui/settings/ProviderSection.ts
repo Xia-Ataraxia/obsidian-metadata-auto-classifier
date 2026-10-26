@@ -38,7 +38,9 @@ export class ProviderSection {
 			desc:
 				oauthTokens && !isTokenExpired(oauthTokens)
 					? `Signed in · ${formatTokenExpiry(oauthTokens)}`
-					: 'Not signed in',
+					: oauthTokens?.refreshToken
+						? 'Signed in · refreshes on next use'
+						: 'Not signed in',
 		};
 	}
 

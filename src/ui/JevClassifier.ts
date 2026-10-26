@@ -40,7 +40,8 @@ export class JevClassifier {
 		}
 		const apiKey = config.apiKey.trim();
 		const model = config.model.trim();
-		if (!apiKey || !model) throw new JevClassificationError('missing-config');
+		if (!apiKey) throw new JevClassificationError('missing-api-key');
+		if (!model) throw new JevClassificationError('missing-model');
 		const built = buildJevRequests({ ...input, model });
 		if (!built.ok) throw new JevClassificationError(built.error.code);
 		const candidates: JevCandidateMapping[] = [];

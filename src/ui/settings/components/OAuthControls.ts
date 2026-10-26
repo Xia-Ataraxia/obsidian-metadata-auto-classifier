@@ -10,11 +10,11 @@ export function renderOAuthSection(
 	onConnect: () => void | Promise<void>,
 	onDisconnect: () => void | Promise<void>
 ): void {
-	const connectedTokens = tokens && !isTokenExpired(tokens) ? tokens : undefined;
-	const isConnected = Boolean(connectedTokens);
-	const statusText = connectedTokens
-		? `Connected (${formatTokenExpiry(connectedTokens)})`
-		: 'Not connected';
+	const isConnected = Boolean(tokens?.refreshToken) || (tokens !== undefined && !isTokenExpired(tokens));
+	const statusText =
+		tokens && !isTokenExpired(tokens)
+			? `Connected (${formatTokenExpiry(tokens)})`
+			: 'Connected, refreshes on next use';
 
 	Setting.create(containerEl, {
 		name: 'Authentication',

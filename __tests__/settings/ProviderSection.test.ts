@@ -323,7 +323,7 @@ describe('ProviderSection', () => {
 			expect(result.desc).toBe('Not signed in');
 		});
 
-		it('shows expired OAuth tokens as not signed in', () => {
+		it('shows expired OAuth tokens with a refresh token as signed in', () => {
 			const expiredTokens: OAuthTokens = {
 				accessToken: 'token',
 				refreshToken: 'refresh',
@@ -345,7 +345,7 @@ describe('ProviderSection', () => {
 			const result = getDisplayInfo(providerSection, provider);
 
 			expect(result.name).toBe('Codex');
-			expect(result.desc).toBe('Not signed in');
+			expect(result.desc).toBe('Signed in · refreshes on next use');
 		});
 
 		it('should detect OAuth provider by oauth field even without authType', () => {

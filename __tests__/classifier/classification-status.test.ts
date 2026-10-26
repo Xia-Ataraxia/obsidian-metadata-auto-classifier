@@ -9,9 +9,15 @@ import { HttpError } from '../../src/ui/request';
 
 describe('classification error statuses', () => {
 	it('distinguishes missing config, auth, network and server failures', () => {
-		expect(classificationErrorStatus(new JevClassificationError('missing-config'))).toBe(
-			'missing_config'
+		expect(classificationErrorStatus(new JevClassificationError('missing-api-key'))).toBe(
+			'missing_api_key'
 		);
+		expect(classificationErrorStatus(new JevClassificationError('missing-model'))).toBe(
+			'missing_model'
+		);
+		expect(
+			classificationErrorStatus(new JevClassificationError('question-context-too-large'))
+		).toBe('context_too_large');
 		expect(classificationErrorStatus(new HttpError('HTTP_ERROR', 401))).toBe('auth_failed');
 		expect(classificationErrorStatus(new HttpError('HTTP_ERROR', 403))).toBe('auth_failed');
 		expect(classificationErrorStatus(new HttpError('TRANSPORT_ERROR'))).toBe('network_failed');
@@ -20,10 +26,13 @@ describe('classification error statuses', () => {
 	});
 
 	it('routes setup problems to the notice with an Open settings action', () => {
-		expect(classificationNoticeKey('missing_config')).toBe('classification_setup');
+		expect(classificationNoticeKey('missing_api_key')).toBe('classification_setup');
 		expect(classificationNoticeKey('auth_failed')).toBe('classification_setup');
 		expect(classificationNoticeKey('no_refs')).toBe('classification_setup');
 		expect(classificationNoticeKey('server_failed')).toBe('classification_status');
-		expect(CLASSIFICATION_MESSAGES.missing_config).toContain('settings');
+		expect(classificationNoticeKey('missing_model')).toBe('classification_setup');
+		expect(CLASSIFICATION_MESSAGES.missing_api_key).toBe(
+			'Jev API key is missing. Add it in settings. No changes were made.'
+		);
 	});
 });

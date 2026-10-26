@@ -20,7 +20,9 @@ export const CLASSIFICATION_MESSAGES = {
 	preparation_failed: 'Reference values could not be prepared. No changes were made.',
 	write_failed: 'The note could not be updated safely. No changes were made.',
 	invalid_settings: 'Classification settings are invalid. No changes were made.',
-	missing_config: 'Add your Jev API key and model in settings. No changes were made.',
+	missing_api_key: 'Jev API key is missing. Add it in settings. No changes were made.',
+	missing_model: 'Jev model is missing. Add it in settings. No changes were made.',
+	context_too_large: 'This note is too large to classify (limit about 24 KB). No changes were made.',
 	auth_failed: 'Jev rejected the API key. Check it in settings. No changes were made.',
 	network_failed: 'Could not reach Jev. Check your connection and try again. No changes were made.',
 	server_failed: 'Jev is unavailable right now. Try again later. No changes were made.',
@@ -28,7 +30,8 @@ export const CLASSIFICATION_MESSAGES = {
 
 /** Statuses the user fixes in settings; shown as a mutable notice with an Open settings action. */
 const SETUP_STATUSES: ReadonlySet<ClassificationStatus> = new Set([
-	'missing_config',
+	'missing_api_key',
+	'missing_model',
 	'auth_failed',
 	'no_refs',
 ]);
@@ -59,7 +62,10 @@ export function classificationErrorStatus(error: unknown): ClassificationStatus 
 		return 'generation_failed';
 	if (error instanceof JevClassificationError) {
 		if (error.code === 'expired') return 'timeout';
-		return error.code === 'missing-config' ? 'missing_config' : 'selection_failed';
+		if (error.code === 'missing-api-key') return 'missing_api_key';
+		if (error.code === 'missing-model') return 'missing_model';
+		if (error.code === 'question-context-too-large') return 'context_too_large';
+		return 'selection_failed';
 	}
 	return 'selection_failed';
 }
