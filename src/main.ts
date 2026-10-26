@@ -2,6 +2,7 @@ import { Plugin } from 'obsidian';
 import { ClassificationService } from './ui/ClassificationService';
 import { CommandService } from './ui/CommandService';
 import { DEFAULT_FRONTMATTER_SETTING, DEFAULT_SETTINGS, NOTICE_CATALOG } from './domain/constants';
+import { migrateStoredSettings } from './domain/settings-migration';
 import type { AutoClassifierSettings } from './types';
 import { AutoClassifierSettingTab } from './ui/settings';
 import { PluginNotices } from './ui/plugin-notices';
@@ -102,11 +103,8 @@ export default class AutoClassifierPlugin extends Plugin {
 		const generation = this.lifecycleGeneration;
 		const storedSettings: unknown = await this.loadData();
 		if (generation !== this.lifecycleGeneration) return;
-		this.settings = Object.assign(
-			{},
-			DEFAULT_SETTINGS,
-			storedSettings
-		);
+		const defaults = structuredClone(DEFAULT_SETTINGS);
+		this.settings = { ...defaults, ...(migrateStoredSettings(storedSettings) as Partial<AutoClassifierSettings>) };
 		this.settings.jev = { ...DEFAULT_SETTINGS.jev, ...this.settings.jev };
 
 		// Migrate old frontmatter settings that may be missing count
