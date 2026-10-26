@@ -181,6 +181,10 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 		timeout: 3000,
 		immutable: true,
 	},
+	model_test_failed: {
+		template: 'Could not connect to {{name}}. Check the provider and model.',
+		timeout: 5000,
+	},
 	model_test_error: {
 		template: 'Test failed for {{name}}. {{message}}',
 		timeout: 5000,
