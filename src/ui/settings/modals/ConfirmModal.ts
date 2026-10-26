@@ -19,6 +19,8 @@ class ConfirmModal extends Modal {
 
 	onOpen(): void {
 		this.scope.register([], 'Enter', () => {
+			// A focused button keeps its native Enter activation, so Cancel stays Cancel.
+			if (this.contentEl.doc.activeElement?.tagName === 'BUTTON') return true;
 			this.confirm();
 			return false;
 		});
