@@ -95,8 +95,15 @@
     margin-bottom: var(--size-4-4);
 }
 
-.mac-classification-rule-textarea {
-	width: 100%;
+.mac-classification-rule-textarea.mac-full-width {
+	/* Line up with the setting rows above, which are inset inside setting groups. */
+	width: calc(100% - 2 * var(--setting-items-padding-x, 0px));
+	margin-inline: var(--setting-items-padding-x, 0px);
+}
+
+/* Headings outside a setting group keep Obsidian's group inset; modal rows have none. */
+.popular-models-section .setting-item-heading {
+	padding-inline: 0;
 }
 
 /* API Key Link Styling */

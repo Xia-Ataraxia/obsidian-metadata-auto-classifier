@@ -47,7 +47,7 @@ const settingHarness = vi.hoisted(() => ({
 	toggles: [] as {
 		name: string;
 		container: SyntheticElement;
-		setting: object;
+		setting: { settingEl: { visible: boolean } };
 		component: SyntheticToggle;
 	}[],
 	buttons: [] as { component: SyntheticButton }[],
@@ -131,7 +131,14 @@ vi.mock('obsidian', () => {
 	});
 
 	class Setting {
-		settingEl = { addClass: () => {}, createDiv: () => createElement() };
+		settingEl = {
+			visible: true,
+			addClass: () => {},
+			createDiv: () => createElement(),
+			toggle(show: boolean) {
+				this.visible = show;
+			},
+		};
 		controlEl = { createSpan: () => createElement() };
 		name = '';
 
@@ -263,7 +270,9 @@ const createModal = (field: FrontmatterField): ConfigurableSettingModal =>
 const activeGenerationToggles = () =>
 	settingHarness.toggles.filter(
 		({ name, container, setting }) =>
-			name === 'Generate new tags' && container.children.includes(setting)
+			name === 'Generate new tags' &&
+			container.children.includes(setting) &&
+			setting.settingEl.visible
 	);
 
 const currentModal = (): ConfigurableSettingModal => {

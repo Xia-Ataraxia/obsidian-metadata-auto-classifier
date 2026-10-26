@@ -110,7 +110,7 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 		timeout: 5000,
 	},
 	no_active_file: {
-		template: 'No active file.',
+		template: 'Open a note to classify first.',
 		timeout: 5000,
 	},
 	no_frontmatter_setting: {

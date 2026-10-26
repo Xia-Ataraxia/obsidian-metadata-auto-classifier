@@ -235,6 +235,19 @@ describe('AutoClassifierPlugin', () => {
 			);
 		});
 
+		it('skips unnamed draft fields', async () => {
+			plugin.addCommand = vi.fn();
+			installClassificationService();
+			plugin.settings.frontmatter = [makeField(1), { ...makeField(2), name: ' ' }];
+			vi.mocked(app.workspace.getActiveFile).mockReturnValue(createTestTFile('notes/one.md', 'one'));
+
+			plugin.setupCommand();
+			await plugin.processAllFrontmatter();
+
+			expect(plugin.addCommand).toHaveBeenCalledTimes(2);
+			expect(mocks.classify.mock.calls.map(([, id]) => id)).toEqual([1]);
+		});
+
 		it('registers callbacks that invoke their command action', async () => {
 			plugin.addCommand = vi.fn();
 			const callback = vi.fn().mockResolvedValue(undefined);

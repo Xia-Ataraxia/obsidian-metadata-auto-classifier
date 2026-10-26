@@ -1,4 +1,4 @@
-import type { App, TextAreaComponent } from 'obsidian';
+import type { App, TextAreaComponent, ToggleComponent } from 'obsidian';
 import { Modal, Setting, TextAreaComponent as ObsidianTextArea } from 'obsidian';
 
 import { deepCloneFrontmatterField } from '../../frontmatter';
@@ -10,7 +10,8 @@ export class ConfigurableSettingModal extends Modal {
 	private readonly props: FrontmatterEditorModalProps;
 	private readonly localState: FrontmatterField;
 	private textAreaComponent?: TextAreaComponent;
-	private generateNewTagsContainer?: HTMLElement;
+	private generateNewTagsSetting?: Setting;
+	private generateNewTagsToggle?: ToggleComponent;
 
 	constructor(app: App, props: FrontmatterEditorModalProps) {
 		super(app);
@@ -38,53 +39,51 @@ export class ConfigurableSettingModal extends Modal {
 			},
 		});
 
-		// Controls container
-		const controlsContainer = contentEl.createDiv({ cls: 'controls-container' });
-		this.generateNewTagsContainer = controlsContainer.createDiv({
-			cls: 'generate-new-tags-container',
-		});
+		// Rows stay direct children of contentEl so Obsidian's modal dividers and padding apply.
+		this.addGenerateNewTagsSetting(contentEl);
 		this.renderGenerateNewTagsSetting();
 
 		// Only show LinkType if enabled
 		if (this.props.options.showLinkType) {
-			this.addLinkTypeSetting(controlsContainer);
+			this.addLinkTypeSetting(contentEl);
 		}
 
 		// Overwrite Toggle (always shown)
-		this.addOverwriteSetting(controlsContainer);
+		this.addOverwriteSetting(contentEl);
 
 		// Count (always shown)
-		this.addCountSetting(controlsContainer);
+		this.addCountSetting(contentEl);
 
 		// Options section (conditional)
 		if (this.props.options.showOptions) {
-			this.addOptionsSection(controlsContainer);
+			this.addOptionsSection(contentEl);
 		}
 
 		// Custom Query section (always shown)
-		this.addCustomQuerySection(controlsContainer);
+		this.addCustomQuerySection(contentEl);
 
 		// Add save/cancel buttons
 		this.addActionButtons(contentEl);
 	}
 
-	private renderGenerateNewTagsSetting(): void {
-		if (!this.generateNewTagsContainer) return;
-		this.generateNewTagsContainer.empty();
-		if (this.localState.name !== 'tags') {
-			this.localState.generateNewTags = false;
-			return;
-		}
-
-		new Setting(this.generateNewTagsContainer)
+	private addGenerateNewTagsSetting(containerEl: HTMLElement): void {
+		this.generateNewTagsSetting = new Setting(containerEl)
 			.setName('Generate new tags')
 			.setDesc('Use the optional provider only for remaining slots; failures write nothing.')
 			.addToggle((toggle) => {
+				this.generateNewTagsToggle = toggle;
 				toggle.setValue(this.localState.generateNewTags === true);
 				toggle.onChange((value) => {
 					this.localState.generateNewTags = this.localState.name === 'tags' && value === true;
 				});
 			});
+	}
+
+	private renderGenerateNewTagsSetting(): void {
+		const isTags = this.localState.name === 'tags';
+		if (!isTags) this.localState.generateNewTags = false;
+		this.generateNewTagsToggle?.setValue(this.localState.generateNewTags === true);
+		this.generateNewTagsSetting?.settingEl.toggle(isTags);
 	}
 
 	private addLinkTypeSetting(containerEl: HTMLElement): void {

@@ -1,5 +1,7 @@
 // Matches the plugin's own Codex OAuth errors (UnifiedProvider, CodexOAuth.refreshTokens)
 const RECONNECT_ERROR_PATTERN = /OAuth tokens (not found|incomplete)|Token refresh failed/;
+// Thrown before any request when the provider has no usable key (UnifiedProvider.resolveApiKey).
+const MISSING_AUTH_ERROR_PATTERN = /^Provider authentication is unavailable$/;
 const NETWORK_ERROR_PATTERN = /net::ERR_|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET|Failed to fetch|NetworkError/i;
 
 function getStatus(error: unknown, message: string): number | undefined {
@@ -26,6 +28,7 @@ export function toApiErrorNotice(error: unknown, provider: string): string {
 	const message = typeof rawMessage === 'string' ? rawMessage : '';
 	// These carry no trustworthy status: OAuth failures may wrap a 401, parse errors embed raw note text.
 	if (RECONNECT_ERROR_PATTERN.test(message)) return `Reconnect your ${provider} account in settings.`;
+	if (MISSING_AUTH_ERROR_PATTERN.test(message)) return `Add an API key for ${provider} in settings.`;
 	if (message.startsWith('Failed to parse')) return `${provider} returned an unexpected response. Try again.`;
 	const status = getStatus(error, message);
 
