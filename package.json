@@ -26,6 +26,7 @@
 		"@codemirror/view": "6.43.13",
 		"@eslint/js": "10.0.1",
 		"@types/node": "^26.6.5",
+		"@vitest/eslint-plugin": "^1.6.28",
 		"esbuild": "0.28.2",
 		"eslint": "^10.13.0",
 		"eslint-plugin-obsidianmd": "^0.4.2",
