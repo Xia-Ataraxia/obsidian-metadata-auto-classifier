@@ -40,6 +40,7 @@ export interface FrontmatterField {
 	overwrite: boolean;
 	linkType: LinkType;
 	customQuery: string;
+	generateNewTags?: boolean;
 }
 
 export interface FrontMatter {
@@ -64,18 +65,13 @@ export type ProviderAuth =
 	| { type: 'apiKey'; apiKey: string }
 	| { type: 'oauth'; oauth: OAuthTokens };
 
-/**
- * Provider configuration interface
- * NOTE: During migration, both old format (apiKey, oauth fields) and new format (auth field) are supported
- */
 export interface ProviderBase {
 	name: string;
 	baseUrl: string;
 	temperature?: number;
 	models: Model[];
-	// New unified auth field
+	// Explicit auth takes precedence; flat fields must not supply fallback credentials.
 	auth?: ProviderAuth;
-	// Legacy fields (kept for backward compatibility during migration)
 	apiKey?: string;
 	authType?: AuthType;
 	oauth?: OAuthTokens;
@@ -83,9 +79,8 @@ export interface ProviderBase {
 
 export type ProviderConfig = ProviderBase;
 
-export interface StructuredOutput {
-	output: string[];
-	reliability: number;
+export interface GeneratedTags {
+	tags: string[];
 }
 
 export interface ProviderPreset extends Omit<ProviderBase, 'apiKey'> {
@@ -108,11 +103,12 @@ export interface APIProvider {
 		provider: ProviderConfig,
 		selectedModel: string,
 		temperature?: number,
-		onTokenRefresh?: OnTokenRefreshCallback
-	): Promise<StructuredOutput>;
+		onTokenRefresh?: OnTokenRefreshCallback,
+		requestOptions?: { deadline: number; assertCurrent?: () => void }
+	): Promise<GeneratedTags>;
 
 	buildHeaders(apiKey: string): Record<string, string>;
-	processApiResponse(responseData: unknown): StructuredOutput;
+	processApiResponse(responseData: unknown): GeneratedTags;
 }
 
 // ==========================================
@@ -175,6 +171,7 @@ export type FrontmatterRef = Pick<FrontmatterField, 'id' | 'name'>;
 // ==========================================
 
 export interface AutoClassifierSettings {
+	jev: { apiKey: string; model: string };
 	providers: ProviderConfig[];
 	selectedProvider: string;
 	selectedModel: string;

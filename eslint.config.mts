@@ -48,7 +48,6 @@ export default tseslint.config(
 			'**/*.config.js',
 			'**/*.config.mjs',
 		],
-		plugins: { '@typescript-eslint': tseslint.plugin },
 		rules: {
 			'@typescript-eslint/no-misused-promises': ['error', {
 				checksConditionals: true,
@@ -94,7 +93,7 @@ export default tseslint.config(
 	},
 	// Test files: relax rules that don't apply to test code.
 	{
-		files: ['test/**/*.ts', '__tests__/**/*.ts'],
+		files: ['test/**/*.ts', '__tests__/**/*.ts', '__mocks__/**/*.ts'],
 		plugins: vitestPlugin ? { vitest: vitestPlugin } : {},
 		languageOptions: {
 			globals: { ...globals.node },
@@ -122,5 +121,5 @@ export default tseslint.config(
 		},
 	},
 	// Node tooling and root configs are not plugin code and sit outside tsconfig (type-aware rules need it).
-	globalIgnores(['dist/', 'node_modules/', 'coverage/', 'scripts/', '**/*.mjs', '*.config.ts', '*.config.mts']),
+	globalIgnores(['dist/', 'main.js', 'node_modules/', 'coverage/', 'scripts/', '**/*.mjs', '*.config.ts', '*.config.mts']),
 );

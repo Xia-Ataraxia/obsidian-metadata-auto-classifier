@@ -6,7 +6,7 @@ import { PluginLogger } from './plugin-logger';
  */
 let debugMode = false;
 
-export const macLogger = new PluginLogger('MAC', () => debugMode);
+export const macLogger = new PluginLogger(() => debugMode);
 
 export function setLoggerDebug(enabled: boolean): void {
 	debugMode = enabled;

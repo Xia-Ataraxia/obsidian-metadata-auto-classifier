@@ -1,20 +1,38 @@
-export type MigrationFn = (data: Record<string, unknown>) => Record<string, unknown>;
+import { extractAccountId } from './auth/token-manager';
+
+type Raw = Record<string, unknown>;
+
+function isRaw(value: unknown): value is Raw {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function withAccountId(oauth: unknown): unknown {
+	if (!isRaw(oauth) || typeof oauth.accessToken !== 'string') return oauth;
+	if (typeof oauth.accountId === 'string' && oauth.accountId) return oauth;
+	try {
+		return { ...oauth, accountId: extractAccountId(oauth.accessToken) };
+	} catch {
+		return oauth;
+	}
+}
 
 /**
- * Run a series of migration functions over settings data.
- * Each migration receives a shallow copy and may mutate it or return a new object.
- * `changed` is true if any migration was executed (not based on reference equality,
- * since mutations to the same object are common and valid).
+ * Upgrades settings written by earlier releases: moves the legacy top-level
+ * `codexConnection` onto the Codex provider and backfills a missing `accountId`.
  */
-export function migrateSettings(
-	data: Record<string, unknown>,
-	migrations: MigrationFn[]
-): { data: Record<string, unknown>; changed: boolean } {
-	let current = { ...data };
+export function migrateStoredSettings(stored: unknown): unknown {
+	if (!isRaw(stored)) return stored;
+	const { codexConnection, ...rest } = stored;
+	const providers = Array.isArray(rest.providers) ? rest.providers : undefined;
+	if (!providers) return rest;
 
-	for (const migrate of migrations) {
-		current = migrate(current);
-	}
-
-	return { data: current, changed: migrations.length > 0 };
+	const migrated = providers.map((provider: unknown) => {
+		if (!isRaw(provider)) return provider;
+		const legacy = provider.name === 'Codex' && !provider.oauth ? codexConnection : undefined;
+		const oauth = withAccountId(provider.oauth ?? legacy);
+		if (oauth === provider.oauth) return provider;
+		return legacy ? { ...provider, oauth, authType: 'oauth' } : { ...provider, oauth };
+	});
+	if (migrated.some((provider, index) => provider !== providers[index])) rest.providers = migrated;
+	return rest;
 }

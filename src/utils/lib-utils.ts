@@ -37,33 +37,25 @@ export const getProviderPreset = (providerName: string): ProviderPreset => {
 	return preset;
 };
 
-/**
- * Find matching preset for an existing provider config
- * Matches by baseUrl or name
- */
-export const findMatchingPreset = (providerConfig: { baseUrl: string; name: string }): string => {
-	const presets = getProviderPresets();
-	const matchingPreset = presets.find(
-		(preset) => preset.baseUrl === providerConfig.baseUrl || preset.name === providerConfig.name
-	);
-	return matchingPreset?.name || 'Custom Provider';
-};
-
-/**
- * Whether the provider can be called: credentials are present, or its preset needs none (Ollama, LM Studio).
- * Supports both the unified auth field and legacy apiKey/oauth fields.
- */
-export const hasValidAuth = (provider: ProviderConfig): boolean => {
-	if (provider.auth?.type === 'oauth' || (!provider.auth && provider.authType === 'oauth')) {
-		return Boolean(provider.auth?.type === 'oauth' ? provider.auth.oauth?.accessToken : provider.oauth?.accessToken);
+export function findUniqueProvider(
+	providers: ReadonlyArray<ProviderConfig>,
+	name: string
+): ProviderConfig | undefined {
+	let match: ProviderConfig | undefined;
+	for (const provider of providers) {
+		if (provider.name !== name) continue;
+		if (match) return undefined;
+		match = provider;
 	}
-	const apiKey = provider.auth?.type === 'apiKey' ? provider.auth.apiKey : provider.apiKey;
-	if (apiKey) return true;
-	return getProviderPresets().find((p) => p.name === provider.name)?.apiKeyRequired === false;
-};
+	return match;
+}
+
 /**
  * Writes an edited clone back into the settings list by id (the editor modal works on a copy).
  */
-export function replaceFrontmatterById(list: FrontmatterField[], updated: FrontmatterField): FrontmatterField[] {
-	return list.map((f) => (f.id === updated.id ? updated : f));
+export function replaceFrontmatterById(
+	list: FrontmatterField[],
+	updated: FrontmatterField
+): FrontmatterField[] {
+	return list.map((field) => (field.id === updated.id ? updated : field));
 }

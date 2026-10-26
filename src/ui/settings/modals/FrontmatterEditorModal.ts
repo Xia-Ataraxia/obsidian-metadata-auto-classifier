@@ -10,6 +10,7 @@ export class ConfigurableSettingModal extends Modal {
 	private readonly props: FrontmatterEditorModalProps;
 	private readonly localState: FrontmatterField;
 	private textAreaComponent?: TextAreaComponent;
+	private generateNewTagsContainer?: HTMLElement;
 
 	constructor(app: App, props: FrontmatterEditorModalProps) {
 		super(app);
@@ -31,12 +32,18 @@ export class ConfigurableSettingModal extends Modal {
 				value: this.localState.name,
 				onChange: (value) => {
 					this.localState.name = value;
+					if (value !== 'tags') this.localState.generateNewTags = false;
+					this.renderGenerateNewTagsSetting();
 				},
 			},
 		});
 
 		// Controls container
 		const controlsContainer = contentEl.createDiv({ cls: 'controls-container' });
+		this.generateNewTagsContainer = controlsContainer.createDiv({
+			cls: 'generate-new-tags-container',
+		});
+		this.renderGenerateNewTagsSetting();
 
 		// Only show LinkType if enabled
 		if (this.props.options.showLinkType) {
@@ -59,6 +66,25 @@ export class ConfigurableSettingModal extends Modal {
 
 		// Add save/cancel buttons
 		this.addActionButtons(contentEl);
+	}
+
+	private renderGenerateNewTagsSetting(): void {
+		if (!this.generateNewTagsContainer) return;
+		this.generateNewTagsContainer.empty();
+		if (this.localState.name !== 'tags') {
+			this.localState.generateNewTags = false;
+			return;
+		}
+
+		new Setting(this.generateNewTagsContainer)
+			.setName('Generate new tags')
+			.setDesc('Use the optional provider only for remaining slots; failures write nothing.')
+			.addToggle((toggle) => {
+				toggle.setValue(this.localState.generateNewTags === true);
+				toggle.onChange((value) => {
+					this.localState.generateNewTags = this.localState.name === 'tags' && value === true;
+				});
+			});
 	}
 
 	private addLinkTypeSetting(containerEl: HTMLElement): void {

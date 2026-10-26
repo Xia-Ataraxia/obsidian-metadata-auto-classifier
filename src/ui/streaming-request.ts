@@ -1,183 +1,102 @@
-import { Platform } from 'obsidian';
-import { macLogger } from '../utils/mac-logger';
-import { redactLogPayload, sanitizeErrorMessage, summarizeForLog } from '../utils/log-redaction';
-import { sendStreamingRequestViaNode } from './streaming-node-request';
-
-const STREAM_TIMEOUT_MS = 60000;
-const MAX_RETRIES = 3;
-const INITIAL_DELAY_MS = 1000;
-const RETRY_STATUS_CODES = [429, 500, 502, 503, 504];
+import { HttpError, sendHttpRequest } from './request';
+import type { HttpRequestOptions } from './request';
 
 export interface SSEEvent {
 	type: string;
 	[key: string]: unknown;
 }
 
-function redactUrl(url: string): string {
+export type SSEEventOutcome =
+	| { type: 'delta'; text: string }
+	| { type: 'complete' }
+	| { type: 'ignore' }
+	| { type: 'error' };
+
+function parseEventData(data: string): SSEEvent {
+	let event: unknown;
 	try {
-		const parsed = new URL(url);
-		let changed = false;
-		for (const key of parsed.searchParams.keys()) {
-			if (/key|token|secret|code/i.test(key)) {
-				parsed.searchParams.set(key, '[REDACTED]');
-				changed = true;
-			}
-		}
-		return changed ? parsed.toString() : url;
+		event = JSON.parse(data) as unknown;
 	} catch {
-		return sanitizeErrorMessage(url);
+		throw new HttpError('PROTOCOL_ERROR');
 	}
+	if (typeof event !== 'object' || event === null || Array.isArray(event)) {
+		throw new HttpError('PROTOCOL_ERROR');
+	}
+	if (typeof (event as Record<string, unknown>).type !== 'string') {
+		throw new HttpError('PROTOCOL_ERROR');
+	}
+	return event as SSEEvent;
 }
 
-function parseSSEEvents(text: string): SSEEvent[] {
-	const events: SSEEvent[] = [];
+function parseSSE(text: string, parseEvent: (event: SSEEvent) => SSEEventOutcome): string {
+	const lines = text.split(/\r\n|\r|\n/);
+	let frameHasField = false;
+	let dataLines: string[] = [];
+	let accumulatedText = '';
+	let completed = false;
 
-	for (const line of text.split('\n')) {
-		const trimmedLine = line.trim();
-		if (!trimmedLine || trimmedLine === 'data: [DONE]') {
+	const consumeFrame = (): void => {
+		if (dataLines.length === 0) return;
+		if (completed) throw new HttpError('PROTOCOL_ERROR');
+		const event = parseEventData(dataLines.join('\n'));
+		let outcome: SSEEventOutcome;
+		try {
+			outcome = parseEvent(event);
+		} catch {
+			throw new HttpError('PROTOCOL_ERROR');
+		}
+		if (!outcome || typeof outcome !== 'object') throw new HttpError('PROTOCOL_ERROR');
+		switch (outcome.type) {
+			case 'delta':
+				if (typeof outcome.text !== 'string') throw new HttpError('PROTOCOL_ERROR');
+				accumulatedText += outcome.text;
+				break;
+			case 'complete':
+				completed = true;
+				break;
+			case 'ignore':
+				break;
+			case 'error':
+			default:
+				throw new HttpError('PROTOCOL_ERROR');
+		}
+	};
+
+	for (const line of lines) {
+		if (line === '') {
+			consumeFrame();
+			frameHasField = false;
+			dataLines = [];
 			continue;
 		}
-
-		if (trimmedLine.startsWith('data: ')) {
-			try {
-				const jsonStr = trimmedLine.slice(6);
-				const event = JSON.parse(jsonStr) as SSEEvent;
-				events.push(event);
-			} catch {
-				// Skip non-JSON data lines
-			}
+		if (line.startsWith(':')) continue;
+		frameHasField = true;
+		const separator = line.indexOf(':');
+		const field = separator === -1 ? line : line.slice(0, separator);
+		if (field === 'data') {
+			let value = separator === -1 ? '' : line.slice(separator + 1);
+			if (value.startsWith(' ')) value = value.slice(1);
+			dataLines.push(value);
 		}
 	}
 
-	return events;
-}
-
-function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function isRetryableStatus(status: number): boolean {
-	return RETRY_STATUS_CODES.includes(status);
-}
-
-export class HttpError extends Error {
-	readonly status: number;
-	readonly responseText: string;
-
-	constructor(message: string, status: number, responseText: string) {
-		super(message);
-		this.name = 'HttpError';
-		this.status = status;
-		this.responseText = responseText;
-	}
+	if (frameHasField || dataLines.length > 0) throw new HttpError('PROTOCOL_ERROR');
+	if (!completed || accumulatedText.trim().length === 0) throw new HttpError('PROTOCOL_ERROR');
+	return accumulatedText;
 }
 
 export async function sendStreamingRequest(
 	url: string,
 	headers: Record<string, string>,
 	body: Record<string, unknown>,
-	parseEvent: (event: SSEEvent) => string | null
+	parseEvent: (event: SSEEvent) => SSEEventOutcome,
+	options?: HttpRequestOptions
 ): Promise<string> {
-	if (!Platform.isDesktop) {
-		throw new Error('Streaming requests are only available on desktop platforms');
-	}
-
-	macLogger.debug(
-		'[API Streaming Request]',
-		redactLogPayload({
-			url: redactUrl(url),
-			headers,
-			body,
-		})
-	);
-
-	let lastError: Error | null = null;
-
-	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-		try {
-			const response = await sendStreamingRequestViaNode(url, headers, body, STREAM_TIMEOUT_MS);
-
-			// Check for HTTP errors
-			if (response.status >= 400) {
-				// Throw HttpError for 401 so it can be caught for token refresh
-				if (response.status === 401) {
-					throw new HttpError(
-						`Authentication failed (HTTP 401)`,
-						response.status,
-						sanitizeErrorMessage(response.text)
-					);
-				}
-
-				// Check if we should retry for transient errors
-				if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
-					const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
-					macLogger.warn(
-						`[API Streaming] Retryable error (HTTP ${response.status}), attempt ${attempt + 1}/${MAX_RETRIES + 1}, retrying in ${delayMs}ms`
-					);
-					await delay(delayMs);
-					continue;
-				}
-
-				macLogger.error(
-					'[API Streaming Error]',
-					new Error(`HTTP ${response.status}: ${sanitizeErrorMessage(response.text)}`)
-				);
-				throw new HttpError(
-					`Streaming request failed (HTTP ${response.status}): ${sanitizeErrorMessage(response.text)}`,
-					response.status,
-					sanitizeErrorMessage(response.text)
-				);
-			}
-
-			// Parse SSE events from response text
-			const events = parseSSEEvents(response.text);
-			let accumulatedText = '';
-
-			for (const event of events) {
-				// Check for error events
-				if (event.type === 'error') {
-					const errMsg = typeof event.message === 'string' ? event.message : summarizeForLog(event);
-					throw new Error(`Stream error: ${errMsg}`);
-				}
-
-				const textDelta = parseEvent(event);
-				if (textDelta !== null) {
-					accumulatedText += textDelta;
-				}
-			}
-
-			macLogger.debug('[API Streaming Response] Accumulated text length', {
-				length: String(accumulatedText.length),
-			});
-			return accumulatedText;
-		} catch (error) {
-			lastError = error instanceof Error ? error : new Error(String(error));
-
-			// Don't retry 401 errors - they need token refresh, not retry
-			if (error instanceof HttpError && error.status === 401) {
-				throw error;
-			}
-
-			// Retry on network errors (not HTTP errors)
-			if (!(error instanceof HttpError) && attempt < MAX_RETRIES) {
-				const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt);
-				macLogger.warn(
-					`[API Streaming] Network error, attempt ${attempt + 1}/${MAX_RETRIES + 1}, retrying in ${delayMs}ms: ${sanitizeErrorMessage(lastError.message)}`
-				);
-				await delay(delayMs);
-				continue;
-			}
-
-			// Re-throw HttpError as-is to preserve status info
-			if (error instanceof HttpError) {
-				throw error;
-			}
-
-			macLogger.error('[API Streaming Error] Request failed', lastError);
-			throw new Error(`Streaming request failed: ${sanitizeErrorMessage(lastError.message)}`);
-		}
-	}
-
-	// Should not reach here, but TypeScript needs this for exhaustiveness
-	throw lastError ?? new Error('Streaming request failed after all retries');
+	const deadline = Math.min(options?.deadline ?? Infinity, Date.now() + 60_000);
+	const response = await sendHttpRequest(url, headers, body, { ...options, deadline });
+	if (Date.now() >= deadline) throw new HttpError('TIMEOUT');
+	if (typeof response.text !== 'string') throw new HttpError('PROTOCOL_ERROR');
+	const text = parseSSE(response.text, parseEvent);
+	if (Date.now() >= deadline) throw new HttpError('TIMEOUT');
+	return text;
 }

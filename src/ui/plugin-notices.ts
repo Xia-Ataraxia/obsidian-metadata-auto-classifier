@@ -1,4 +1,4 @@
-import { Notice, setIcon, setTooltip } from 'obsidian';
+import { ButtonComponent, Notice } from 'obsidian';
 import type {
 	NoticeCatalog,
 	NoticeDefinition,
@@ -146,17 +146,22 @@ export class PluginNotices {
 		content.setText(text);
 
 		if (!opts.immutable) {
-			row.appendChild(this.createMuteButton(id));
+			this.createMuteButton(id, row);
 		}
 
 		if (opts.button?.text && typeof opts.button.callback === 'function') {
 			const callback = opts.button.callback;
-			const btn = root
-				.createDiv({ cls: `${CLS}-actions` })
-				.createEl('button', { cls: `${CLS}-action`, text: opts.button.text, type: 'button' });
-			btn.addEventListener('click', () => {
-				callback();
-				this.remove(id);
+			const actions = root.createDiv({ cls: `${CLS}-actions` });
+			const button = new ButtonComponent(actions);
+			button.buttonEl.addClass(`${CLS}-action`);
+			button.buttonEl.setAttribute('type', 'button');
+			button.setButtonText(opts.button.text).onClick((evt) => {
+				evt.stopPropagation();
+				try {
+					callback();
+				} finally {
+					this.remove(id);
+				}
 			});
 		}
 
@@ -164,11 +169,12 @@ export class PluginNotices {
 		return fragment;
 	}
 
-	private createMuteButton(id: string): HTMLButtonElement {
-		const button = createEl('button', { cls: `${CLS}-mute`, type: 'button' });
-		setIcon(button, 'bell-off');
-		setTooltip(button, 'Mute this notice');
-		button.addEventListener('click', (evt) => {
+	private createMuteButton(id: string, container: HTMLElement): void {
+		const button = new ButtonComponent(container);
+		button.buttonEl.addClass(`${CLS}-mute`);
+		button.buttonEl.setAttribute('type', 'button');
+		button.buttonEl.setAttribute('aria-label', `Mute notice: ${id}`);
+		button.setIcon('bell-off').setTooltip('Mute this notice').onClick((evt) => {
 			// Keep the click from also dismissing the notice before the mute is saved.
 			evt.stopPropagation();
 			void this.mute(id)
@@ -176,10 +182,9 @@ export class PluginNotices {
 					this.remove(id);
 					this.show('notice_muted');
 				})
-				.catch((err: unknown) => {
-					console.error(`[${this.head}] Failed to mute notice:`, err);
+				.catch(() => {
+					console.error('[MAC] Failed to mute notice.');
 				});
 		});
-		return button;
 	}
 }

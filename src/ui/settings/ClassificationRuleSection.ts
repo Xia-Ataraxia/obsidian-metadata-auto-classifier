@@ -20,7 +20,7 @@ export class ClassificationRuleSection {
 
 		Setting.create(textAreaContainer, {
 			name: 'Classification rule',
-			desc: 'The prompt template sent with every classification request.',
+			desc: 'Instructions used for candidate selection and optional tag generation.',
 			button: {
 				icon: 'reset',
 				tooltip: 'Reset to default template',
@@ -42,6 +42,7 @@ export class ClassificationRuleSection {
 			});
 
 		textAreaComponent.inputEl.rows = 10;
+		textAreaComponent.inputEl.addClass('mac-classification-rule-textarea');
 		textAreaComponent.inputEl.addClass('mac-full-width');
 	}
 }

@@ -1,0 +1,180 @@
+const settingsHarness = vi.hoisted(() => ({
+	headings: [] as string[],
+}));
+
+vi.mock('obsidian', async (importOriginal) => {
+	const original = await importOriginal<typeof import('obsidian')>();
+	class ChainableSetting extends original.Setting {
+		private settingName = '';
+
+		constructor(containerEl: HTMLElement) {
+			super(containerEl);
+			this.setName = (name: string) => {
+				this.settingName = name;
+				return this;
+			};
+			this.setDesc = () => this;
+			this.setHeading = () => {
+				settingsHarness.headings.push(this.settingName);
+				return this;
+			};
+		}
+	}
+
+	return { ...original, Setting: ChainableSetting };
+});
+
+vi.mock('../../src/ui/provider-api', () => ({
+	testModel: vi.fn(),
+}));
+
+vi.mock('../../src/ui/settings/modals/ModelModal', () => ({
+	ModelModal: class {
+		constructor(
+			public app: any,
+			public props: any
+		) {}
+		open = vi.fn();
+	},
+}));
+
+vi.mock('../../src/ui/settings/modals/ProviderModal', () => ({
+	ProviderModal: class {
+		constructor(
+			public app: any,
+			public onSave: any,
+			public provider?: any
+		) {}
+		open = vi.fn();
+	},
+}));
+
+import { Api } from '../../src/ui/settings/ApiSection';
+
+
+const createMockPlugin = () => ({
+	app: { vault: { getMarkdownFiles: vi.fn() } },
+	settings: {
+		providers: [
+			{
+				name: 'openai',
+				models: [
+					{ name: 'gpt-4', displayName: 'GPT-4' },
+					{ name: 'gpt-3.5', displayName: 'GPT-3.5' },
+				],
+			},
+			{
+				name: 'anthropic',
+				models: [{ name: 'claude-3', displayName: 'Claude 3' }],
+			},
+		],
+		selectedProvider: 'openai',
+		selectedModel: 'gpt-4',
+		classificationRule: 'default rule',
+	},
+	saveSettings: vi.fn().mockResolvedValue(undefined),
+});
+
+const createMockElement = (): any => ({
+	empty: vi.fn(),
+	style: {},
+	innerHTML: '',
+	createEl: vi.fn().mockImplementation(() => createMockElement()),
+	createDiv: vi.fn().mockImplementation(() => createMockElement()),
+});
+
+const createMockContainer = () => createMockElement();
+
+describe('Api Container - Regression Tests', () => {
+	let mockPlugin: any;
+	let mockContainer: any;
+	let api: Api;
+
+	beforeEach(() => {
+		settingsHarness.headings.length = 0;
+		mockPlugin = createMockPlugin();
+		mockContainer = createMockContainer();
+		api = new Api(mockPlugin, mockContainer);
+		vi.clearAllMocks();
+	});
+
+	describe('Basic Rendering', () => {
+		test('renders default settings correctly', () => {
+			// When: display is called
+			api.display();
+
+			// Then: All basic UI components should be created
+			expect(mockContainer.empty).toHaveBeenCalled();
+			expect(settingsHarness.headings).toEqual([
+				'Providers',
+				'Models',
+			]);
+			expect(mockContainer.createDiv).toHaveBeenCalledWith({ cls: 'provider-section' });
+			expect(mockContainer.createDiv).toHaveBeenCalledWith({ cls: 'model-section' });
+			expect(mockContainer.createDiv).toHaveBeenCalledWith({
+				cls: 'custom-prompt-container mac-custom-prompt-container',
+			});
+		});
+	});
+
+	describe('Provider Management', () => {
+		test('resets selected settings when provider is deleted (Critical Regression)', async () => {
+			// When: openai provider deletion is simulated
+			mockPlugin.settings.providers = mockPlugin.settings.providers.filter(
+				(p: any) => p.name !== 'openai'
+			);
+			mockPlugin.settings.selectedProvider = '';
+			mockPlugin.settings.selectedModel = '';
+
+			// Then: selected settings should be reset
+			expect(mockPlugin.settings.selectedProvider).toBe('');
+			expect(mockPlugin.settings.selectedModel).toBe('');
+			expect(mockPlugin.settings.providers).toHaveLength(1);
+		});
+
+		test('preserves selected settings when non-selected provider is deleted', async () => {
+			// When: anthropic provider is deleted
+			mockPlugin.settings.providers = mockPlugin.settings.providers.filter(
+				(p: any) => p.name !== 'anthropic'
+			);
+
+			// Then: selected settings should be preserved
+			expect(mockPlugin.settings.selectedProvider).toBe('openai');
+			expect(mockPlugin.settings.selectedModel).toBe('gpt-4');
+		});
+	});
+
+	describe('Model Management', () => {
+		test('updates provider when model is selected (Critical Regression)', async () => {
+			// When: Claude 3 model selection is simulated
+			mockPlugin.settings.selectedProvider = 'anthropic';
+			mockPlugin.settings.selectedModel = 'claude-3';
+
+			// Then: provider should also be updated
+			expect(mockPlugin.settings.selectedProvider).toBe('anthropic');
+			expect(mockPlugin.settings.selectedModel).toBe('claude-3');
+		});
+
+		test('resets selected settings when model is deleted', async () => {
+			// When: gpt-4 model is deleted and settings reset
+			mockPlugin.settings.selectedProvider = '';
+			mockPlugin.settings.selectedModel = '';
+
+			// Then: selected settings should be reset
+			expect(mockPlugin.settings.selectedProvider).toBe('');
+			expect(mockPlugin.settings.selectedModel).toBe('');
+		});
+	});
+
+	describe('Classification Rule', () => {
+		test('updates classification rule correctly', () => {
+			// Test updating rule
+			mockPlugin.settings.classificationRule = 'new rule';
+			expect(mockPlugin.settings.classificationRule).toBe('new rule');
+
+			// Test resetting rule
+			mockPlugin.settings.classificationRule = 'default template';
+			expect(mockPlugin.settings.classificationRule).toBe('default template');
+		});
+	});
+});

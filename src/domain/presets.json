@@ -23,14 +23,6 @@
 			{
 				"id": "gpt-4.1-mini",
 				"name": "GPT-4.1 Mini"
-			},
-			{
-				"id": "gpt-4-turbo",
-				"name": "GPT-4 Turbo"
-			},
-			{
-				"id": "gpt-3.5-turbo",
-				"name": "GPT-3.5 Turbo"
 			}
 		]
 	},
@@ -43,16 +35,12 @@
 		"temperature": 0.6,
 		"popularModels": [
 			{
-				"id": "claude-opus-4-20250514",
-				"name": "Claude Opus 4"
+				"id": "claude-opus-4-6",
+				"name": "Claude Opus 4.6"
 			},
 			{
-				"id": "claude-sonnet-4-20250514",
-				"name": "Claude Sonnet 4"
-			},
-			{
-				"id": "claude-3-7-sonnet-20250219",
-				"name": "Claude Sonnet 3.7"
+				"id": "claude-sonnet-4-6",
+				"name": "Claude Sonnet 4.6"
 			}
 		]
 	},
@@ -69,8 +57,8 @@
 				"name": "Gemini 2.5 Pro"
 			},
 			{
-				"id": "gemini-2.0-flash",
-				"name": "Gemini 2.0 Flash"
+				"id": "gemini-3.8-flash",
+				"name": "Gemini 3.8 Flash"
 			}
 		]
 	},
@@ -83,12 +71,12 @@
 		"temperature": 0.6,
 		"popularModels": [
 			{
-				"id": "meta-llama/llama-4-maverick:free",
-				"name": "Llama 4 Maverick (Free)"
+				"id": "meta-llama/llama-4-maverick",
+				"name": "Llama 4 Maverick"
 			},
 			{
-				"id": "meta-llama/llama-4-scout:free",
-				"name": "Llama 4 Scout (Free)"
+				"id": "meta-llama/llama-4-scout",
+				"name": "Llama 4 Scout"
 			},
 			{
 				"id": "openrouter/auto",
@@ -127,16 +115,16 @@
 		"apiKeyUrl": "https://platform.deepseek.com/api_keys",
 		"apiKeyRequired": true,
 		"modelsList": "https://api-docs.deepseek.com/quick_start/pricing",
-		"baseUrl": "https://api.deepseek.com/v1/chat/completions",
+		"baseUrl": "https://api.deepseek.com/chat/completions",
 		"temperature": 1.0,
 		"popularModels": [
 			{
-				"id": "deepseek-chat",
-				"name": "DeepSeek-V3"
+				"id": "deepseek-flash",
+				"name": "DeepSeek V4.1 Flash"
 			},
 			{
-				"id": "deepseek-reasoner",
-				"name": "DeepSeek-R1"
+				"id": "deepseek-v4-pro",
+				"name": "DeepSeek V4 Pro"
 			}
 		]
 	},
@@ -167,13 +155,13 @@
 		"apiKeyUrl": "",
 		"apiKeyRequired": false,
 		"authType": "oauth",
-		"modelsList": "https://openai.com/chatgpt",
+		"modelsList": "https://learn.chatgpt.com/docs/models",
 		"baseUrl": "https://chatgpt.com/backend-api/codex/responses",
 		"temperature": 0.6,
 		"popularModels": [
 			{
 				"id": "gpt-5.2",
-				"name": "GPT-5.2 (Recommended)"
+				"name": "GPT-5.2 (Deprecated for ChatGPT sign-in)"
 			}
 		]
 	}
