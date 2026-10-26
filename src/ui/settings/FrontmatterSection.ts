@@ -1,3 +1,4 @@
+import { replaceFrontmatterById } from '../../utils/lib-utils';
 import { confirmAction } from './modals/ConfirmModal';
 import type { FrontmatterActions, FrontmatterField, SettingsComponentOptions } from '../../types';
 import { BaseSettingsComponent } from './components/BaseSettings';
@@ -27,8 +28,9 @@ export class Frontmatter extends BaseSettingsComponent {
 	private handleEdit(frontmatterSetting: FrontmatterField): void {
 		this.openEditModal(frontmatterSetting, async (updatedFrontmatter) => {
 			// The modal edits a clone, so write it back by id
-			this.plugin.settings.frontmatter = this.plugin.settings.frontmatter.map((f) =>
-				f.id === updatedFrontmatter.id ? updatedFrontmatter : f
+			this.plugin.settings.frontmatter = replaceFrontmatterById(
+				this.plugin.settings.frontmatter,
+				updatedFrontmatter
 			);
 
 			// Register command for the updated frontmatter

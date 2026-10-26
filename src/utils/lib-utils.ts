@@ -1,4 +1,4 @@
-import type { ProviderConfig, ProviderPreset } from '../types';
+import type { FrontmatterField, ProviderConfig, ProviderPreset } from '../types';
 import providerPresetsData from '../domain/presets.json';
 
 export const PROVIDER_NAMES = {
@@ -61,3 +61,9 @@ export const hasValidAuth = (provider: ProviderConfig): boolean => {
 	if (apiKey) return true;
 	return getProviderPresets().find((p) => p.name === provider.name)?.apiKeyRequired === false;
 };
+/**
+ * Writes an edited clone back into the settings list by id (the editor modal works on a copy).
+ */
+export function replaceFrontmatterById(list: FrontmatterField[], updated: FrontmatterField): FrontmatterField[] {
+	return list.map((f) => (f.id === updated.id ? updated : f));
+}
