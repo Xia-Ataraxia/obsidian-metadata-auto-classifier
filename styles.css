@@ -74,16 +74,6 @@
     from { opacity: 0; }
 }
 
-.mac-busy svg {
-    animation: metadata-auto-classifier-spin 900ms linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .mac-busy svg {
-        animation: metadata-auto-classifier-pulse 1600ms ease-in-out infinite alternate;
-    }
-}
-
 /* Button Container for Modals */
 .mac-button-container {
     display: flex;
@@ -114,17 +104,15 @@
 /* Plugin notice styles */
 .metadata-auto-classifier-notice {
 	display: flex;
-	align-items: flex-start;
-	gap: var(--size-4-2);
+	flex-direction: column;
+	gap: var(--size-4-1);
 	color: inherit;
 }
 
-.metadata-auto-classifier-notice-body {
+.metadata-auto-classifier-notice-row {
 	display: flex;
-	flex: 1 1 auto;
-	flex-direction: column;
-	gap: var(--size-4-1);
-	min-width: 0;
+	align-items: flex-start;
+	gap: var(--size-4-2);
 }
 
 .metadata-auto-classifier-notice-head {
@@ -136,6 +124,8 @@
 }
 
 .metadata-auto-classifier-notice-content {
+	flex: 1 1 auto;
+	min-width: 0;
 	margin: 0;
 	font-size: var(--font-ui-small);
 	color: inherit;
@@ -172,6 +162,8 @@
 	justify-content: center;
 	width: var(--size-4-6);
 	height: var(--size-4-6);
+	/* Centre the bell on the first message line. */
+	margin-block: calc((var(--font-ui-small) * var(--line-height-normal) - var(--size-4-6)) / 2);
 	padding: 0;
 	border: none;
 	border-radius: var(--radius-s);

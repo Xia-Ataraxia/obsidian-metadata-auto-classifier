@@ -171,14 +171,13 @@ export class Setting {
 				btn.onClick(props.onClick);
 				return;
 			}
+			// Obsidian shows its own spinner (mod-loading) while an async onClick runs; only the label changes.
 			btn.onClick(async () => {
-				btn.setDisabled(true).setIcon('loader').setTooltip(busyText);
-				btn.buttonEl.addClass('mac-busy');
+				btn.setTooltip(busyText);
 				try {
 					await props.onClick();
 				} finally {
-					btn.buttonEl.removeClass('mac-busy');
-					btn.setDisabled(false).setIcon(props.icon ?? '').setTooltip(tooltip ?? '');
+					btn.setTooltip(tooltip ?? '');
 				}
 			});
 		});

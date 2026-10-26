@@ -18,12 +18,12 @@ const BUILTIN_NOTICES: NoticeCatalog = {
 };
 
 /** Builds the shared notice shell: plugin name head, body text, optional actions. */
-export function createNoticeShell(head: string): { root: HTMLElement; body: HTMLElement; content: HTMLElement } {
+export function createNoticeShell(head: string): { root: HTMLElement; row: HTMLElement; content: HTMLElement } {
 	const root = createDiv({ cls: CLS });
-	const body = root.createDiv({ cls: `${CLS}-body` });
-	body.createEl('p', { cls: `${CLS}-head`, text: head });
-	const content = body.createEl('p', { cls: `${CLS}-content` });
-	return { root, body, content };
+	root.createEl('p', { cls: `${CLS}-head`, text: head });
+	const row = root.createDiv({ cls: `${CLS}-row` });
+	const content = row.createEl('p', { cls: `${CLS}-content` });
+	return { root, row, content };
 }
 
 export class PluginNotices {
@@ -142,22 +142,22 @@ export class PluginNotices {
 		opts: { button?: { text: string; callback: () => void }; immutable: boolean }
 	): DocumentFragment {
 		const fragment = createFragment();
-		const { root, body, content } = createNoticeShell(this.head);
+		const { root, row, content } = createNoticeShell(this.head);
 		content.setText(text);
+
+		if (!opts.immutable) {
+			row.appendChild(this.createMuteButton(id));
+		}
 
 		if (opts.button?.text && typeof opts.button.callback === 'function') {
 			const callback = opts.button.callback;
-			const btn = body
+			const btn = root
 				.createDiv({ cls: `${CLS}-actions` })
 				.createEl('button', { cls: `${CLS}-action`, text: opts.button.text, type: 'button' });
 			btn.addEventListener('click', () => {
 				callback();
 				this.remove(id);
 			});
-		}
-
-		if (!opts.immutable) {
-			root.appendChild(this.createMuteButton(id));
 		}
 
 		fragment.appendChild(root);

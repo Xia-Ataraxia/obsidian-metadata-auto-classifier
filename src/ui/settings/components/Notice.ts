@@ -21,7 +21,7 @@ export class Notice {
 
 		const notice: ProgressNotice = new ObsidianNotice(fragment, 0);
 		notice.waitingTimer = window.setTimeout(() => {
-			textEl.setText(`${displayText} · still waiting…`);
+			textEl.setText(`${displayText.replace(/…$/, '')}, still waiting…`);
 		}, STILL_WAITING_AFTER_MS);
 		notice.capTimer = window.setTimeout(() => {
 			this.endProgress(notice);
