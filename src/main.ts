@@ -65,6 +65,7 @@ export default class AutoClassifierPlugin extends Plugin {
 	}
 
 	registerCommand(name: string, callback: () => Promise<void>) {
+		if (!name.trim()) return;
 		this.addCommand({
 			id: `fetch-frontmatter-${name}`,
 			name: `Fetch frontmatter: ${name}`,
@@ -79,7 +80,9 @@ export default class AutoClassifierPlugin extends Plugin {
 			return;
 		}
 		const service = this.classificationService;
-		const frontmatterIds = this.settings.frontmatter.map((field) => field.id);
+		const frontmatterIds = this.settings.frontmatter
+			.filter((field) => field.name.trim())
+			.map((field) => field.id);
 		for (const frontmatterId of frontmatterIds) {
 			await service?.classify(currentFile, frontmatterId);
 		}

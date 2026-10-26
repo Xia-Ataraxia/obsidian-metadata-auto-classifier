@@ -29,6 +29,8 @@ export class CommandService {
 	}
 
 	registerCommand(name: string, callback: () => Promise<void>): void {
+		// Unnamed fields are drafts from "+ Add frontmatter"; a blank command name is unusable.
+		if (!name.trim()) return;
 		this.plugin.addCommand({
 			id: `fetch-frontmatter-${name}`,
 			name: `Fetch frontmatter: ${name}`,

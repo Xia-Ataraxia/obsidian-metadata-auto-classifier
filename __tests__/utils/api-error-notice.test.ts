@@ -21,6 +21,12 @@ describe('toApiErrorNotice', () => {
 		);
 	});
 
+	it('asks for a key instead of a retry when none is configured', () => {
+		expect(toApiErrorNotice(new Error('Provider authentication is unavailable'), 'OpenAI')).toBe(
+			'Add an API key for OpenAI in settings.'
+		);
+	});
+
 	it('prefers reconnect and parse copy over any status in the text', () => {
 		const wrapped = Object.assign(new Error('Token refresh failed: invalid_grant'), { status: 401 });
 		expect(toApiErrorNotice(wrapped, 'Codex')).toBe('Reconnect your Codex account in settings.');
