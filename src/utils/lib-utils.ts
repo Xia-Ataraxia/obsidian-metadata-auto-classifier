@@ -1,4 +1,4 @@
-import type { ProviderPreset } from '../types';
+import type { ProviderConfig, ProviderPreset } from '../types';
 import providerPresetsData from '../domain/presets.json';
 
 export const PROVIDER_NAMES = {
@@ -47,4 +47,17 @@ export const findMatchingPreset = (providerConfig: { baseUrl: string; name: stri
 		(preset) => preset.baseUrl === providerConfig.baseUrl || preset.name === providerConfig.name
 	);
 	return matchingPreset?.name || 'Custom Provider';
+};
+
+/**
+ * Whether the provider can be called: credentials are present, or its preset needs none (Ollama, LM Studio).
+ * Supports both the unified auth field and legacy apiKey/oauth fields.
+ */
+export const hasValidAuth = (provider: ProviderConfig): boolean => {
+	if (provider.auth?.type === 'oauth' || (!provider.auth && provider.authType === 'oauth')) {
+		return Boolean(provider.auth?.type === 'oauth' ? provider.auth.oauth?.accessToken : provider.oauth?.accessToken);
+	}
+	const apiKey = provider.auth?.type === 'apiKey' ? provider.auth.apiKey : provider.apiKey;
+	if (apiKey) return true;
+	return getProviderPresets().find((p) => p.name === provider.name)?.apiKeyRequired === false;
 };
