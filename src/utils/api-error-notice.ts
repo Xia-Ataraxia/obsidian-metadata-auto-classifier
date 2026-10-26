@@ -12,14 +12,15 @@ function getStatus(error: unknown, message: string): number | undefined {
 // Notices never show request URLs, response bodies, or raw error text; the full error goes to the console
 export function toApiErrorNotice(error: unknown, provider: string): string {
 	const message = error instanceof Error ? error.message : String(error);
+	// These carry no trustworthy status: OAuth failures may wrap a 401, parse errors embed raw note text.
+	if (RECONNECT_ERROR_PATTERN.test(message)) return `Reconnect your ${provider} account in settings.`;
+	if (message.startsWith('Failed to parse')) return `${provider} returned an unexpected response. Try again.`;
 	const status = getStatus(error, message);
 
 	if (status === 401 || status === 403) return `Request failed (${status}). Check the API key for ${provider}.`;
 	if (status === 429) return 'Rate limited. Try again in a moment.';
 	if (status !== undefined && status >= 500) return `${provider} is unavailable (${status}). Try again later.`;
 	if (status !== undefined) return `Request to ${provider} failed (${status}).`;
-	if (RECONNECT_ERROR_PATTERN.test(message)) return `Reconnect your ${provider} account in settings.`;
 	if (NETWORK_ERROR_PATTERN.test(message)) return `Couldn't reach ${provider}.`;
-	if (message.startsWith('Failed to parse')) return `${provider} returned an unexpected response. Try again.`;
 	return 'Classification failed. See the console for details.';
 }

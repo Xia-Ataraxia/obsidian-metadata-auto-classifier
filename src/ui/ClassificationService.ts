@@ -7,6 +7,7 @@ import { DEFAULT_SYSTEM_ROLE, getPromptTemplate } from '../domain/prompt';
 import { Notice } from './settings/components/Notice';
 import type { FrontmatterField, FrontMatter, ProviderConfig, StructuredOutput } from '../types';
 import type { PluginNotices } from './plugin-notices';
+import { macLogger } from '../utils/mac-logger';
 import { toApiErrorNotice } from '../utils/api-error-notice';
 
 export interface ClassificationContext {
@@ -178,7 +179,7 @@ export class ClassificationService {
 				)
 			);
 		} catch (error) {
-			console.error('[MAC] Classification request failed', error);
+			macLogger.error('[Classification] Request failed', error);
 			this.context.notices.show('api_error', {
 				message: toApiErrorNotice(error, this.context.provider.name),
 			});

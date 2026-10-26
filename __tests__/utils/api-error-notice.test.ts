@@ -21,6 +21,14 @@ describe('toApiErrorNotice', () => {
 		);
 	});
 
+	it('prefers reconnect and parse copy over any status in the text', () => {
+		const wrapped = Object.assign(new Error('Token refresh failed: invalid_grant'), { status: 401 });
+		expect(toApiErrorNotice(wrapped, 'Codex')).toBe('Reconnect your Codex account in settings.');
+		expect(
+			toApiErrorNotice(new Error('Failed to parse API response. Raw content: HTTP 404 page'), 'Fake')
+		).toBe('Fake returned an unexpected response. Try again.');
+	});
+
 	it('handles network, parse, and other failures', () => {
 		expect(toApiErrorNotice(new Error('net::ERR_CONNECTION_REFUSED'), 'Ollama')).toBe(
 			"Couldn't reach Ollama."
