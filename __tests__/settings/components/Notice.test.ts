@@ -546,6 +546,31 @@ describe('Notice', () => {
 		expect(notice.hide).toHaveBeenCalledTimes(1);
 	});
 
+	test('muting a notice offers Undo that unmutes the key and saves', async () => {
+		activateDocumentBoundary(createObsidianDocumentBoundary());
+		const settings: Record<string, unknown> = {};
+		const saveSettings = vi.fn().mockResolvedValue(undefined);
+		const openSettings = vi.fn();
+		const pluginNotices = new PluginNotices(
+			{ settings, saveSettings, openSettings },
+			{ 'notice-id': { template: 'A fixed notice.' } },
+			'Metadata Auto Classifier'
+		);
+		pluginNotices.show('notice-id', {}, { timeout: 0 });
+		const row = noticeChildAt(noticeChildAt(noticeFragmentAt(0), 0), 1);
+		noticeChildAt(row, 1).click();
+		await vi.waitFor(() => expect(mockNotice).toHaveBeenCalledTimes(2));
+		expect(pluginNotices.isMuted('notice-id')).toBe(true);
+
+		const actions = noticeChildAt(noticeChildAt(noticeFragmentAt(1), 0), 2);
+		expect(actions.children.map((b) => b.textContent)).toEqual(['Undo', 'Open settings']);
+		actions.children[0]?.click();
+		await vi.waitFor(() => expect(pluginNotices.isMuted('notice-id')).toBe(false));
+		expect(pluginNotices.listMuted()).toEqual([]);
+		expect(saveSettings).toHaveBeenCalledTimes(2);
+		expect(openSettings).not.toHaveBeenCalled();
+	});
+
 	test('repeated plugin notices are freshly re-announced', () => {
 		const popoutDocument = createObsidianDocumentBoundary();
 		activateDocumentBoundary(popoutDocument);

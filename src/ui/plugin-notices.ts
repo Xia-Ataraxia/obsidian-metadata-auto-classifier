@@ -42,16 +42,19 @@ export class PluginNotices {
 		const template = definition?.template ?? id;
 		const timeout = opts?.timeout ?? definition?.timeout ?? 5000;
 		const message = this.interpolate(template, params ?? {});
-		const button =
-			opts?.button ??
-			(definition?.action === 'open-settings' && this.plugin.openSettings
+		const settingsButton =
+			definition?.action === 'open-settings' && this.plugin.openSettings
 				? { text: 'Open settings', callback: this.plugin.openSettings }
-				: undefined);
+				: undefined;
+		const buttons = [
+			...(opts?.undo ? [{ text: 'Undo', callback: opts.undo }] : []),
+			...(opts?.button ? [opts.button] : settingsButton ? [settingsButton] : []),
+		];
 
 		// A fresh notice each time so a repeated message is visibly re-announced.
 		this.active.get(id)?.hide();
 		const notice = new Notice(
-			this.buildFragment(id, message, { button, immutable: definition?.immutable ?? false }),
+			this.buildFragment(id, message, { buttons, immutable: definition?.immutable ?? false }),
 			timeout
 		);
 		this.active.set(id, notice);
@@ -139,7 +142,7 @@ export class PluginNotices {
 	private buildFragment(
 		id: string,
 		text: string,
-		opts: { button?: { text: string; callback: () => void }; immutable: boolean }
+		opts: { buttons: { text: string; callback: () => void }[]; immutable: boolean }
 	): DocumentFragment {
 		const fragment = createFragment();
 		const { root, row, content } = createNoticeShell(this.head);
@@ -149,20 +152,22 @@ export class PluginNotices {
 			this.createMuteButton(id, row);
 		}
 
-		if (opts.button?.text && typeof opts.button.callback === 'function') {
-			const callback = opts.button.callback;
+		const buttons = opts.buttons.filter((b) => b.text && typeof b.callback === 'function');
+		if (buttons.length > 0) {
 			const actions = root.createDiv({ cls: `${CLS}-actions` });
-			const button = new ButtonComponent(actions);
-			button.buttonEl.addClass(`${CLS}-action`);
-			button.buttonEl.setAttribute('type', 'button');
-			button.setButtonText(opts.button.text).onClick((evt) => {
-				evt.stopPropagation();
-				try {
-					callback();
-				} finally {
-					this.remove(id);
-				}
-			});
+			for (const { text: label, callback } of buttons) {
+				const button = new ButtonComponent(actions);
+				button.buttonEl.addClass(`${CLS}-action`);
+				button.buttonEl.setAttribute('type', 'button');
+				button.setButtonText(label).onClick((evt) => {
+					evt.stopPropagation();
+					try {
+						callback();
+					} finally {
+						this.remove(id);
+					}
+				});
+			}
 		}
 
 		fragment.appendChild(root);
@@ -180,7 +185,7 @@ export class PluginNotices {
 			void this.mute(id)
 				.then(() => {
 					this.remove(id);
-					this.show('notice_muted');
+					this.show('notice_muted', {}, { undo: () => void this.unmute(id).catch(() => console.error('[MAC] Failed to unmute notice.')) });
 				})
 				.catch(() => {
 					console.error('[MAC] Failed to mute notice.');
