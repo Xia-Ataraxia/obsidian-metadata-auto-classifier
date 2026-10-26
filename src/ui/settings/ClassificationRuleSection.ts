@@ -19,8 +19,8 @@ export class ClassificationRuleSection {
 		let textAreaComponent: TextAreaComponent;
 
 		Setting.create(textAreaContainer, {
-			name: 'Classification Rule',
-			desc: 'Customize the prompt template for classification requests',
+			name: 'Classification rule',
+			desc: 'The prompt template sent with every classification request.',
 			button: {
 				icon: 'reset',
 				tooltip: 'Reset to default template',

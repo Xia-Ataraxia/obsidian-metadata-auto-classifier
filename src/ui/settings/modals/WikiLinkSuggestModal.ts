@@ -11,6 +11,7 @@ export class WikiLinkSuggestModal extends FuzzySuggestModal<TFile> {
 		readonly onItemSelected: (file: TFile) => void
 	) {
 		super(app);
+		this.setPlaceholder('Search notes');
 	}
 
 	getItems(): TFile[] {

@@ -1,5 +1,5 @@
 import type { App } from 'obsidian';
-import { ButtonComponent, Modal } from 'obsidian';
+import { ButtonComponent, Modal, Setting } from 'obsidian';
 
 import { isDuplicateModel } from '../../../domain/model-list';
 import { getProviderPresets } from '../../../utils/lib-utils';
@@ -55,11 +55,10 @@ export class ModelModal extends Modal {
 		// Accessibility: Set modal role and label
 		contentEl.setAttribute('role', 'dialog');
 		contentEl.setAttribute('aria-modal', 'true');
-		const title = this.props.editTarget ? 'Edit Model' : 'Add Model';
+		const title = this.props.editTarget ? 'Edit model' : 'Add model';
 		contentEl.setAttribute('aria-label', title);
 
-		// Modal title
-		contentEl.createEl('h2', { text: title });
+		this.setTitle(title);
 
 		// Provider selection
 		this.addProviderSetting(contentEl);
@@ -106,7 +105,7 @@ export class ModelModal extends Modal {
 
 	private addPopularModelsSection(containerEl: HTMLElement): void {
 		const popularSection = containerEl.createDiv({ cls: 'popular-models-section' });
-		popularSection.createEl('h3', { text: 'Popular models' });
+		new Setting(popularSection).setName('Popular models').setHeading();
 		popularSection.createEl('p', {
 			text: 'Choose from commonly used models or enter custom model details.',
 			cls: 'setting-item-description',

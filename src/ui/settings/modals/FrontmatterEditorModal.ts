@@ -20,7 +20,7 @@ export class ConfigurableSettingModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 
-		this.setTitle(`Edit Setting: ${this.localState.name}`);
+		this.setTitle(`Edit ${this.localState.name || 'frontmatter'}`);
 
 		// Name setting (always shown)
 		CommonSetting.create(contentEl, {
@@ -63,7 +63,7 @@ export class ConfigurableSettingModal extends Modal {
 
 	private addLinkTypeSetting(containerEl: HTMLElement): void {
 		CommonSetting.create(containerEl, {
-			name: 'Link Type',
+			name: 'Link type',
 			className: 'control-setting',
 			dropdown: {
 				options: [

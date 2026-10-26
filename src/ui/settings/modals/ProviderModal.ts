@@ -51,8 +51,7 @@ export class ProviderModal extends Modal {
 		contentEl.setAttribute('aria-modal', 'true');
 		contentEl.setAttribute('aria-label', 'Provider settings');
 
-		// Modal title - unified
-		contentEl.createEl('h2', { text: 'Provider settings' });
+		this.setTitle('Provider settings');
 
 		// Always show preset selection
 		this.addPresetSetting(contentEl);
@@ -82,8 +81,8 @@ export class ProviderModal extends Modal {
 		const currentValue = this.providerConfig.name || 'Custom Provider';
 
 		CommonSetting.create(containerEl, {
-			name: 'Provider Preset',
-			desc: 'Select a predefined provider',
+			name: 'Provider preset',
+			desc: 'Start from a known provider, or pick Custom.',
 			dropdown: {
 				options: presetOptions,
 				value: currentValue,
@@ -108,10 +107,10 @@ export class ProviderModal extends Modal {
 		const isPresetProvider = presets.some((preset) => preset.name === this.providerConfig.name);
 
 		CommonSetting.create(containerEl, {
-			name: 'Provider Name',
+			name: 'Provider name',
 			desc: isPresetProvider
-				? 'Provider name (from preset)'
-				: 'Enter a unique name for your provider',
+				? 'Filled in from the preset.'
+				: 'A unique name for this provider.',
 			textInput: {
 				placeholder: 'Enter provider name',
 				value: this.providerConfig.name,
@@ -125,7 +124,7 @@ export class ProviderModal extends Modal {
 		// API URL
 		CommonSetting.create(containerEl, {
 			name: 'API URL',
-			desc: 'The complete API URL including endpoint (e.g., https://api.openai.com/v1/chat/completions)',
+			desc: 'The full endpoint URL, like https://api.openai.com/v1/chat/completions.',
 			textInput: {
 				placeholder: 'https://api.example.com/v1/chat/completions',
 				value: this.providerConfig.baseUrl,
@@ -142,10 +141,11 @@ export class ProviderModal extends Modal {
 			this.addOAuthSection(containerEl);
 		} else {
 			CommonSetting.create(containerEl, {
-				name: 'API Key',
-				desc: 'Your API key for this provider',
+				name: 'API key',
+				desc: 'Your API key for this provider.',
 				textInput: {
 					placeholder: 'Enter API key',
+					password: true,
 					value: this.providerConfig.apiKey ?? '',
 					onChange: (value) => {
 						this.providerConfig.apiKey = value;
@@ -158,14 +158,12 @@ export class ProviderModal extends Modal {
 				const settingEl = containerEl.querySelector(
 					'.setting-item:last-child .setting-item-description'
 				);
-				if (settingEl) {
-					const linkEl = createEl('a');
-					linkEl.href = preset.apiKeyUrl;
-					linkEl.target = '_blank';
-					linkEl.className = 'mac-api-key-link';
-					linkEl.textContent = 'Get your API key here';
-					settingEl.appendChild(linkEl);
-				}
+				settingEl?.createEl('a', {
+					cls: 'mac-api-key-link',
+					text: 'Get an API key',
+					href: preset.apiKeyUrl,
+					attr: { target: '_blank' },
+				});
 			}
 		}
 	}
@@ -192,7 +190,7 @@ export class ProviderModal extends Modal {
 			name: 'Authentication',
 			desc: isConnected ? statusText : 'Connect your account to use this provider',
 			button: {
-				text: isConnected ? 'Disconnect' : 'Connect Account',
+				text: isConnected ? 'Disconnect' : 'Connect account',
 				warning: isConnected,
 				onClick: isConnected ? () => void this.disconnectOAuth() : () => this.connectOAuth(),
 			},
