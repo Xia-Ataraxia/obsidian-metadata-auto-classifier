@@ -3,7 +3,6 @@ import { Modal, Setting, TextAreaComponent as ObsidianTextArea } from 'obsidian'
 
 import { deepCloneFrontmatterField } from '../../frontmatter';
 import type { FrontmatterEditorModalProps, FrontmatterField, LinkType } from '../../../types';
-import { Notice } from '../components/Notice';
 import { Setting as CommonSetting } from '../components/Setting';
 import { WikiLinkSelector } from '../components/WikiLinkSelector';
 
@@ -166,7 +165,7 @@ export class ConfigurableSettingModal extends Modal {
 
 		const textArea = new ObsidianTextArea(containerEl);
 		textArea
-			.setPlaceholder('Enter specific classification rules or additional context here...')
+			.setPlaceholder('Enter specific classification rules or additional context here…')
 			.setValue(this.localState.customQuery || '')
 			.onChange((value) => {
 				this.localState.customQuery = value;
@@ -187,14 +186,9 @@ export class ConfigurableSettingModal extends Modal {
 					.setButtonText('Save')
 					.setCta()
 					.onClick(async () => {
-						const notice = Notice.startProgress('Saving settings...');
 						btn.setDisabled(true);
-						try {
-							await this.props.onSave(this.localState);
-							this.close();
-						} finally {
-							Notice.endProgress(notice);
-						}
+						await this.props.onSave(this.localState);
+						this.close();
 					})
 			);
 	}

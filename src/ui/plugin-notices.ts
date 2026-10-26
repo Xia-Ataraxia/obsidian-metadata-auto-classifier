@@ -1,55 +1,66 @@
-import { Notice, setIcon } from 'obsidian';
-import type { NoticeCatalog, NoticeShowOptions, PluginNoticesHost } from '../types';
+import { Notice, setIcon, setTooltip } from 'obsidian';
+import type {
+	NoticeCatalog,
+	NoticeDefinition,
+	NoticeShowOptions,
+	PluginNoticesHost,
+} from '../types';
 
-const BUILTIN_TEMPLATES: Record<string, string> = {
-	notice_muted: 'Notice muted. Undo in settings.',
+const CLS = 'metadata-auto-classifier-notice';
+
+const BUILTIN_NOTICES: NoticeCatalog = {
+	notice_muted: {
+		template: 'Notice muted. Reset it in settings.',
+		timeout: 4000,
+		immutable: true,
+		action: 'open-settings',
+	},
 };
+
+/** Builds the shared notice shell: plugin name head, body text, optional actions. */
+export function createNoticeShell(head: string): { root: HTMLElement; body: HTMLElement; content: HTMLElement } {
+	const root = createDiv({ cls: CLS });
+	const body = root.createDiv({ cls: `${CLS}-body` });
+	body.createEl('p', { cls: `${CLS}-head`, text: head });
+	const content = body.createEl('p', { cls: `${CLS}-content` });
+	return { root, body, content };
+}
 
 export class PluginNotices {
 	private readonly active = new Map<string, Notice>();
-	private readonly activeTimers = new Map<string, number>();
 
 	constructor(
 		private readonly plugin: PluginNoticesHost,
 		private readonly catalog: NoticeCatalog,
-		private readonly prefix: string
+		private readonly head: string
 	) {}
 
 	show(id: string, params?: Record<string, unknown>, opts?: NoticeShowOptions): Notice | null {
 		if (this.isMuted(id)) return null;
 
-		const definition = this.catalog[id];
-		const template = definition?.template ?? BUILTIN_TEMPLATES[id] ?? id;
+		const definition: NoticeDefinition | undefined = this.catalog[id] ?? BUILTIN_NOTICES[id];
+		const template = definition?.template ?? id;
 		const timeout = opts?.timeout ?? definition?.timeout ?? 5000;
-		const immutable = definition?.immutable ?? false;
 		const message = this.interpolate(template, params ?? {});
-		const fragment = this.buildFragment(id, message, {
-			button: opts?.button,
-			immutable,
-		});
+		const button =
+			opts?.button ??
+			(definition?.action === 'open-settings' && this.plugin.openSettings
+				? { text: 'Open settings', callback: this.plugin.openSettings }
+				: undefined);
 
-		const existing = this.active.get(id);
-		if (existing) {
-			existing.setMessage(fragment);
-			this.scheduleCleanup(id, timeout);
-			return existing;
-		}
-
-		const notice = new Notice(fragment, timeout);
+		// A fresh notice each time so a repeated message is visibly re-announced.
+		this.active.get(id)?.hide();
+		const notice = new Notice(
+			this.buildFragment(id, message, { button, immutable: definition?.immutable ?? false }),
+			timeout
+		);
 		this.active.set(id, notice);
-		this.scheduleCleanup(id, timeout);
 		return notice;
 	}
 
 	remove(id: string): void {
 		this.active.get(id)?.hide();
 		this.active.delete(id);
-
-		const timer = this.activeTimers.get(id);
-		if (timer !== undefined) {
-			window.clearTimeout(timer);
-			this.activeTimers.delete(id);
-		}
 	}
 
 	async mute(id: string): Promise<void> {
@@ -131,71 +142,44 @@ export class PluginNotices {
 		opts: { button?: { text: string; callback: () => void }; immutable: boolean }
 	): DocumentFragment {
 		const fragment = createFragment();
-		const wrapper = createDiv({ cls: 'plugin-notice' });
-		wrapper.createEl('p', { cls: 'plugin-notice-head', text: `[${this.prefix}]` });
-		wrapper.createEl('p', { cls: 'plugin-notice-content', text });
-
-		const actions = createDiv({ cls: 'plugin-notice-actions' });
+		const { root, body, content } = createNoticeShell(this.head);
+		content.setText(text);
 
 		if (opts.button?.text && typeof opts.button.callback === 'function') {
-			const btn = this.createActionButton(opts.button.text, () => {
-				opts.button?.callback();
+			const callback = opts.button.callback;
+			const btn = body
+				.createDiv({ cls: `${CLS}-actions` })
+				.createEl('button', { cls: `${CLS}-action`, text: opts.button.text, type: 'button' });
+			btn.addEventListener('click', () => {
+				callback();
 				this.remove(id);
 			});
-			actions.appendChild(btn);
 		}
 
 		if (!opts.immutable) {
-			const muteBtn = this.createMuteButton(id);
-			actions.appendChild(muteBtn);
+			root.appendChild(this.createMuteButton(id));
 		}
 
-		if (actions.childElementCount > 0) {
-			wrapper.appendChild(actions);
-		}
-
-		fragment.appendChild(wrapper);
+		fragment.appendChild(root);
 		return fragment;
 	}
 
-	private createActionButton(text: string, callback: () => void): HTMLButtonElement {
-		const button = createEl('button', { cls: 'plugin-notice-btn', text, type: 'button' });
-		button.addEventListener('click', callback);
-		return button;
-	}
-
 	private createMuteButton(id: string): HTMLButtonElement {
-		const button = createEl('button', {
-			cls: 'plugin-notice-btn plugin-notice-btn--mute',
-			type: 'button',
-			attr: { 'aria-label': `Mute notice: ${id}` },
-		});
+		const button = createEl('button', { cls: `${CLS}-mute`, type: 'button' });
 		setIcon(button, 'bell-off');
-		button.addEventListener('click', () => {
+		setTooltip(button, 'Mute this notice');
+		button.addEventListener('click', (evt) => {
+			// Keep the click from also dismissing the notice before the mute is saved.
+			evt.stopPropagation();
 			void this.mute(id)
 				.then(() => {
 					this.remove(id);
-					this.show('notice_muted', {}, { timeout: 2000 });
+					this.show('notice_muted');
 				})
 				.catch((err: unknown) => {
-					console.error(`[${this.prefix}] Failed to mute notice:`, err);
+					console.error(`[${this.head}] Failed to mute notice:`, err);
 				});
 		});
 		return button;
-	}
-
-	private scheduleCleanup(id: string, timeout: number): void {
-		const existing = this.activeTimers.get(id);
-		if (existing !== undefined) {
-			window.clearTimeout(existing);
-			this.activeTimers.delete(id);
-		}
-		if (timeout <= 0) return;
-
-		const timer = window.setTimeout(() => {
-			this.active.delete(id);
-			this.activeTimers.delete(id);
-		}, timeout + 50);
-		this.activeTimers.set(id, timer);
 	}
 }

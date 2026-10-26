@@ -6,7 +6,6 @@ import { getProviderPreset, getProviderPresets } from '../../../utils/lib-utils'
 import { CodexOAuth, formatTokenExpiry, isTokenExpired, CODEX_OAUTH } from '../../auth';
 import type { OAuthTokens, ProviderConfig } from '../../../types';
 import { ModalAccessibilityHelper } from '../components/ModalAccessibilityHelper';
-import { Notice } from '../components/Notice';
 import type { PluginNotices } from '../../plugin-notices';
 import { Setting as CommonSetting, type DropdownOption } from '../components/Setting';
 
@@ -254,20 +253,13 @@ export class ProviderModal extends Modal {
 
 		new ButtonComponent(buttonContainer).setButtonText('Cancel').onClick(() => this.close());
 
-		const saveBtn = new ButtonComponent(buttonContainer)
+		new ButtonComponent(buttonContainer)
 			.setButtonText('Save')
 			.setCta()
 			.onClick(() => {
-				const notice = Notice.startProgress('Saving provider...');
-				saveBtn.setDisabled(true);
-				try {
-					if (this.validateForm()) {
-						void this.onSave(this.providerConfig);
-						this.close();
-					}
-				} finally {
-					Notice.endProgress(notice);
-					saveBtn.setDisabled(false);
+				if (this.validateForm()) {
+					void this.onSave(this.providerConfig);
+					this.close();
 				}
 			});
 	}
@@ -320,7 +312,7 @@ export class ProviderModal extends Modal {
 		if (!this.providerConfig.name.trim()) {
 			this.notices.show('validation_error', {
 				component: 'Provider',
-				message: 'Provider name is required. Please enter a name for your provider.',
+				message: 'Enter a provider name.',
 			});
 			return false;
 		}
@@ -329,7 +321,7 @@ export class ProviderModal extends Modal {
 		if (!this.providerConfig.baseUrl.trim()) {
 			this.notices.show('validation_error', {
 				component: 'Provider',
-				message: 'API URL is required. Please enter a valid API endpoint URL.',
+				message: 'Enter an API URL.',
 			});
 			return false;
 		}
@@ -340,7 +332,7 @@ export class ProviderModal extends Modal {
 		} catch {
 			this.notices.show('validation_error', {
 				component: 'Provider',
-				message: 'Please enter a valid URL (e.g., https://api.example.com/v1/chat/completions)',
+				message: 'Enter a valid URL, like https://api.example.com/v1/chat/completions.',
 			});
 			return false;
 		}
@@ -350,7 +342,7 @@ export class ProviderModal extends Modal {
 			if (!this.oauthTokens) {
 				this.notices.show('validation_error', {
 					component: 'Provider',
-					message: 'Please connect your account before saving.',
+					message: 'Connect your account before saving.',
 				});
 				return false;
 			}

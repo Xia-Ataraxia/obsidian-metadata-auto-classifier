@@ -1,72 +1,38 @@
 import { Notice as ObsidianNotice } from 'obsidian';
+import { createNoticeShell } from '../../plugin-notices';
 
-// Maximum duration for progress spinner (30 seconds)
-const MAX_PROGRESS_DURATION_MS = 30000;
+// Safety cap so a request that never settles cannot leave the notice up forever.
+const MAX_PROGRESS_DURATION_MS = 120000;
+const STILL_WAITING_AFTER_MS = 15000;
+
+type ProgressNotice = ObsidianNotice & { waitingTimer?: number; capTimer?: number };
 
 export class Notice {
-	private static show(message: string, duration: number): void {
-		new ObsidianNotice(message, duration);
-	}
+	/** Plugin name shown at the top of every progress notice; set on load. */
+	static head = '';
 
-	/**
-	 * Format a validation error message with component context
-	 * @param component - The component name (e.g., 'Provider', 'Model')
-	 * @param message - The error message
-	 * @returns Formatted error message: [Component] Message
-	 */
-	static formatValidationError(component: string, message: string): string {
-		return `[${component}] ${message}`;
-	}
+	static startProgress(displayText: string): ProgressNotice {
+		const fragment = createFragment();
+		const { root, content } = createNoticeShell(this.head);
+		root.addClass('metadata-auto-classifier-notice--progress');
+		content.createSpan({ cls: 'metadata-auto-classifier-notice-spinner' });
+		const textEl = content.createSpan({ text: displayText });
+		fragment.appendChild(root);
 
-	/**
-	 * Show a validation error with component context
-	 */
-	static validationError(component: string, message: string): void {
-		const formattedMessage = this.formatValidationError(component, message);
-		this.error(new Error(formattedMessage));
-	}
-
-	static error(error: Error): void {
-		this.show(`❌ ${error.message}`, 5000);
-		console.error(error);
-	}
-
-	static success(message: string): void {
-		this.show(message, 3000);
-	}
-
-	static startProgress(
-		displayText: string
-	): ObsidianNotice & { interval?: number; timeout?: number } {
-		const spinChars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-		let spinIndex = 0;
-
-		const noticeText = () => `${spinChars[spinIndex]} ${displayText}`;
-		const notice = new ObsidianNotice(noticeText(), 0) as ObsidianNotice & {
-			interval?: number;
-			timeout?: number;
-		};
-
-		notice.interval = window.setInterval(() => {
-			spinIndex = (spinIndex + 1) % spinChars.length;
-			notice.setMessage(noticeText());
-		}, 100);
-
-		// Auto-cleanup after MAX_PROGRESS_DURATION to prevent infinite intervals
-		notice.timeout = window.setTimeout(() => {
+		const notice: ProgressNotice = new ObsidianNotice(fragment, 0);
+		notice.waitingTimer = window.setTimeout(() => {
+			textEl.setText(`${displayText} · still waiting…`);
+		}, STILL_WAITING_AFTER_MS);
+		notice.capTimer = window.setTimeout(() => {
 			this.endProgress(notice);
 		}, MAX_PROGRESS_DURATION_MS);
 
 		return notice;
 	}
 
-	static endProgress(notice: ObsidianNotice & { interval?: number; timeout?: number }): void {
-		if (notice.interval) {
-			window.clearInterval(notice.interval);
-		}
-		if (notice.timeout) {
-			window.clearTimeout(notice.timeout);
-		}
+	static endProgress(notice: ProgressNotice): void {
+		window.clearTimeout(notice.waitingTimer);
+		window.clearTimeout(notice.capTimer);
 		notice.hide();
 	}
 
@@ -76,10 +42,9 @@ export class Notice {
 		fn: () => Promise<T>
 	): Promise<T> {
 		const fileNameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
-		const progressNotice = this.startProgress(`Tagging ${fileNameWithoutExt} (${frontmatterName})`);
+		const progressNotice = this.startProgress(`Tagging ${fileNameWithoutExt} (${frontmatterName})…`);
 		try {
-			const result = await fn();
-			return result;
+			return await fn();
 		} finally {
 			this.endProgress(progressNotice);
 		}

@@ -39,6 +39,7 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 		this.renderSupport(containerEl);
 		this.renderApi(containerEl);
 		this.renderFrontmatters(containerEl);
+		this.renderNotices(containerEl);
 	}
 
 	getSettingDefinitions(): SettingDefinitionItem[] {
@@ -50,6 +51,7 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 			{ name: 'Support Auto Classifier', render: mount((el) => this.renderSupport(el)) },
 			{ name: 'API configuration', aliases: ['provider', 'model'], render: mount((el) => this.renderApi(el)) },
 			{ name: 'Frontmatters', aliases: ['tags'], render: mount((el) => this.renderFrontmatters(el)) },
+			{ name: 'Muted notices', aliases: ['notifications'], render: mount((el) => this.renderNotices(el)) },
 		];
 	}
 
@@ -93,6 +95,24 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 				text: '+ Add frontmatter',
 				onClick: () => this.addNewFrontmatter(),
 			},
+		});
+	}
+
+	private renderNotices(containerEl: HTMLElement): void {
+		const { notices } = this.plugin;
+		const setting = new ObsidianSetting(containerEl).setName('Muted notices');
+		setting.descEl.addClass('mac-muted-count');
+		setting.addButton((btn) => {
+			const refresh = () => {
+				const count = notices.listMuted().length;
+				setting.setDesc(count > 0 ? `${count} muted` : 'None muted');
+				btn.setDisabled(count === 0);
+			};
+			btn.setButtonText('Reset').onClick(async () => {
+				await notices.unmuteAll();
+				refresh();
+			});
+			refresh();
 		});
 	}
 

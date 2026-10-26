@@ -8,6 +8,7 @@ import { migrateSettings } from './domain/settings-migration';
 import type { AutoClassifierSettings, FrontmatterField, ProviderConfig } from './types';
 import { AutoClassifierSettingTab } from './ui/settings';
 import { PluginNotices } from './ui/plugin-notices';
+import { Notice } from './ui/settings/components/Notice';
 import { PluginLogger } from './utils/plugin-logger';
 
 export default class AutoClassifierPlugin extends Plugin {
@@ -20,6 +21,7 @@ export default class AutoClassifierPlugin extends Plugin {
 
 	async onload() {
 		this.logger = new PluginLogger('MAC');
+		Notice.head = this.manifest.name;
 
 		await this.loadSettings();
 		await this.runMigrateSettings();
@@ -31,6 +33,10 @@ export default class AutoClassifierPlugin extends Plugin {
 			this.notices.show('init_failed');
 		}
 		this.addSettingTab(new AutoClassifierSettingTab(this));
+	}
+
+	onunload() {
+		this.notices?.unload();
 	}
 
 	/**
@@ -153,14 +159,7 @@ export default class AutoClassifierPlugin extends Plugin {
 		}));
 
 		// Initialize notices after settings are loaded so the mute store is available
-		this.notices = new PluginNotices(
-			{
-				settings: this.settings as unknown as Record<string, unknown>,
-				saveSettings: () => this.saveSettings(),
-			},
-			NOTICE_CATALOG,
-			'MAC'
-		);
+		this.notices = this.createNotices();
 
 		await this.saveSettings();
 	}
@@ -192,16 +191,29 @@ export default class AutoClassifierPlugin extends Plugin {
 		if (changed) {
 			this.settings = data as unknown as AutoClassifierSettings;
 			// Re-bind notices host after settings object is replaced
-			this.notices = new PluginNotices(
-				{
-					settings: this.settings as unknown as Record<string, unknown>,
-					saveSettings: () => this.saveSettings(),
-				},
-				NOTICE_CATALOG,
-				'MAC'
-			);
+			this.notices = this.createNotices();
 			await this.saveSettings();
 		}
+	}
+
+	private createNotices(): PluginNotices {
+		return new PluginNotices(
+			{
+				settings: this.settings as unknown as Record<string, unknown>,
+				saveSettings: () => this.saveSettings(),
+				openSettings: () => this.openSettings(),
+			},
+			NOTICE_CATALOG,
+			this.manifest.name
+		);
+	}
+
+	openSettings(): void {
+		// App#setting is not in the public typings.
+		const setting = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } })
+			.setting;
+		setting?.open();
+		setting?.openTabById(this.manifest.id);
 	}
 
 	async saveSettings(): Promise<void> {
