@@ -123,6 +123,8 @@ export interface NoticeDefinition {
 	template: string;
 	timeout?: number;
 	immutable?: boolean;
+	/** Adds an action button to the notice. */
+	action?: 'open-settings';
 }
 
 export type NoticeCatalog = Record<string, NoticeDefinition>;
@@ -135,6 +137,7 @@ export interface NoticeShowOptions {
 export interface PluginNoticesHost {
 	settings: Record<string, unknown>;
 	saveSettings(): Promise<void>;
+	openSettings?: () => void;
 }
 
 // ==========================================

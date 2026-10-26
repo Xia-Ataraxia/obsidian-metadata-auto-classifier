@@ -12,6 +12,8 @@ export interface ButtonProps {
 	cta?: boolean;
 	warning?: boolean;
 	disabled?: boolean;
+	/** Label shown while an async onClick runs; the button spins and is disabled. */
+	busyText?: string;
 }
 
 export interface DropdownOption {
@@ -164,7 +166,20 @@ export class Setting {
 			if (props.cta) btn.setCta();
 			if (props.warning) btn.buttonEl.addClass('mod-warning');
 			if (props.disabled) btn.setDisabled(props.disabled);
-			btn.onClick(props.onClick);
+			const { busyText } = props;
+			if (!busyText) {
+				btn.onClick(props.onClick);
+				return;
+			}
+			// Obsidian shows its own spinner (mod-loading) while an async onClick runs; only the label changes.
+			btn.onClick(async () => {
+				btn.setTooltip(busyText);
+				try {
+					await props.onClick();
+				} finally {
+					btn.setTooltip(tooltip ?? '');
+				}
+			});
 		});
 	}
 

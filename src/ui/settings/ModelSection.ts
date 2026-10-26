@@ -74,6 +74,7 @@ export class ModelSection {
 						{
 							icon: 'plug-zap',
 							text: 'Test',
+							busyText: 'Testing…',
 							onClick: async () => {
 								try {
 									await testModel(provider, config.id);
