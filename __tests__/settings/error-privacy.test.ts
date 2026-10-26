@@ -92,7 +92,7 @@ describe('settings error privacy', () => {
 		await action?.onClick();
 		expect(show).toHaveBeenCalledWith('model_test_error', {
 			name: 'Test',
-			message: 'The connection test failed. Check the provider configuration.',
+			message: 'Request failed. Please try again.',
 		});
 		expect(JSON.stringify(show.mock.calls)).not.toContain(canary);
 	});

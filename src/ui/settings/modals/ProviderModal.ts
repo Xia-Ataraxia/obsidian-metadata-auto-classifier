@@ -230,7 +230,7 @@ export class ProviderModal extends Modal {
 		const presets = getProviderPresets();
 		CommonSetting.create(containerEl, {
 			name: 'Provider name',
-			desc: 'Filled in from the selected preset.',
+			desc: this.providerConfig.name,
 		});
 
 		// API URL

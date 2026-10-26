@@ -225,7 +225,7 @@ describe('ClassificationService', () => {
 	it('does not call Jev for empty tags references and only generates when the exact tags opt-in is true', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', refs: [], generateNewTags: true });
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		currentContent = '---\ntags: [old-tag]\n---\nBody text\n';
 		vault.cachedRead.mockResolvedValue(currentContent);
@@ -314,7 +314,7 @@ describe('ClassificationService', () => {
 	it('uses the tags opt-in to generate after Jev reports no usable candidates', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		mocks.classify.mockResolvedValue({ status: 'no-candidates' });
 
@@ -340,7 +340,7 @@ describe('ClassificationService', () => {
 	it('does not generate or commit after an invalid Jev result', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		mocks.classify.mockResolvedValue({ status: 'invalid', error: { code: 'invalid-input' } });
 
@@ -356,7 +356,7 @@ describe('ClassificationService', () => {
 	it('allows generation after an all-no result only for opted-in tags', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		mocks.classify.mockResolvedValue({ status: 'empty', values: [] });
 
@@ -371,7 +371,7 @@ describe('ClassificationService', () => {
 		mocks.classify.mockResolvedValue({ status: 'abstain' });
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 
 		await service.classify(file, 9);
@@ -404,7 +404,7 @@ describe('ClassificationService', () => {
 			generateNewTags: true,
 		});
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 
 		await service.classify(file, 9);
@@ -428,7 +428,7 @@ describe('ClassificationService', () => {
 			generateNewTags: true,
 		});
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockResolvedValue([]);
 
@@ -445,7 +445,7 @@ describe('ClassificationService', () => {
 	it('does not commit confident selections when required tag generation fails', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockRejectedValue(new Error('private provider error'));
 
@@ -490,7 +490,7 @@ describe('ClassificationService', () => {
 	it('rechecks the selected provider and model inside the final native callback', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		beforeProcess = () => {
 			settings.selectedModel = 'model-2';
@@ -632,7 +632,7 @@ describe('ClassificationService', () => {
 	it('reuses the Jev configuration guard while generation is pending', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockImplementation(async (input: { assertCurrent: () => void }) => {
 			settings.jev.model = 'changed-model';
@@ -749,7 +749,7 @@ describe('ClassificationService', () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
 		const provider = requireValue(settings.providers[0], 'configured provider');
-		settings.selectedProvider = 'Test provider';
+		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockImplementation(async (input: { assertCurrent: () => void }) => {
 			provider.auth = { type: 'apiKey', apiKey: 'user-replaced-key' };

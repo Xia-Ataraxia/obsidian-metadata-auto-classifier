@@ -385,7 +385,7 @@ function getInputs(modal: ProviderModal): TestControl[] {
 }
 
 function getButtons(modal: ProviderModal): TestButton[] {
-	return Array.from(modal.contentEl.querySelectorAll('button')) as unknown as TestButton[];
+	return Array.from(modal.contentEl.querySelectorAll('button'));
 }
 
 function getSettings(modal: ProviderModal): TestSetting[] {
