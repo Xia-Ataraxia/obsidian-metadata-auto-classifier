@@ -49,7 +49,8 @@ export class ProviderSection {
 						onClick: async () => {
 							const confirmed = await confirmAction(
 								this.app,
-								`Are you sure you want to delete "${provider.name}" provider?`
+								`Are you sure you want to delete "${provider.name}" provider?`,
+								'Delete'
 							);
 							if (!confirmed) return;
 

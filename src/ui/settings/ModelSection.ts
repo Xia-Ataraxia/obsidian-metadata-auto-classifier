@@ -97,7 +97,8 @@ export class ModelSection {
 							onClick: async () => {
 								const confirmed = await confirmAction(
 									this.app,
-									`Are you sure you want to delete "${config.name}" model?`
+									`Are you sure you want to delete "${config.name}" model?`,
+									'Delete'
 								);
 								if (!confirmed) return;
 
