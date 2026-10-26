@@ -599,6 +599,22 @@ describe('ClassificationService', () => {
 		expect(app.vault.process).toHaveBeenCalledOnce();
 	});
 
+	it('derives candidates per folder and leaves settings untouched across runs', async () => {
+		settings.frontmatter[0] = makeField({ refs: [] });
+		const before = JSON.stringify(settings);
+		vi.mocked(getFieldValues)
+			.mockReturnValueOnce(['folder-a'])
+			.mockReturnValueOnce(['folder-b']);
+
+		await service.classify(file, 9);
+		await service.classify(file, 9);
+
+		const candidates = mocks.classify.mock.calls.map((call) => call[0].candidates);
+		expect(candidates).toEqual([['folder-a'], ['folder-b']]);
+		expect(JSON.stringify(settings)).toBe(before);
+		expect(saveSettings).not.toHaveBeenCalled();
+	});
+
 	it('reuses the Jev configuration guard while generation is pending', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
