@@ -1,4 +1,5 @@
-import type { TFile, App } from 'obsidian';
+import type { App } from 'obsidian';
+import { TFile } from 'obsidian';
 
 import { COMMON_CONSTANTS } from '../domain/constants';
 import { getContentWithoutFrontmatter, getFieldValues, insertToFrontMatter } from './frontmatter';
@@ -16,7 +17,6 @@ export interface ClassificationContext {
 	provider: ProviderConfig;
 	model: string;
 	classificationRule: string;
-	saveSettings: () => Promise<void>;
 	notices: PluginNotices;
 }
 
@@ -35,8 +35,10 @@ export class ClassificationService {
 		const fileNameWithoutExt = currentFile.name.replace(/\.[^/.]+$/, '');
 
 		// Step 1: Prepare and validate input
-		await this.ensureRefsExist(frontmatter);
-		const validation = this.validateClassificationInput(frontmatter, fileNameWithoutExt);
+		const validation = this.validateClassificationInput(
+			{ ...frontmatter, refs: this.resolveRefs(frontmatter, currentFile) },
+			fileNameWithoutExt
+		);
 		if (!validation.isValid) {
 			if (validation.noticeId) {
 				this.context.notices.show(validation.noticeId, validation.noticeParams);
@@ -64,15 +66,13 @@ export class ClassificationService {
 		}
 	}
 
-	private async ensureRefsExist(frontmatter: FrontmatterField): Promise<void> {
-		if (!frontmatter.refs || frontmatter.refs.length === 0) {
-			frontmatter.refs = getFieldValues(
-				frontmatter.name,
-				this.context.app.vault.getMarkdownFiles(),
-				this.context.app.metadataCache
-			);
-			await this.context.saveSettings();
-		}
+	// Empty refs fall back to values used in the note's own folder; never scan the whole vault.
+	private resolveRefs(frontmatter: FrontmatterField, currentFile: TFile): string[] {
+		if (frontmatter.refs?.length) return frontmatter.refs;
+		const siblings = (currentFile.parent?.children ?? [currentFile]).filter(
+			(file): file is TFile => file instanceof TFile && file.extension === 'md'
+		);
+		return getFieldValues(frontmatter.name, siblings, this.context.app.metadataCache);
 	}
 
 	private validateClassificationInput(
