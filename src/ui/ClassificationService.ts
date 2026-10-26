@@ -9,6 +9,7 @@ import type { FrontmatterField, FrontMatter, ProviderConfig, StructuredOutput } 
 import type { PluginNotices } from './plugin-notices';
 import { macLogger } from '../utils/mac-logger';
 import { toApiErrorNotice } from '../utils/api-error-notice';
+import { hasValidAuth } from '../utils/lib-utils';
 
 export interface ClassificationContext {
 	app: App;
@@ -29,28 +30,6 @@ interface ValidationResult {
 
 export class ClassificationService {
 	constructor(private readonly context: ClassificationContext) {}
-
-	/**
-	 * Check if the provider has valid authentication configured
-	 * Supports both new auth field and legacy apiKey/oauth fields
-	 */
-	private hasValidAuth(provider: ProviderConfig): boolean {
-		// New unified auth format
-		if (provider.auth) {
-			if (provider.auth.type === 'apiKey') {
-				return Boolean(provider.auth.apiKey);
-			}
-			if (provider.auth.type === 'oauth') {
-				return Boolean(provider.auth.oauth?.accessToken);
-			}
-		}
-
-		// Legacy format
-		if (provider.authType === 'oauth') {
-			return Boolean(provider.oauth?.accessToken);
-		}
-		return Boolean(provider.apiKey);
-	}
 
 	async classify(currentFile: TFile, frontmatter: FrontmatterField): Promise<void> {
 		const fileNameWithoutExt = currentFile.name.replace(/\.[^/.]+$/, '');
@@ -118,7 +97,7 @@ export class ClassificationService {
 		}
 
 		// Validate authentication based on provider auth type
-		if (!this.hasValidAuth(this.context.provider)) {
+		if (!hasValidAuth(this.context.provider)) {
 			const authType = this.context.provider.authType ?? 'apiKey';
 			const errorMessage =
 				authType === 'oauth'
