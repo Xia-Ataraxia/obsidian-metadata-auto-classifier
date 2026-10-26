@@ -3,6 +3,8 @@ import type { App } from 'obsidian';
 
 import type AutoClassifierPlugin from '../../main';
 import { testModel } from '../provider-api';
+import { saveModel } from '../../domain/model-list';
+import { toApiErrorNotice } from '../../utils/api-error-notice';
 import type { Model, ProviderConfig } from '../../types';
 import { Setting } from './components/Setting';
 import { ModelModal, type ModelModalProps } from './modals/ModelModal';
@@ -70,19 +72,18 @@ export class ModelSection {
 							},
 						},
 						{
-							icon: 'check-circle',
+							icon: 'plug-zap',
 							text: 'Test',
 							onClick: async () => {
 								try {
-									const success = await testModel(provider, config.id);
-									if (success) {
-										this.plugin.notices.show('model_test_success', { name: config.name });
-									} else {
-										this.plugin.notices.show('model_test_failed', { name: config.name });
-									}
+									await testModel(provider, config.id);
+									this.plugin.notices.show('model_test_success', { name: config.name });
 								} catch (error) {
-									const message = error instanceof Error ? error.message : 'Test failed';
-									this.plugin.notices.show('model_test_error', { message });
+									console.error(`[MAC] ${config.name} test failed:`, error);
+									this.plugin.notices.show('model_test_error', {
+										name: config.name,
+										message: toApiErrorNotice(error, provider.name),
+									});
 								}
 							},
 						},
@@ -134,31 +135,13 @@ export class ModelSection {
 			providers: this.plugin.settings.providers,
 			notices: this.plugin.notices,
 			onSave: async (result) => {
-				if (result.isEdit && result.oldModel) {
-					const provider = this.plugin.settings.providers.find(
-						(p) => p.name === result.oldModel?.provider
-					);
-					if (provider) {
-						provider.models = provider.models.filter((m) => m.id !== result.oldModel?.model);
-					}
-
-					const newProvider = this.plugin.settings.providers.find(
-						(p) => p.name === result.provider
-					);
-					if (newProvider) {
-						newProvider.models.push(result.model);
-					}
-
-					if (editTarget && editTarget.model === result.oldModel.model) {
-						this.plugin.settings.selectedProvider = result.provider;
-						this.plugin.settings.selectedModel = result.model.id;
-					}
-				} else {
-					const provider = this.plugin.settings.providers.find((p) => p.name === result.provider);
-					if (provider) {
-						provider.models.push(result.model);
-					}
-				}
+				saveModel(
+					this.plugin.settings.providers,
+					this.plugin.settings,
+					result.provider,
+					result.model,
+					result.oldModel
+				);
 
 				await this.plugin.saveSettings();
 				this.onRefresh();

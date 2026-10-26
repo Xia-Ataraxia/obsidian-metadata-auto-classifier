@@ -37,7 +37,7 @@ describe('toApiErrorNotice', () => {
 			toApiErrorNotice(new Error('Failed to parse API response: x. Raw content: note body'), 'Fake')
 		).toBe('Fake returned an unexpected response. Try again.');
 		expect(toApiErrorNotice(new Error('Unexpected failure with sk-secret123 in text'), 'Fake')).toBe(
-			'Classification failed. See the console for details.'
+			'Request failed. See the console for details.'
 		);
 		expect(
 			toApiErrorNotice(new Error('Codex OAuth tokens not found. Please reconnect your account.'), 'Codex')
@@ -48,6 +48,6 @@ describe('toApiErrorNotice', () => {
 		expect(toApiErrorNotice(new Error('Token refresh failed: invalid_grant'), 'Codex')).toBe(
 			'Reconnect your Codex account in settings.'
 		);
-		expect(toApiErrorNotice('boom', 'Fake')).toBe('Classification failed. See the console for details.');
+		expect(toApiErrorNotice('boom', 'Fake')).toBe('Request failed. See the console for details.');
 	});
 });
