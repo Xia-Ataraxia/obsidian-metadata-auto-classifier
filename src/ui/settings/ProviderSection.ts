@@ -48,7 +48,7 @@ export class ProviderSection {
 		const providerSection = containerEl.createDiv({ cls: 'provider-section' });
 		new ObsidianSetting(providerSection)
 			.setName('Providers')
-			.setDesc('Used only when new-tag generation is enabled for tags.')
+			.setDesc('Credentials for the models that classify notes and generate new tags.')
 			.setHeading();
 
 		providers.forEach((provider) => {

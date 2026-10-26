@@ -2,7 +2,7 @@ import { ClassificationStateError } from '../domain/classification-state';
 import { FrontmatterEditError } from '../domain/frontmatter-edit';
 import { TagGenerationError } from '../domain/tag-generation';
 import { FrontmatterCommitError } from './frontmatter-commit';
-import { JevClassificationError } from './JevClassifier';
+import { DecisionClassificationError } from './DecisionClassifier';
 import { GenerationFailedError } from './classification-generation';
 import { HttpError } from './request';
 
@@ -19,19 +19,17 @@ export const CLASSIFICATION_MESSAGES = {
 	selection_failed: 'Classification could not be completed safely. No changes were made.',
 	preparation_failed: 'Reference values could not be prepared. No changes were made.',
 	write_failed: 'The note could not be updated safely. No changes were made.',
+	no_model: 'Add a decision API model in settings to classify. No changes were made.',
 	invalid_settings: 'Classification settings are invalid. No changes were made.',
-	missing_api_key: 'Jev API key is missing. Add it in settings. No changes were made.',
-	missing_model: 'Jev model is missing. Add it in settings. No changes were made.',
 	context_too_large: 'This note is too large to classify (limit about 24 KB). No changes were made.',
-	auth_failed: 'Jev rejected the API key. Check it in settings. No changes were made.',
-	network_failed: 'Could not reach Jev. Check your connection and try again. No changes were made.',
-	server_failed: 'Jev is unavailable right now. Try again later. No changes were made.',
+	auth_failed: 'The provider rejected the API key. Check it in settings. No changes were made.',
+	network_failed: 'Could not reach the provider. Check your connection and try again. No changes were made.',
+	server_failed: 'The provider is unavailable right now. Try again later. No changes were made.',
 } as const;
 
 /** Statuses the user fixes in settings; shown as a mutable notice with an Open settings action. */
 const SETUP_STATUSES: ReadonlySet<ClassificationStatus> = new Set([
-	'missing_api_key',
-	'missing_model',
+	'no_model',
 	'auth_failed',
 	'no_refs',
 ]);
@@ -60,10 +58,8 @@ export function classificationErrorStatus(error: unknown): ClassificationStatus 
 	if (error instanceof HttpError) return httpErrorStatus(error);
 	if (error instanceof TagGenerationError || error instanceof GenerationFailedError)
 		return 'generation_failed';
-	if (error instanceof JevClassificationError) {
+	if (error instanceof DecisionClassificationError) {
 		if (error.code === 'expired') return 'timeout';
-		if (error.code === 'missing-api-key') return 'missing_api_key';
-		if (error.code === 'missing-model') return 'missing_model';
 		if (error.code === 'question-context-too-large') return 'context_too_large';
 		return 'selection_failed';
 	}

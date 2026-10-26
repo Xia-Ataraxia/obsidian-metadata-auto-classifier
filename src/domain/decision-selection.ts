@@ -1,8 +1,8 @@
 import type {
-	DecodeJevResponseResult,
-	JevCandidateMapping,
-	JevSelectionResult,
-} from '../types/jev';
+	DecodeDecisionResult,
+	DecisionCandidateMapping,
+	DecisionSelectionResult,
+} from '../types/decision';
 
 const YES_THRESHOLD = 0.7;
 const NO_THRESHOLD = 0.3;
@@ -13,7 +13,7 @@ function isArrayValue(value: unknown): boolean {
 
 function invalid(
 	code: 'invalid-input' | 'probability-set-mismatch' | 'invalid-probability'
-): JevSelectionResult {
+): DecisionSelectionResult {
 	return { status: 'invalid', error: { code } };
 }
 
@@ -21,25 +21,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Decode only the documented Noul answer shape; failures never include response data. */
-export function decodeJevResponse(
-	response: unknown,
+function decodeAnswers(
+	answers: unknown,
 	expectedIds: readonly string[],
-	expectedModel: string
-): DecodeJevResponseResult {
+	readProbability: (answer: unknown) => number | undefined
+): DecodeDecisionResult {
 	if (
 		!isArrayValue(expectedIds) ||
 		expectedIds.length === 0 ||
 		expectedIds.some((id) => typeof id !== 'string' || id.length === 0) ||
-		new Set(expectedIds).size !== expectedIds.length ||
-		typeof expectedModel !== 'string' ||
-		expectedModel.length === 0
+		new Set(expectedIds).size !== expectedIds.length
 	)
 		return { ok: false, error: { code: 'invalid-expected-ids' } };
-	if (!isRecord(response)) return { ok: false, error: { code: 'invalid-response' } };
-	if (response.model !== expectedModel) return { ok: false, error: { code: 'model-mismatch' } };
-	if (!isRecord(response.answers)) return { ok: false, error: { code: 'invalid-response' } };
-	const answerIds = Object.keys(response.answers);
+	if (!isRecord(answers)) return { ok: false, error: { code: 'invalid-response' } };
+	const answerIds = Object.keys(answers);
 	const expectedIdSet = new Set(expectedIds);
 	if (answerIds.length !== expectedIds.length || answerIds.some((id) => !expectedIdSet.has(id))) {
 		return { ok: false, error: { code: 'answer-set-mismatch' } };
@@ -47,49 +42,68 @@ export function decodeJevResponse(
 
 	const probabilities = Object.create(null) as Record<string, number>;
 	for (const id of expectedIds) {
-		if (!Object.prototype.hasOwnProperty.call(response.answers, id)) {
+		if (!Object.prototype.hasOwnProperty.call(answers, id)) {
 			return { ok: false, error: { code: 'answer-set-mismatch' } };
 		}
-		const answer = response.answers[id];
+		const probability = readProbability(answers[id]);
 		if (
-			!isRecord(answer) ||
-			answer.type !== 'noul' ||
-			typeof answer.noul !== 'number' ||
-			!Number.isFinite(answer.noul) ||
-			answer.noul < 0 ||
-			answer.noul > 1
+			typeof probability !== 'number' ||
+			!Number.isFinite(probability) ||
+			probability < 0 ||
+			probability > 1
 		) {
 			return { ok: false, error: { code: 'invalid-answer' } };
 		}
-		probabilities[id] = answer.noul;
+		probabilities[id] = probability;
 	}
-	if (
-		!isRecord(response.usage) ||
-		typeof response.usage.input_tokens !== 'number' ||
-		typeof response.usage.output_tokens !== 'number' ||
-		!Number.isFinite(response.usage.input_tokens) ||
-		response.usage.input_tokens < 0 ||
-		!Number.isFinite(response.usage.output_tokens) ||
-		response.usage.output_tokens < 0
-	) {
-		return { ok: false, error: { code: 'invalid-usage' } };
-	}
-	return {
-		ok: true,
-		probabilities,
-		usage: {
-			input_tokens: response.usage.input_tokens,
-			output_tokens: response.usage.output_tokens,
-		},
-	};
+	return { ok: true, probabilities };
 }
 
+/** Decode only the documented System One Noul answer shape; failures never include response data. */
+export function decodeSystemOneResponse(
+	response: unknown,
+	expectedIds: readonly string[]
+): DecodeDecisionResult {
+	if (!isRecord(response)) return { ok: false, error: { code: 'invalid-response' } };
+	return decodeAnswers(response.answers, expectedIds, (answer) =>
+		isRecord(answer) && answer.type === 'noul' && typeof answer.noul === 'number'
+			? answer.noul
+			: undefined
+	);
+}
+
+/** Decode the OpenAI Decisions predicate list keyed by question name. */
+export function decodeOpenAIDecisionsResponse(
+	response: unknown,
+	expectedIds: readonly string[]
+): DecodeDecisionResult {
+	if (!isRecord(response) || !Array.isArray(response.answers)) {
+		return { ok: false, error: { code: 'invalid-response' } };
+	}
+	const byName = Object.create(null) as Record<string, unknown>;
+	for (const answer of response.answers as unknown[]) {
+		if (!isRecord(answer) || typeof answer.name !== 'string' || answer.name in byName) {
+			return { ok: false, error: { code: 'answer-set-mismatch' } };
+		}
+		byName[answer.name] = answer;
+	}
+	return decodeAnswers(byName, expectedIds, (answer) => {
+		if (!isRecord(answer)) return undefined;
+		// A refusal is uncertainty: never selected, and it blocks an all-no empty result.
+		if (answer.type === 'refusal') return 0.5;
+		return answer.type === 'predicate' && typeof answer.probability === 'number'
+			? answer.probability
+			: undefined;
+	});
+}
+
+/** Decode the structured-output emulation used by chat-only providers. */
 /** Select only confident yes candidates; uncertainty is never filled to satisfy a minimum. */
-export function selectJevCandidates(
-	candidates: readonly JevCandidateMapping[],
+export function selectDecisionCandidates(
+	candidates: readonly DecisionCandidateMapping[],
 	probabilities: Readonly<Record<string, number>>,
 	max: number
-): JevSelectionResult {
+): DecisionSelectionResult {
 	if (
 		!isArrayValue(candidates) ||
 		!probabilities ||
@@ -120,7 +134,7 @@ export function selectJevCandidates(
 	if (probabilityIds.length !== ids.size || probabilityIds.some((id) => !ids.has(id))) {
 		return invalid('probability-set-mismatch');
 	}
-	const scored: Array<{ candidate: JevCandidateMapping; probability: number }> = [];
+	const scored: Array<{ candidate: DecisionCandidateMapping; probability: number }> = [];
 	for (const candidate of candidates) {
 		const probability = probabilities[candidate.id];
 		if (

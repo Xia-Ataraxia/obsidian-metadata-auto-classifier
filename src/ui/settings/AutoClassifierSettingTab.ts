@@ -7,7 +7,6 @@ import { DEFAULT_FRONTMATTER_SETTING } from '../../domain/constants';
 import { generateId } from '../../utils/lib-utils';
 import { Api } from './ApiSection';
 import { Frontmatter } from './FrontmatterSection';
-import { JevSection } from './JevSection';
 import { Setting } from './components/Setting';
 import { Tag } from './TagSection';
 
@@ -25,7 +24,6 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		this.renderJev(containerEl);
 		this.renderApi(containerEl);
 		this.renderFrontmatters(containerEl);
 		this.renderNotices(containerEl);
@@ -38,16 +36,11 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 			render(setting.settingEl.createDiv({ cls: 'mac-setting-mount' }));
 		};
 		return [
-			{ name: 'Jev classification', aliases: ['selection', 'candidates'], render: mount((el) => this.renderJev(el)) },
-			{ name: 'Tag generation', aliases: ['API', 'provider', 'model'], render: mount((el) => this.renderApi(el)) },
+			{ name: 'Classification', aliases: ['API', 'provider', 'model', 'decision'], render: mount((el) => this.renderApi(el)) },
 			{ name: 'Frontmatters', aliases: ['tags'], render: mount((el) => this.renderFrontmatters(el)) },
 			{ name: 'Muted notices', aliases: ['notifications'], render: mount((el) => this.renderNotices(el)) },
 			{ name: 'Support Auto Classifier', render: mount((el) => this.renderSupport(el)) },
 		];
-	}
-
-	private renderJev(containerEl: HTMLElement): void {
-		new JevSection(this.plugin, containerEl.createDiv({ cls: 'jev-section' })).display();
 	}
 
 	private renderApi(containerEl: HTMLElement): void {

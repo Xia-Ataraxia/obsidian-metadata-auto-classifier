@@ -7,17 +7,20 @@ import {
 	classificationCandidates,
 	existingStringValues,
 	findField,
+	providerHasAuth,
 	sameFieldSnapshot,
 	readFieldSnapshot,
 	validateCount,
 } from '../domain/classification-state';
 import type { FieldSnapshot } from '../domain/classification-state';
+import { classificationTarget } from '../domain/model-list';
 import { resolveClassificationValues } from '../domain/classification-result';
 import { isTagGenerationAllowed } from '../domain/tag-generation';
 import { commitField, captureFieldBaseline } from './frontmatter-commit';
 import { getFieldValues } from './frontmatter';
-import { JevClassifier } from './JevClassifier';
+import { DecisionClassifier } from './DecisionClassifier';
 import { createGenerationStage } from './classification-generation';
+import { createProviderSession } from './provider-session';
 import {
 	CLASSIFICATION_MESSAGES,
 	ClassificationIssue,
@@ -46,7 +49,7 @@ function siblingMarkdownFiles(file: TFile): TFile[] {
 
 export class ClassificationService {
 	private readonly state = new ClassificationState();
-	private readonly jev = new JevClassifier();
+	private readonly decisions = new DecisionClassifier();
 
 	constructor(private readonly context: ClassificationContext) {}
 
@@ -92,19 +95,35 @@ export class ClassificationService {
 		const content = await this.context.app.vault.cachedRead(file);
 		assertBase();
 		const baseline = captureFieldBaseline(content, snapshot.name);
-		let jevConfig: AutoClassifierSettings['jev'] | undefined;
-		const assertSelection = () => {
+		let session: ReturnType<typeof createProviderSession> | undefined;
+		let selected: Pick<AutoClassifierSettings, 'selectedProvider' | 'selectedModel'> | undefined;
+		let generated = false;
+		const assertSelected = () => {
 			assertBase();
-			if (!jevConfig) return;
-			const live = this.context.getSettings().jev;
-			if (!live || live.apiKey !== jevConfig.apiKey || live.model !== jevConfig.model)
-				throw new ClassificationStateError('settings-changed');
+			const live = this.context.getSettings();
+			if (
+				selected &&
+				(live.selectedProvider !== selected.selectedProvider ||
+					live.selectedModel !== selected.selectedModel)
+			)
+				throw new ClassificationStateError('provider-changed');
+		};
+		const assertSelection = () => {
+			if (session) session.assertCurrent();
+			else assertBase();
 		};
 		const select = async () => {
-			const current = this.context.getSettings().jev;
-			if (!current) throw new ClassificationIssue('selection_failed');
-			jevConfig = { ...current };
-			const result = await this.jev.classify(
+			const settings = this.context.getSettings();
+			const target = classificationTarget(settings);
+			if (!target || !providerHasAuth(target.provider)) throw new ClassificationIssue('no_model');
+			selected = { selectedProvider: settings.selectedProvider, selectedModel: settings.selectedModel };
+			session = createProviderSession({
+				getProvider: () => classificationTarget(this.context.getSettings())?.provider,
+				saveSettings: () => this.context.saveSettings(),
+				onPersistFailed: () => this.context.notices.show('settings_save_failed'),
+				assertCurrent: assertSelected,
+			});
+			const result = await this.decisions.classify(
 				{
 					body: baseline.body,
 					fieldName: snapshot.name,
@@ -114,8 +133,9 @@ export class ClassificationService {
 					candidates,
 					max: snapshot.maximum,
 				},
-				jevConfig,
-				{ deadline, assertCurrent: assertSelection }
+				session.provider,
+				target.model,
+				{ deadline, assertCurrent: assertSelection, onTokenRefresh: session.refreshTokens }
 			);
 			assertSelection();
 			return result;
@@ -127,7 +147,8 @@ export class ClassificationService {
 			snapshot,
 			body: baseline.body,
 			deadline,
-			assertCurrent: assertSelection,
+			// Generation guards its own provider; a token refresh there must not trip the scoring snapshot.
+			assertCurrent: assertSelected,
 		});
 		const resolution = await resolveClassificationValues({
 			snapshot,
@@ -135,7 +156,10 @@ export class ClassificationService {
 			existing: existingStringValues(baseline.target),
 			mayGenerate,
 			select,
-			generate: generation.generate,
+			generate: (request) => {
+				generated = true;
+				return generation.generate(request);
+			},
 		});
 		if (resolution.status !== 'ready') throw new ClassificationIssue(resolution.status);
 		await commitField(this.context.app, file, baseline, {
@@ -143,7 +167,7 @@ export class ClassificationService {
 			values: resolution.values,
 			overwrite: snapshot.overwrite,
 			linkType: snapshot.linkType,
-			assertCurrent: generation.assertCurrent,
+			assertCurrent: generated ? generation.assertCurrent : assertSelection,
 		});
 		this.show('completed');
 	}

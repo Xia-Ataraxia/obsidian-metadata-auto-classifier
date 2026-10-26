@@ -1,4 +1,4 @@
-import type { JevSelectionResult } from '../types/jev';
+import type { DecisionSelectionResult } from '../types/decision';
 import { stripWikiLink } from './classification-state';
 import type { FieldSnapshot } from './classification-state';
 
@@ -18,7 +18,7 @@ export async function resolveClassificationValues(input: {
 	candidates: string[];
 	existing: string[];
 	mayGenerate: boolean;
-	select: () => Promise<JevSelectionResult>;
+	select: () => Promise<DecisionSelectionResult>;
 	generate: (request: GenerationRequest) => Promise<string[]>;
 }): Promise<ClassificationResolution> {
 	let selected: string[] = [];

@@ -13,8 +13,8 @@
 
 | Layer         | Responsibility                                                                                                                                       |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/types/`  | Provider, field, settings, and Jev contracts                                                                                                         |
-| `src/domain/` | Pure Jev request construction and decisions, generated-tag validation, YAML range editing and target snapshots, explicit operation-state transitions |
+| `src/types/`  | Provider, field, settings, and decision contracts                                                                                                    |
+| `src/domain/` | Pure decision request construction and decisions, generated-tag validation, YAML range editing and target snapshots, explicit operation-state transitions |
 | `src/ui/`     | Obsidian-dependent classification orchestration, native atomic commits, provider adapters, transport, authentication, and settings UI                |
 | `src/utils/`  | Repository-local utilities and diagnostic boundary                                                                                                   |
 | `src/main.ts` | Composition root, lifecycle, persisted settings, and command entry points                                                                            |
@@ -25,14 +25,16 @@ Domain classification and YAML modules must not import Obsidian. The `yaml` libr
 
 | Module                            | Responsibility                                                                                                  |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `domain/jev-questions.ts`         | Build stable named Noul questions and conservatively bounded request chunks                                     |
-| `domain/jev-selection.ts`         | Validate exact response keys, probabilities, model and usage; distinguish yes, all-no, and abstention           |
+| `domain/decision-questions.ts`    | Build stable named yes/no questions and conservatively bounded request chunks                                   |
+| `domain/decision-formats.ts`      | Pick the decision transport per model and map questions to SystemOne or OpenAI Decisions; chat models have none |
+| `domain/decision-selection.ts`    | Decode each transport, validate exact answer sets and probabilities; distinguish yes, all-no, and abstention    |
+| `domain/model-list.ts`            | Resolve classification and generation targets; migrate the 1.13 standalone Jev key to a TypeSafe provider      |
 | `domain/tag-generation.ts`        | Exact `tags` permission gate, remaining-slot calculation, generation prompt and strict tag-result validation    |
 | `domain/classification-state.ts`  | Related settings snapshots, token ownership, and conflict checks                                                |
 | `domain/classification-result.ts` | All-or-nothing selection/generation decisions and combined operation counts                                     |
 | `domain/frontmatter-snapshot.ts`  | Typed target-field presence/value snapshots                                                                     |
 | `domain/frontmatter-edit.ts`      | Edit only a target YAML source range; reject unsafe or unsupported structures                                   |
-| `ui/JevClassifier.ts`             | Send all Jev chunks through the native transport and reject partial or stale results                            |
+| `ui/DecisionClassifier.ts`        | Send all chunks through the model's transport and reject partial or stale results                               |
 | `ui/ClassificationService.ts`     | Coordinate preparation, selection, optional generation, and the final guarded commit                            |
 | `ui/classification-generation.ts` | Capture only the used provider, guard refresh persistence, and preserve live generation validity                |
 | `ui/provider-session.ts`          | Share provider snapshots and awaited, account-bound refresh persistence between generation and connection tests |
@@ -44,11 +46,11 @@ A batch captures one original note. All entry points share the same classificati
 
 ## Optional generation and transport
 
-`ui/provider-api.ts` exposes explicit model connection testing and permission-gated new-tag generation. `UnifiedProvider` coordinates provider specs in `provider-chat-specs.ts` and `provider-native-specs.ts`. The generation result is only `{ tags: string[] }`; it is not the Jev classification response.
+`ui/provider-api.ts` exposes explicit model connection testing and permission-gated new-tag generation. `UnifiedProvider` coordinates provider specs in `provider-chat-specs.ts` and `provider-native-specs.ts`. The generation result is only `{ tags: string[] }`; it is not the classification response.
 
 `ui/request.ts` owns JSON or explicit raw-form/native HTTP behavior, safe HTTP errors, and bounded retries. `ui/request-control.ts` shares abort, deadline, and currentness enforcement across inference and authentication. Only explicit 429/529 responses retry, with three total attempts by default; authentication explicitly permits one attempt. Cancellation ignores late native completions rather than claiming physical cancellation of `requestUrl`. `ui/streaming-request.ts` consumes buffered native responses as strict SSE frames and requires successful terminal completion. Neither path uses a Node HTTP fallback. Codex accepts completed output-array terminals and ID-only completion metadata; generated text still comes from accumulated deltas. Contradictory status, error/incomplete metadata, refusals, missing completion, partial frames, empty text, and trailing events fail closed. Live backend compatibility remains unverified.
 
-Authentication is a separate concern from candidate selection. Ordinary classification must not require generation credentials. Actual device authentication, mobile runtime validation, and provider service eligibility are separate verification obligations; requestUrl-based inference alone does not prove them.
+Authentication is a separate concern from candidate selection. Classification needs only the selected model's credentials. Actual device authentication, mobile runtime validation, and provider service eligibility are separate verification obligations; requestUrl-based inference alone does not prove them.
 
 `ui/auth/device-auth.ts` implements the fixed-host device flow with a 15-minute deadline, cancellable polling, a hosted callback exchange, and single-attempt grants. The dialog renders the code as text and opens the fixed verification URL only on an explicit click. There is no loopback server or local PKCE implementation. Token parsing requires a future access-token expiry and `chatgpt_account_id`; optional ID-token account claims must agree. These decoded claims are routing/expiry hints, not signature verification. Refresh rejects account switches and awaits guarded persistence before retrying; an omitted rotated refresh token preserves the existing token, but an explicitly invalid token does not. One in-flight owner holds each rotating refresh credential through persistence and retry; competing operations fail without replaying that grant.
 
@@ -58,7 +60,7 @@ Provider names are exact protocol/profile keys, not arbitrary display labels. Pr
 
 ## Settings and diagnostics
 
-The named settings tab implementation is `ui/settings/AutoClassifierSettingTab.ts`; `ui/settings/index.ts` is a barrel. Jev configuration is independent of optional generation-provider configuration. Native field controls expose generation only for the exact `tags` name, defaulting to false.
+The named settings tab implementation is `ui/settings/AutoClassifierSettingTab.ts`; `ui/settings/index.ts` is a barrel. One provider/model list serves classification and generation; decision API models classify and chat models only generate tags; each model row shows its kind. Native field controls expose generation only for the exact `tags` name, defaulting to false.
 
 Provider editing uses an isolated draft. Saving awaits persistence; newer draft edits remain available for another save, while closing the modal revokes late UI updates. A deliberate disconnect clears credential sources in the draft without requiring a replacement login.
 

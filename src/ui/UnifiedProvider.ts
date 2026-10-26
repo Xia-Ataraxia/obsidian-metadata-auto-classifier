@@ -21,7 +21,7 @@ const AUTH_UNAVAILABLE_ERROR = 'Provider authentication is unavailable';
 
 type CodexTokens = Awaited<ReturnType<CodexOAuth['refreshTokens']>>;
 
-function resolveApiKey(provider: ProviderConfig): string {
+export function resolveApiKey(provider: ProviderConfig): string {
 	const expectedAuth: ProviderAuthMode =
 		provider.name === PROVIDER_NAMES.CODEX ? 'oauth' : 'apiKey';
 	const optionalKey =

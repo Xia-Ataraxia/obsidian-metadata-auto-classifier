@@ -54,6 +54,8 @@ export interface FrontMatter {
 export interface Model {
 	id: string;
 	name: string;
+	/** Classifies through a decision endpoint; chat models only generate tags. */
+	decision?: boolean;
 }
 
 export type AuthType = 'apiKey' | 'oauth';
@@ -173,7 +175,6 @@ export type FrontmatterRef = Pick<FrontmatterField, 'id' | 'name'>;
 // ==========================================
 
 export interface AutoClassifierSettings {
-	jev: { apiKey: string; model: string };
 	providers: ProviderConfig[];
 	selectedProvider: string;
 	selectedModel: string;

@@ -163,7 +163,6 @@ describe('ProviderSection', () => {
 				selectedModel: '',
 				frontmatter: [],
 				classificationRule: '',
-				jev: { apiKey: '', model: '' },
 			},
 			isActive: vi.fn(() => pluginActive),
 			register: vi.fn((cleanup: () => void) => {
