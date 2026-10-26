@@ -3,19 +3,19 @@
 /* Grid Container for Popular Models */
 .mac-grid-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 8px;
-    margin-top: 10px;
-    margin-bottom: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(calc(var(--size-4-12) * 4), 1fr));
+    gap: var(--size-4-2);
+    margin-top: var(--size-4-2);
+    margin-bottom: var(--size-4-5);
 }
 
 /* Model Option (Radio Button) */
 .mac-model-option {
     display: flex;
     align-items: center;
-    padding: 8px 12px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
+    padding: var(--size-4-2) var(--size-4-3);
+    border: var(--border-width) solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
     cursor: pointer;
     transition:
         background-color 150ms ease,
@@ -35,7 +35,7 @@
 }
 
 .mac-model-option input[type="radio"] {
-    margin-right: 8px;
+    margin-right: var(--size-4-2);
 }
 
 .mac-model-option.selected {
@@ -49,13 +49,19 @@
     from { transform: scale(0.96); }
 }
 
+@keyframes mac-select-fade {
+    from { opacity: 0.6; }
+}
+
+/* Reduced motion keeps the feedback as a soft fade instead of a scale pop. */
 @media (prefers-reduced-motion: reduce) {
     .mac-model-option:active {
         transform: none;
+        opacity: 0.8;
     }
 
     .mac-model-option.selected {
-        animation: none;
+        animation: mac-select-fade 220ms ease-out;
     }
 }
 
@@ -78,27 +84,21 @@
 .mac-button-container {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
-    margin-top: 20px;
+    gap: var(--size-4-2);
+    margin-top: var(--size-4-5);
 }
 
 /* Custom Prompt Container */
 .mac-custom-prompt-container {
     width: 100%;
-    margin-top: 8px;
-    margin-bottom: 16px;
-}
-
-/* Provider/Model Section Headings */
-.mac-section-heading {
-    margin-top: 16px;
-    margin-bottom: 8px;
+    margin-top: var(--size-4-2);
+    margin-bottom: var(--size-4-4);
 }
 
 /* API Key Link Styling */
 .mac-api-key-link {
     color: var(--interactive-accent);
-    margin-left: 4px;
+    margin-left: var(--size-4-1);
 }
 
 /* Plugin notice styles */
@@ -170,7 +170,7 @@
 	background: transparent;
 	box-shadow: none;
 	color: inherit;
-	opacity: 0.6;
+	opacity: 0.8;
 	cursor: pointer;
 	transition: opacity 120ms ease-out, background-color 120ms ease-out;
 	--icon-size: var(--icon-xs);

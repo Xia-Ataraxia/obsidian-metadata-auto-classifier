@@ -11,6 +11,7 @@ export class WikiLinkSuggestModal extends FuzzySuggestModal<TFile> {
 		readonly onItemSelected: (file: TFile) => void
 	) {
 		super(app);
+		this.setPlaceholder('Search notes');
 	}
 
 	getItems(): TFile[] {
@@ -22,8 +23,10 @@ export class WikiLinkSuggestModal extends FuzzySuggestModal<TFile> {
 	}
 
 	renderSuggestion(file: FuzzyMatch<TFile>, el: HTMLElement): void {
-		el.createDiv({ text: file.item.basename });
-		el.createEl('small', { text: file.item.path });
+		el.addClass('mod-complex');
+		const content = el.createDiv({ cls: 'suggestion-content' });
+		content.createDiv({ cls: 'suggestion-title', text: file.item.basename });
+		content.createDiv({ cls: 'suggestion-note', text: file.item.path });
 	}
 
 	onChooseItem(file: TFile): void {

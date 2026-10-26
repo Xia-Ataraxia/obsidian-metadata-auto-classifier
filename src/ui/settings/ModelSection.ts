@@ -1,5 +1,5 @@
 import { confirmAction } from './modals/ConfirmModal';
-import type { App } from 'obsidian';
+import { Setting as ObsidianSetting, type App } from 'obsidian';
 
 import type AutoClassifierPlugin from '../../main';
 import { testModel } from '../provider-api';
@@ -18,7 +18,7 @@ export class ModelSection {
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[], selectedModel: string): void {
 		const modelSection = containerEl.createDiv({ cls: 'model-section' });
-		modelSection.createEl('h3', { text: 'Models' });
+		new ObsidianSetting(modelSection).setName('Models').setHeading();
 
 		this.renderModelList(modelSection, providers, selectedModel);
 
@@ -41,7 +41,7 @@ export class ModelSection {
 		if (!hasModels) {
 			Setting.create(containerEl, {
 				name: 'No models configured',
-				desc: 'Add a model to get started',
+				desc: 'Add a model to get started.',
 			});
 			return;
 		}

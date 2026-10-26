@@ -25,6 +25,7 @@ export interface TextInputConfig {
 	placeholder?: string;
 	value?: string;
 	disabled?: boolean;
+	password?: boolean;
 	onChange: (value: string) => void | Promise<void>;
 }
 
@@ -121,6 +122,7 @@ export class Setting {
 		this.setting.addText((text) => {
 			if (textInput.placeholder) text.setPlaceholder(textInput.placeholder);
 			if (textInput.value !== undefined) text.setValue(textInput.value);
+			if (textInput.password) text.inputEl.type = 'password';
 			if (textInput.disabled) {
 				text.inputEl.disabled = true;
 				text.inputEl.classList.add('mod-disabled');

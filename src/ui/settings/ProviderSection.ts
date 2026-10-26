@@ -1,9 +1,10 @@
 import { confirmAction } from './modals/ConfirmModal';
-import type { App } from 'obsidian';
+import { Setting as ObsidianSetting, type App } from 'obsidian';
 
 import type AutoClassifierPlugin from '../../main';
 import { formatTokenExpiry, isTokenExpired } from '../auth';
 import type { ProviderConfig } from '../../types';
+import { hasValidAuth } from '../../utils/lib-utils';
 import { Setting } from './components/Setting';
 import { ProviderModal } from './modals/ProviderModal';
 
@@ -21,16 +22,16 @@ export class ProviderSection {
 		if (provider.authType === 'oauth' || provider.oauth) {
 			const isConnected = provider.oauth && !isTokenExpired(provider.oauth);
 			const status = isConnected
-				? `OAuth Connected (${formatTokenExpiry(provider.oauth!)})`
-				: 'OAuth Not Connected';
+				? `Signed in · ${formatTokenExpiry(provider.oauth!)}`
+				: 'Not signed in';
 			return { name: provider.name, desc: status };
 		}
-		return { name: provider.name, desc: '' };
+		return { name: provider.name, desc: hasValidAuth(provider) ? 'Connected' : 'No API key' };
 	}
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[]): void {
 		const providerSection = containerEl.createDiv({ cls: 'provider-section' });
-		providerSection.createEl('h3', { text: 'Providers' });
+		new ObsidianSetting(providerSection).setName('Providers').setHeading();
 
 		providers.forEach((provider) => {
 			const displayInfo = this.getProviderDisplayInfo(provider);

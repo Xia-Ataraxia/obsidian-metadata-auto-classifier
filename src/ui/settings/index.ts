@@ -36,10 +36,10 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		this.renderSupport(containerEl);
 		this.renderApi(containerEl);
 		this.renderFrontmatters(containerEl);
 		this.renderNotices(containerEl);
+		this.renderSupport(containerEl);
 	}
 
 	getSettingDefinitions(): SettingDefinitionItem[] {
@@ -48,21 +48,20 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 			render(setting.settingEl.createDiv({ cls: 'mac-setting-mount' }));
 		};
 		return [
-			{ name: 'Support Auto Classifier', render: mount((el) => this.renderSupport(el)) },
 			{ name: 'API configuration', aliases: ['provider', 'model'], render: mount((el) => this.renderApi(el)) },
 			{ name: 'Frontmatters', aliases: ['tags'], render: mount((el) => this.renderFrontmatters(el)) },
 			{ name: 'Muted notices', aliases: ['notifications'], render: mount((el) => this.renderNotices(el)) },
+			{ name: 'Support Auto Classifier', render: mount((el) => this.renderSupport(el)) },
 		];
 	}
 
 	private renderSupport(containerEl: HTMLElement): void {
 		Setting.create(containerEl, {
 			name: 'Support Auto Classifier',
-			desc: 'If you find Auto Classifier valuable, consider supporting its development!',
-			heading: true,
+			desc: 'If Auto Classifier saves you time, consider supporting its development.',
 			className: 'auto-classifier-settings-support',
 			button: {
-				text: 'Buy Me a Coffee',
+				text: 'Buy me a coffee',
 				cta: true,
 				onClick: () => {
 					window.open('https://www.buymeacoffee.com/gobeumsu9', '_blank');
