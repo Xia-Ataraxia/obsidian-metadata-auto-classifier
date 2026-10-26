@@ -10,7 +10,7 @@ import { WikiLinkSelector } from '../components/WikiLinkSelector';
 export class ConfigurableSettingModal extends Modal {
 	private readonly props: FrontmatterEditorModalProps;
 	private readonly localState: FrontmatterField;
-	private textAreaComponent!: TextAreaComponent;
+	private textAreaComponent?: TextAreaComponent;
 
 	constructor(app: App, props: FrontmatterEditorModalProps) {
 		super(app);
@@ -150,8 +150,7 @@ export class ConfigurableSettingModal extends Modal {
 	}
 
 	private updateOptionsTextarea(): void {
-		// eslint-disable-next-line @typescript-eslint/no-misused-promises -- textAreaComponent is a class instance, not a Promise; rule incorrectly fires due to chainable .onChange() returning the component
-		if (this.textAreaComponent) {
+		if (this.textAreaComponent !== undefined) {
 			let displayValue = '';
 			if (this.localState.refs && this.localState.refs.length > 0) {
 				displayValue = this.localState.refs.join(', ');
