@@ -69,6 +69,6 @@ export class WikiLinkSuggestModal extends FuzzySuggestModal<TAbstractFile> {
 	}
 
 	private updatePlaceholder(): void {
-		this.setPlaceholder(this.folder.isRoot() ? 'Search notes' : `Search ${this.folder.path}`);
+		this.setPlaceholder(this.folder.isRoot() ? 'Search notes' : `Search ${this.folder.name}`);
 	}
 }
