@@ -92,6 +92,24 @@ const displaySection = (plugin: AutoClassifierPlugin): void => {
 	new JevSection(plugin, { empty: vi.fn() } as unknown as HTMLElement).display();
 };
 
+const settingAt = (index: number): SyntheticSettingState => {
+	const setting = settingHarness.settings[index];
+	if (!setting) throw new Error(`Expected Jev setting at index ${index}`);
+	return setting;
+};
+
+const inputAt = (index: number): SyntheticTextInput => {
+	const input = settingHarness.inputs[index];
+	if (!input) throw new Error(`Expected Jev text input at index ${index}`);
+	return input;
+};
+
+const inputCallback = (input: SyntheticTextInput) => {
+	const callback = input.callback;
+	if (!callback) throw new Error('Expected Jev input callback to be registered');
+	return callback;
+};
+
 describe('Jev settings section', () => {
 	beforeEach(() => {
 		settingHarness.settings.length = 0;
@@ -103,16 +121,18 @@ describe('Jev settings section', () => {
 		const { plugin } = createPlugin();
 		displaySection(plugin);
 
-		expect(settingHarness.settings[0]).toEqual({
+		expect(settingAt(0)).toEqual({
 			name: 'Jev classification',
 			description: 'Jev handles classification for all candidates.',
 			heading: true,
 		});
 		expect(settingHarness.inputs).toHaveLength(2);
-		expect(settingHarness.inputs[0].inputEl.type).toBe('password');
-		expect(settingHarness.inputs[0].value).toBe('existing-secret');
-		expect(settingHarness.inputs[1].inputEl.type).toBe('text');
-		expect(settingHarness.inputs[1].value).toBe('jev-1.14.0');
+		const apiKeyInput = inputAt(0);
+		const modelInput = inputAt(1);
+		expect(apiKeyInput.inputEl.type).toBe('password');
+		expect(apiKeyInput.value).toBe('existing-secret');
+		expect(modelInput.inputEl.type).toBe('text');
+		expect(modelInput.value).toBe('jev-1.14.0');
 		expect(requestUrl).not.toHaveBeenCalled();
 	});
 
@@ -122,8 +142,10 @@ describe('Jev settings section', () => {
 			plugin.settings;
 		displaySection(plugin);
 
-		await settingHarness.inputs[0].callback?.('new-secret');
-		await settingHarness.inputs[1].callback?.('jev-custom');
+		const updateApiKey = inputCallback(inputAt(0));
+		const updateModel = inputCallback(inputAt(1));
+		await updateApiKey('new-secret');
+		await updateModel('jev-custom');
 
 		expect(plugin.settings.jev).toEqual({ apiKey: 'new-secret', model: 'jev-custom' });
 		expect(plugin.settings.providers).toBe(providers);
@@ -141,7 +163,7 @@ describe('Jev settings section', () => {
 		saveSettings.mockRejectedValue(error);
 		displaySection(plugin);
 
-		await expect(settingHarness.inputs[0].callback?.('new-secret')).rejects.toBe(error);
+		await expect(inputCallback(inputAt(0))('new-secret')).rejects.toBe(error);
 		expect(plugin.settings.jev.apiKey).toBe('new-secret');
 		expect(requestUrl).not.toHaveBeenCalled();
 	});

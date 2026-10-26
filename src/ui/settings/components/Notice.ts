@@ -1,11 +1,11 @@
-import { Notice as ObsidianNotice } from 'obsidian';
+import { Component, Notice as ObsidianNotice } from 'obsidian';
 import { createNoticeShell } from '../../plugin-notices';
 
 // Safety cap so a request that never settles cannot leave the notice up forever.
 const MAX_PROGRESS_DURATION_MS = 120000;
 const STILL_WAITING_AFTER_MS = 15000;
 
-type ProgressNotice = ObsidianNotice & { waitingTimer?: number; capTimer?: number };
+type ProgressNotice = { notice: ObsidianNotice; scope: Component };
 
 export class Notice {
 	/** Plugin name shown at the top of every progress notice; set on load. */
@@ -51,21 +51,28 @@ export class Notice {
 		const textEl = content.createSpan({ text: displayText });
 		fragment.appendChild(root);
 
-		const notice: ProgressNotice = new ObsidianNotice(fragment, 0);
-		notice.waitingTimer = window.setTimeout(() => {
+		const notice = new ObsidianNotice(fragment, 0);
+		const scope = new Component();
+		const progress: ProgressNotice = { notice, scope };
+		scope.load();
+
+		const waitingTimer = window.setTimeout(() => {
 			textEl.setText(`${displayText.replace(/…$/, '')}, still waiting…`);
 		}, STILL_WAITING_AFTER_MS);
-		notice.capTimer = window.setTimeout(() => {
-			this.endProgress(notice);
+		const capTimer = window.setTimeout(() => {
+			this.endProgress(progress);
 		}, MAX_PROGRESS_DURATION_MS);
+		scope.register(() => {
+			window.clearTimeout(waitingTimer);
+			window.clearTimeout(capTimer);
+			notice.hide();
+		});
 
-		return notice;
+		return progress;
 	}
 
-	static endProgress(notice: ProgressNotice): void {
-		if (notice.waitingTimer !== undefined) window.clearTimeout(notice.waitingTimer);
-		if (notice.capTimer !== undefined) window.clearTimeout(notice.capTimer);
-		notice.hide();
+	static endProgress(progress: ProgressNotice): void {
+		progress.scope.unload();
 	}
 
 	static async withProgress<T>(

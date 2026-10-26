@@ -1,15 +1,18 @@
-import { App, type TFile } from 'obsidian';
+import { App, type TAbstractFile, type TFile, type Vault } from 'obsidian';
 import { ClassificationService } from '../../src/ui/ClassificationService';
 import type { AutoClassifierSettings, FrontmatterField, ProviderConfig } from '../../src/types';
 import { getFieldValues } from '../../src/ui/frontmatter';
 import { findUniqueProvider, PROVIDER_NAMES } from '../../src/utils/lib-utils';
+import type { PluginNotices } from '../../src/ui/plugin-notices';
+import { createTestTFile } from '../helpers/obsidian-fixtures';
+import type { Mock } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
 	classify: vi.fn(),
 	generate: vi.fn(),
 }));
 
-vi.mock('obsidian');
+vi.mock('obsidian', async (importOriginal) => importOriginal<typeof import('obsidian')>());
 
 vi.mock('../../src/ui/JevClassifier', () => ({
 	JevClassifier: class {
@@ -32,6 +35,23 @@ vi.mock('../../src/ui/frontmatter', () => ({
 
 const CONTENT = '---\nother: keep\n---\nBody text\n';
 
+type MockedVault = {
+	cachedRead: Mock<Vault['cachedRead']>;
+	getAbstractFileByPath: Mock<(path: string) => TAbstractFile | null>;
+	process: Mock<Vault['process']>;
+};
+
+type MockedApp = App & { vault: MockedVault };
+
+function mockedVault(app: App): MockedVault {
+	return app.vault as unknown as MockedVault;
+}
+
+function requireValue<T>(value: T | undefined, label: string): T {
+	if (value === undefined) throw new Error(`Expected ${label} to exist`);
+	return value;
+}
+
 function makeField(overrides: Partial<FrontmatterField> = {}): FrontmatterField {
 	return {
 		id: 9,
@@ -47,7 +67,7 @@ function makeField(overrides: Partial<FrontmatterField> = {}): FrontmatterField 
 
 function makeProvider(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
 	return {
-		name: 'Test provider',
+		name: 'OpenAI',
 		baseUrl: 'https://provider.invalid',
 		models: [{ id: 'model-1', name: 'Model 1' }],
 		temperature: 0.2,
@@ -57,7 +77,8 @@ function makeProvider(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
 }
 
 describe('ClassificationService', () => {
-	let app: App;
+	let app: MockedApp;
+	let vault: MockedVault;
 	let file: TFile;
 	let settings: AutoClassifierSettings;
 	let service: ClassificationService;
@@ -65,8 +86,8 @@ describe('ClassificationService', () => {
 	let currentContent: string;
 	let written: string[];
 	let beforeProcess: (() => void) | undefined;
-	let saveSettings: ReturnType<typeof vi.fn>;
-	let show: ReturnType<typeof vi.fn>;
+	let saveSettings: Mock<() => Promise<void>>;
+	let show: Mock<PluginNotices['show']>;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -75,17 +96,20 @@ describe('ClassificationService', () => {
 		currentContent = CONTENT;
 		written = [];
 		beforeProcess = undefined;
-		file = { path: 'notes/current.md', name: 'current.md' } as TFile;
-		app = new App();
-		const vault = app.vault as any;
-		vault.cachedRead = vi.fn().mockResolvedValue(CONTENT);
-		vault.getAbstractFileByPath = vi.fn((path: string) => (path === file.path ? file : null));
-		vault.process = vi.fn(async (_file: TFile, transform: (content: string) => string) => {
+		file = createTestTFile('notes/current.md', 'current');
+		const nativeApp = new App();
+		vault = mockedVault(nativeApp);
+		vault.cachedRead = vi.fn<Vault['cachedRead']>().mockResolvedValue(CONTENT);
+		vault.getAbstractFileByPath = vi.fn<(path: string) => TAbstractFile | null>((path) =>
+			path === file.path ? file : null
+		);
+		vault.process = vi.fn<Vault['process']>(async (_file, transform) => {
 			beforeProcess?.();
 			const result = transform(currentContent);
 			written.push(result);
 			return result;
 		});
+		app = nativeApp as unknown as MockedApp;
 		settings = {
 			classificationRule: 'global instructions',
 			frontmatter: [makeField()],
@@ -93,15 +117,16 @@ describe('ClassificationService', () => {
 			selectedProvider: '',
 			selectedModel: '',
 			jev: { apiKey: 'jev-secret', model: 'jev-model' },
-		} as unknown as AutoClassifierSettings;
-		saveSettings = vi.fn().mockResolvedValue(undefined);
-		show = vi.fn();
+		};
+		saveSettings = vi.fn<() => Promise<void>>(async () => undefined);
+		show = vi.fn<PluginNotices['show']>(() => null);
+		const notices: Pick<PluginNotices, 'show'> = { show };
 		service = new ClassificationService({
 			app,
 			getSettings: () => settings,
 			isActive: () => active,
 			saveSettings,
-			notices: { show } as any,
+			notices: notices as unknown as PluginNotices,
 		});
 		vi.mocked(getFieldValues).mockReturnValue([]);
 		mocks.classify.mockResolvedValue({ status: 'selected', values: ['alpha'] });
@@ -157,15 +182,16 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(mocks.classify).toHaveBeenCalledOnce();
-		expect(mocks.classify.mock.calls[0][0]).toMatchObject({
+		const classifyCall = requireValue(mocks.classify.mock.calls[0], 'Jev classification call');
+		expect(classifyCall[0]).toMatchObject({
 			fieldName: 'category',
 			instructions: 'global instructions\n\nfield instructions',
 			candidates: ['alpha', 'beta'],
 			max: 2,
 		});
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
-		expect(written[0]).toContain('category: [alpha]');
+		expect(vault.process).toHaveBeenCalledOnce();
+		expect(requireValue(written[0], 'written frontmatter')).toContain('category: [alpha]');
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Classification completed.',
 		});
@@ -178,7 +204,7 @@ describe('ClassificationService', () => {
 
 		expect(mocks.classify).toHaveBeenCalledOnce();
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 	});
 
 	it('requires the exact raw boolean opt-in on the exact tags field', async () => {
@@ -190,7 +216,7 @@ describe('ClassificationService', () => {
 
 		expect(mocks.classify).not.toHaveBeenCalled();
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'No usable reference values were found. No changes were made.',
 		});
@@ -202,7 +228,7 @@ describe('ClassificationService', () => {
 		settings.selectedProvider = 'Test provider';
 		settings.selectedModel = 'model-1';
 		currentContent = '---\ntags: [old-tag]\n---\nBody text\n';
-		(app.vault as any).cachedRead.mockResolvedValue(currentContent);
+		vault.cachedRead.mockResolvedValue(currentContent);
 		vi.mocked(getFieldValues).mockReturnValue([]);
 
 		await service.classify(file, 9);
@@ -211,15 +237,16 @@ describe('ClassificationService', () => {
 		expect(saveSettings).toHaveBeenCalledOnce();
 		expect(mocks.classify).not.toHaveBeenCalled();
 		expect(mocks.generate).toHaveBeenCalledOnce();
-		expect(mocks.generate.mock.calls[0][0]).toMatchObject({
+		const generationCall = requireValue(mocks.generate.mock.calls[0], 'tag generation call');
+		expect(generationCall[0]).toMatchObject({
 			fieldName: 'tags',
 			enabled: true,
 			excluded: ['old-tag'],
 			minimum: 1,
 			maximum: 2,
 		});
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
-		expect(written[0]).toContain('fresh-tag');
+		expect(vault.process).toHaveBeenCalledOnce();
+		expect(requireValue(written[0], 'written frontmatter')).toContain('fresh-tag');
 	});
 
 	it('rejects generation for duplicate exact provider names before making a provider request', async () => {
@@ -243,7 +270,7 @@ describe('ClassificationService', () => {
 		expect(mocks.generate).not.toHaveBeenCalled();
 		expect(mocks.classify).not.toHaveBeenCalled();
 		expect(saveSettings).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(first).toMatchObject({
 			name: 'Duplicate provider',
 			baseUrl: 'https://first.invalid',
@@ -266,7 +293,7 @@ describe('ClassificationService', () => {
 
 		expect(mocks.classify).not.toHaveBeenCalled();
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'No usable reference values were found. No changes were made.',
 		});
@@ -278,7 +305,7 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'No usable reference values were found. No changes were made.',
 		});
@@ -294,8 +321,8 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(mocks.generate).toHaveBeenCalledOnce();
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
-		expect(written[0]).toContain('fresh-tag');
+		expect(app.vault.process).toHaveBeenCalledOnce();
+		expect(requireValue(written[0], 'written frontmatter')).toContain('fresh-tag');
 	});
 
 	it('does not generate or commit an all-no result for a non-opted-in field', async () => {
@@ -304,7 +331,7 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'No matching references were selected. No changes were made.',
 		});
@@ -320,7 +347,7 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Classification could not be completed safely. No changes were made.',
 		});
@@ -336,8 +363,8 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(mocks.generate).toHaveBeenCalledOnce();
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
-		expect(written[0]).toContain('fresh-tag');
+		expect(app.vault.process).toHaveBeenCalledOnce();
+		expect(requireValue(written[0], 'written frontmatter')).toContain('fresh-tag');
 	});
 
 	it('does not generate or commit when any candidate abstains', async () => {
@@ -350,7 +377,7 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Classification was uncertain. No changes were made.',
 		});
@@ -367,7 +394,7 @@ describe('ClassificationService', () => {
 
 		expect(mocks.classify).toHaveBeenCalledOnce();
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 	});
 
 	it('bounds generated tags by the remaining combined minimum and maximum', async () => {
@@ -382,14 +409,16 @@ describe('ClassificationService', () => {
 
 		await service.classify(file, 9);
 
-		expect(mocks.generate.mock.calls[0][0]).toMatchObject({
+		const generationCall = requireValue(mocks.generate.mock.calls[0], 'tag generation call');
+		expect(generationCall[0]).toMatchObject({
 			minimum: 1,
 			maximum: 1,
 			excluded: ['alpha', 'beta'],
 		});
-		expect(written[0]).toContain('tags:');
-		expect(written[0]).toContain('alpha');
-		expect(written[0]).toContain('fresh-tag');
+		const writtenContent = requireValue(written[0], 'written frontmatter');
+		expect(writtenContent).toContain('tags:');
+		expect(writtenContent).toContain('alpha');
+		expect(writtenContent).toContain('fresh-tag');
 	});
 
 	it('does not write a selection that leaves the combined operation below its minimum', async () => {
@@ -405,8 +434,9 @@ describe('ClassificationService', () => {
 
 		await service.classify(file, 9);
 
-		expect(mocks.generate.mock.calls[0][0]).toMatchObject({ minimum: 1, maximum: 1 });
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		const generationCall = requireValue(mocks.generate.mock.calls[0], 'tag generation call');
+		expect(generationCall[0]).toMatchObject({ minimum: 1, maximum: 1 });
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'The selected values did not meet the minimum. No changes were made.',
 		});
@@ -423,7 +453,7 @@ describe('ClassificationService', () => {
 
 		expect(mocks.classify).toHaveBeenCalledOnce();
 		expect(mocks.generate).toHaveBeenCalledOnce();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'New tags could not be generated safely. No changes were made.',
 		});
@@ -431,12 +461,12 @@ describe('ClassificationService', () => {
 
 	it('uses one atomic callback and rejects revoked settings at the callback boundary', async () => {
 		beforeProcess = () => {
-			settings.frontmatter[0].name = 'renamed';
+			requireValue(settings.frontmatter[0], 'current frontmatter field').name = 'renamed';
 		};
 
 		await service.classify(file, 9);
 
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 		expect(written).toHaveLength(0);
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
@@ -450,7 +480,7 @@ describe('ClassificationService', () => {
 
 		await service.classify(file, 9);
 
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 		expect(written).toHaveLength(0);
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
@@ -469,7 +499,7 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(mocks.generate).toHaveBeenCalledOnce();
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 		expect(written).toHaveLength(0);
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
@@ -483,7 +513,7 @@ describe('ClassificationService', () => {
 
 		await service.classify(file, 9);
 
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 		expect(written).toHaveLength(0);
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
@@ -493,12 +523,12 @@ describe('ClassificationService', () => {
 	it('rejects a different file object returned for the pinned path inside the callback', async () => {
 		const replacement = { ...file };
 		beforeProcess = () => {
-			(app.vault as any).getAbstractFileByPath.mockReturnValue(replacement);
+			vault.getAbstractFileByPath.mockReturnValue(replacement);
 		};
 
 		await service.classify(file, 9);
 
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 		expect(written).toHaveLength(0);
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
@@ -513,7 +543,7 @@ describe('ClassificationService', () => {
 
 		await service.classify(file, 9);
 
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 		expect(written).toHaveLength(0);
 		expect(show).not.toHaveBeenCalled();
 	});
@@ -521,15 +551,17 @@ describe('ClassificationService', () => {
 	it('allows unrelated setting and note changes while preserving the live unrelated content', async () => {
 		settings.frontmatter.push(makeField({ id: 10, name: 'other', refs: ['x'] }));
 		beforeProcess = () => {
-			settings.frontmatter[1].customQuery = 'unrelated user edit';
+			requireValue(settings.frontmatter[1], 'unrelated frontmatter field').customQuery =
+				'unrelated user edit';
 			currentContent = '---\nother: updated\n---\nBody text\n';
 		};
 
 		await service.classify(file, 9);
 
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
-		expect(written[0]).toContain('other: updated');
-		expect(written[0]).toContain('category: [alpha]');
+		expect(app.vault.process).toHaveBeenCalledOnce();
+		const writtenContent = requireValue(written[0], 'written frontmatter');
+		expect(writtenContent).toContain('other: updated');
+		expect(writtenContent).toContain('category: [alpha]');
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Classification completed.',
 		});
@@ -538,17 +570,20 @@ describe('ClassificationService', () => {
 	it('aborts prepared references if field semantics change during collection', async () => {
 		settings.frontmatter[0] = makeField({ refs: [] });
 		vi.mocked(getFieldValues).mockImplementation(() => {
-			settings.frontmatter[0].customQuery = 'externally changed';
+			requireValue(settings.frontmatter[0], 'current frontmatter field').customQuery =
+				'externally changed';
 			return ['collected'];
 		});
 
 		await service.classify(file, 9);
 
-		expect(settings.frontmatter[0].customQuery).toBe('externally changed');
+		expect(requireValue(settings.frontmatter[0], 'current frontmatter field').customQuery).toBe(
+			'externally changed'
+		);
 		expect(saveSettings).not.toHaveBeenCalled();
 		expect(mocks.classify).not.toHaveBeenCalled();
 		expect(mocks.generate).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 	});
 
 	it('uses successfully collected references in the same operation', async () => {
@@ -558,23 +593,26 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(saveSettings).toHaveBeenCalledOnce();
-		expect(mocks.classify.mock.calls[0][0].candidates).toEqual(['collected-one', 'collected-two']);
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		const classifyCall = requireValue(mocks.classify.mock.calls[0], 'Jev classification call');
+		expect(classifyCall[0].candidates).toEqual(['collected-one', 'collected-two']);
+		expect(app.vault.process).toHaveBeenCalledOnce();
 	});
 
 	it('does not use references replaced while their prepared snapshot is being saved', async () => {
 		settings.frontmatter[0] = makeField({ refs: [] });
 		vi.mocked(getFieldValues).mockReturnValue(['collected']);
 		saveSettings.mockImplementation(async () => {
-			settings.frontmatter[0].refs = ['user-edited'];
+			requireValue(settings.frontmatter[0], 'current frontmatter field').refs = ['user-edited'];
 		});
 
 		await service.classify(file, 9);
 
-		expect(settings.frontmatter[0].refs).toEqual(['user-edited']);
+		expect(requireValue(settings.frontmatter[0], 'current frontmatter field').refs).toEqual([
+			'user-edited',
+		]);
 		expect(saveSettings).toHaveBeenCalledOnce();
 		expect(mocks.classify).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 	});
 
 	it('does not classify collected references after global instructions change during save', async () => {
@@ -588,7 +626,7 @@ describe('ClassificationService', () => {
 
 		expect(settings.classificationRule).toBe('user-edited instructions');
 		expect(mocks.classify).not.toHaveBeenCalled();
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 	});
 
 	it('reuses the Jev configuration guard while generation is pending', async () => {
@@ -604,7 +642,7 @@ describe('ClassificationService', () => {
 
 		await service.classify(file, 9);
 
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(settings.jev.model).toBe('changed-model');
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
@@ -612,30 +650,36 @@ describe('ClassificationService', () => {
 	});
 
 	it('rejects work after the pinned file is renamed', async () => {
-		let finish!: (result: { status: 'selected'; values: string[] }) => void;
+		let finish: ((result: { status: 'selected'; values: string[] }) => void) | undefined;
 		mocks.classify.mockReturnValue(new Promise((resolve) => (finish = resolve)));
 		const pending = service.classify(file, 9);
 		await vi.waitFor(() => expect(mocks.classify).toHaveBeenCalledOnce());
 		file.path = 'notes/renamed.md';
-		finish({ status: 'selected', values: ['alpha'] });
+		requireValue(finish, 'classifier completion callback')({
+			status: 'selected',
+			values: ['alpha'],
+		});
 		await pending;
 
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
 		});
 	});
 
 	it('rejects work when the pinned file is removed during inference', async () => {
-		let finish!: (result: { status: 'selected'; values: string[] }) => void;
+		let finish: ((result: { status: 'selected'; values: string[] }) => void) | undefined;
 		mocks.classify.mockReturnValue(new Promise((resolve) => (finish = resolve)));
 		const pending = service.classify(file, 9);
 		await vi.waitFor(() => expect(mocks.classify).toHaveBeenCalledOnce());
 		settings.frontmatter = [];
-		finish({ status: 'selected', values: ['alpha'] });
+		requireValue(finish, 'classifier completion callback')({
+			status: 'selected',
+			values: ['alpha'],
+		});
 		await pending;
 
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
 		});
@@ -647,7 +691,7 @@ describe('ClassificationService', () => {
 
 		await service.classify(file, 9);
 
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 		expect(written).toHaveLength(0);
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Classification timed out. No changes were made.',
@@ -655,16 +699,19 @@ describe('ClassificationService', () => {
 	});
 
 	it('revokes active work on unload and does not report after deactivation', async () => {
-		let finish!: (result: { status: 'selected'; values: string[] }) => void;
+		let finish: ((result: { status: 'selected'; values: string[] }) => void) | undefined;
 		mocks.classify.mockReturnValue(new Promise((resolve) => (finish = resolve)));
 		const pending = service.classify(file, 9);
 		await vi.waitFor(() => expect(mocks.classify).toHaveBeenCalledOnce());
 		active = false;
 		service.deactivate();
-		finish({ status: 'selected', values: ['alpha'] });
+		requireValue(finish, 'classifier completion callback')({
+			status: 'selected',
+			values: ['alpha'],
+		});
 		await pending;
 
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).not.toHaveBeenCalled();
 	});
 
@@ -682,31 +729,38 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 		const other = service.classify(file, 10);
 		await vi.waitFor(() => expect(mocks.classify).toHaveBeenCalledTimes(2));
-		finish[0]({ status: 'selected', values: ['alpha'] });
-		finish[1]({ status: 'selected', values: ['x'] });
+		requireValue(finish[0], 'first classifier completion callback')({
+			status: 'selected',
+			values: ['alpha'],
+		});
+		requireValue(finish[1], 'second classifier completion callback')({
+			status: 'selected',
+			values: ['x'],
+		});
 		await Promise.all([first, other]);
 
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Classification is already running for this field.',
 		});
-		expect((app.vault as any).process).toHaveBeenCalledTimes(2);
+		expect(app.vault.process).toHaveBeenCalledTimes(2);
 	});
 
 	it('rejects a user provider change during tag generation rather than treating it as OAuth refresh', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
+		const provider = requireValue(settings.providers[0], 'configured provider');
 		settings.selectedProvider = 'Test provider';
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockImplementation(async (input: { assertCurrent: () => void }) => {
-			settings.providers[0].auth = { type: 'apiKey', apiKey: 'user-replaced-key' };
+			provider.auth = { type: 'apiKey', apiKey: 'user-replaced-key' };
 			input.assertCurrent();
 			return ['fresh-tag'];
 		});
 
 		await service.classify(file, 9);
 
-		expect(settings.providers[0].auth).toEqual({ type: 'apiKey', apiKey: 'user-replaced-key' });
-		expect((app.vault as any).process).not.toHaveBeenCalled();
+		expect(provider.auth).toEqual({ type: 'apiKey', apiKey: 'user-replaced-key' });
+		expect(app.vault.process).not.toHaveBeenCalled();
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
 		});
@@ -726,7 +780,8 @@ describe('ClassificationService', () => {
 				auth: { type: 'oauth', oauth: tokens },
 			}),
 		];
-		settings.selectedProvider = settings.providers[0].name;
+		const provider = requireValue(settings.providers[0], 'OAuth provider');
+		settings.selectedProvider = provider.name;
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockImplementation(async (_input, _provider, _model, refresh) => {
 			await refresh({ ...tokens, accessToken: 'new-access' });
@@ -736,10 +791,10 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(saveSettings).toHaveBeenCalledOnce();
-		expect(settings.providers[0].auth).toMatchObject({
+		expect(provider.auth).toMatchObject({
 			type: 'oauth',
 			oauth: { accessToken: 'new-access' },
 		});
-		expect((app.vault as any).process).toHaveBeenCalledOnce();
+		expect(app.vault.process).toHaveBeenCalledOnce();
 	});
 });

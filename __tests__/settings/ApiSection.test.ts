@@ -1,8 +1,34 @@
-vi.mock('provider', () => ({
+const settingsHarness = vi.hoisted(() => ({
+	headings: [] as string[],
+}));
+
+vi.mock('obsidian', async (importOriginal) => {
+	const original = await importOriginal<typeof import('obsidian')>();
+	class ChainableSetting extends original.Setting {
+		private settingName = '';
+
+		constructor(containerEl: HTMLElement) {
+			super(containerEl);
+			this.setName = (name: string) => {
+				this.settingName = name;
+				return this;
+			};
+			this.setDesc = () => this;
+			this.setHeading = () => {
+				settingsHarness.headings.push(this.settingName);
+				return this;
+			};
+		}
+	}
+
+	return { ...original, Setting: ChainableSetting };
+});
+
+vi.mock('../../src/ui/provider-api', () => ({
 	testModel: vi.fn(),
 }));
 
-vi.mock('settings/modals/ModelModal', () => ({
+vi.mock('../../src/ui/settings/modals/ModelModal', () => ({
 	ModelModal: class {
 		constructor(
 			public app: any,
@@ -12,7 +38,7 @@ vi.mock('settings/modals/ModelModal', () => ({
 	},
 }));
 
-vi.mock('settings/modals/ProviderModal', () => ({
+vi.mock('../../src/ui/settings/modals/ProviderModal', () => ({
 	ProviderModal: class {
 		constructor(
 			public app: any,
@@ -23,8 +49,8 @@ vi.mock('settings/modals/ProviderModal', () => ({
 	},
 }));
 
-import { testModel } from 'provider';
-import { Api } from 'settings/ApiSection';
+import { testModel } from '../../src/ui/provider-api';
+import { Api } from '../../src/ui/settings/ApiSection';
 
 const mockTestModel = vi.mocked(testModel);
 
@@ -67,6 +93,7 @@ describe('Api Container - Regression Tests', () => {
 	let api: Api;
 
 	beforeEach(() => {
+		settingsHarness.headings.length = 0;
 		mockPlugin = createMockPlugin();
 		mockContainer = createMockContainer();
 		api = new Api(mockPlugin, mockContainer);
@@ -80,11 +107,14 @@ describe('Api Container - Regression Tests', () => {
 
 			// Then: All basic UI components should be created
 			expect(mockContainer.empty).toHaveBeenCalled();
-			expect(mockContainer.createEl).toHaveBeenCalledWith('h2', {
-				text: 'Optional provider for explicitly enabled new-tag generation',
-			});
-			expect(mockContainer.createEl).toHaveBeenCalledWith('div', { cls: 'provider-section' });
-			expect(mockContainer.createEl).toHaveBeenCalledWith('div', { cls: 'model-section' });
+			expect(settingsHarness.headings).toEqual([
+				'Classification instructions',
+				'Optional new-tag generation',
+				'Providers',
+				'Models',
+			]);
+			expect(mockContainer.createDiv).toHaveBeenCalledWith({ cls: 'provider-section' });
+			expect(mockContainer.createDiv).toHaveBeenCalledWith({ cls: 'model-section' });
 			expect(mockContainer.createDiv).toHaveBeenCalledWith({
 				cls: 'custom-prompt-container mac-custom-prompt-container',
 			});

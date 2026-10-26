@@ -203,8 +203,8 @@ describe('UnifiedProvider generated-tags contract', () => {
 							content: {
 								parts: [
 									{ thought: true, text: 'Synthetic reasoning, not output' },
-									{ text: '{\"tags\":' },
-									{ text: '[\"new/tag\"]}' },
+									{ text: '{"tags":' },
+									{ text: '["new/tag"]}' },
 								],
 							},
 						},

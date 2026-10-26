@@ -156,6 +156,31 @@ export class FuzzySuggestModal<T> {
 	close(): void {}
 }
 
+export class Component {
+	private loaded = false;
+	private readonly registered: Array<() => unknown> = [];
+
+	register(callback: () => unknown): void {
+		this.registered.push(callback);
+	}
+
+	load(): void {
+		if (this.loaded) return;
+		this.loaded = true;
+		this.onload();
+	}
+
+	unload(): void {
+		if (!this.loaded) return;
+		this.loaded = false;
+		this.onunload();
+		for (const callback of this.registered.splice(0).reverse()) callback();
+	}
+
+	onload(): void {}
+	onunload(): void {}
+}
+
 // ---------------------- UI Mocks ----------------------
 
 export class ButtonComponent {
@@ -179,7 +204,11 @@ export class ExtraButtonComponent {
 	constructor(public containerEl: HTMLElement) {}
 }
 
-export const Notice = vi.fn().mockImplementation(function (message: string, duration: number) {
+export const Notice = vi.fn().mockImplementation(function (
+	this: { message: unknown; duration: number | undefined; setMessage: () => void; hide: () => void },
+	message: string | DocumentFragment,
+	duration?: number
+) {
 	this.message = message;
 	this.duration = duration;
 	this.setMessage = vi.fn();
@@ -190,10 +219,12 @@ export const Notice = vi.fn().mockImplementation(function (message: string, dura
 export class Setting {
 	settingEl = { addClass: vi.fn(), createSpan: vi.fn() } as any;
 	controlEl = { createSpan: vi.fn() } as any;
+	name = '';
+	desc = '';
 	constructor(public containerEl: HTMLElement) {}
-	setName = vi.fn();
-	setDesc = vi.fn();
-	setHeading = vi.fn();
+	setName = vi.fn((name: string) => { this.name = name; return this; });
+	setDesc = vi.fn((desc: string) => { this.desc = desc; return this; });
+	setHeading = vi.fn(() => { this.settingEl.addClass('setting-item-heading'); return this; });
 	addText = vi.fn();
 	addDropdown = vi.fn();
 	addToggle = vi.fn();
@@ -247,10 +278,12 @@ export class Modal {
 	app: App;
 	contentEl: HTMLElement;
 	modalEl: HTMLElement;
+	titleEl: HTMLElement;
 
 	constructor(app: App) {
 		this.app = app;
-		this.contentEl = createMockElement() as any;
+		this.contentEl = createMockElement();
+		this.titleEl = createMockElement() as HTMLElement;
 		this.modalEl = {
 			addClass: vi.fn(),
 		} as any;
@@ -258,6 +291,10 @@ export class Modal {
 
 	open = vi.fn();
 	close = vi.fn();
+	setTitle(title: string): this {
+		this.titleEl.textContent = title;
+		return this;
+	}
 	onOpen(): void {}
 	onClose(): void {}
 }

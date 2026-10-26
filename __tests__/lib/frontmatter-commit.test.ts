@@ -1,14 +1,14 @@
 import { App, getFrontMatterInfo, TFile } from 'obsidian';
-import {
-	captureFieldBaseline,
-	commitField,
-	FrontmatterCommitError,
-} from '../../src/ui/frontmatter-commit';
+import { captureFieldBaseline, commitField } from '../../src/ui/frontmatter-commit';
 import type { CommitFieldPlan } from '../../src/ui/frontmatter-commit';
 import { FrontmatterEditError } from '../../src/domain/frontmatter-edit';
 import type { Mock } from 'vitest';
 
-type MockVault = { read: Mock; modify: Mock; process: Mock };
+type MockVault = {
+	read: Mock<(file: TFile) => Promise<string>>;
+	modify: Mock<(file: TFile, content: string) => Promise<void>>;
+	process: Mock<(file: TFile, transform: (content: string) => string) => Promise<string>>;
+};
 
 const file = new TFile();
 
@@ -20,6 +20,11 @@ function plan(assertCurrent: () => void = vi.fn()): CommitFieldPlan {
 		linkType: 'Normal',
 		assertCurrent,
 	};
+}
+
+function requireValue<T>(value: T | undefined, label: string): T {
+	if (value === undefined) throw new Error(`Expected ${label} to exist`);
+	return value;
 }
 
 function appWithContent(content: string): App {
@@ -219,7 +224,8 @@ describe('commitField', () => {
 
 		await commitField(app, file, captureFieldBaseline(content, 'tags'), replacement);
 
-		const updated = vaultMocks(app).modify.mock.calls[0][1] as string;
+		const modifyCall = requireValue(vaultMocks(app).modify.mock.calls[0], 'frontmatter write call');
+		const updated = modifyCall[1];
 		expect(captureFieldBaseline(updated, 'tags').target).toEqual({
 			present: true,
 			type: 'array',

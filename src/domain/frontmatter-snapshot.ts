@@ -22,6 +22,7 @@ function hasReference(node: Node): boolean {
 		Node: (_key, current) => {
 			found = isAlias(current) || ('anchor' in current && Boolean(current.anchor));
 			if (found) return visit.BREAK;
+			return undefined;
 		},
 	});
 	return found;

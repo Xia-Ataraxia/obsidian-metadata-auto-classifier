@@ -5,7 +5,7 @@ import type AutoClassifierPlugin from '../../main';
 import { copyProvider, providerHasAuth, sameProvider } from '../../domain/classification-state';
 import type { ProviderConfig } from '../../types';
 import { formatTokenExpiry, isTokenExpired } from '../auth';
-import { findUniqueProvider } from '../../utils/lib-utils';
+import { PROVIDER_NAMES } from '../../utils/lib-utils';
 import { Setting } from './components/Setting';
 import { ProviderModal } from './modals/ProviderModal';
 
@@ -20,24 +20,26 @@ export class ProviderSection {
 	 * Get display name with OAuth status for a provider
 	 */
 	private getProviderDisplayInfo(provider: ProviderConfig): { name: string; desc: string } {
-		const authType =
-			provider.auth !== undefined
-				? provider.auth.type
-				: (provider.authType ?? (provider.oauth ? 'oauth' : undefined));
-		if (authType === 'oauth') {
-			const oauthTokens =
-				provider.auth !== undefined
-					? provider.auth.type === 'oauth'
-						? provider.auth.oauth
-						: undefined
-					: provider.oauth;
-			const isConnected = oauthTokens && !isTokenExpired(oauthTokens);
-			const status = isConnected
-				? `Signed in · ${formatTokenExpiry(oauthTokens!)}`
-				: 'Not signed in';
-			return { name: provider.name, desc: status };
-		}
-		return { name: provider.name, desc: providerHasAuth(provider) ? 'Connected' : 'No API key' };
+		if (!providerHasAuth(provider))
+			return {
+				name: provider.name,
+				desc: provider.name === PROVIDER_NAMES.CODEX ? 'Not signed in' : 'No API key',
+			};
+		if (provider.name !== PROVIDER_NAMES.CODEX)
+			return { name: provider.name, desc: 'Connected' };
+		const oauthTokens =
+			provider.auth === undefined
+				? provider.oauth
+				: provider.auth.type === 'oauth'
+					? provider.auth.oauth
+					: undefined;
+		return {
+			name: provider.name,
+			desc:
+				oauthTokens && !isTokenExpired(oauthTokens)
+					? `Signed in · ${formatTokenExpiry(oauthTokens)}`
+					: 'Not signed in',
+		};
 	}
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[]): void {
@@ -59,6 +61,7 @@ export class ProviderSection {
 						icon: 'trash',
 						text: 'Delete',
 						onClick: async () => {
+							const removedSnapshot = copyProvider(provider);
 							const confirmed = await confirmAction(
 								this.app,
 								`Delete "${provider.name}"?`,
@@ -67,10 +70,13 @@ export class ProviderSection {
 							if (!confirmed || !this.plugin.isActive()) return;
 
 							const providers = this.plugin.settings.providers;
-							if (findUniqueProvider(providers, provider.name) !== provider) return;
+							if (
+								providers.filter((candidate) => candidate === provider).length !== 1 ||
+								!sameProvider(provider, removedSnapshot)
+							)
+								return;
 							const selectedProvider = this.plugin.settings.selectedProvider;
 							const selectedModel = this.plugin.settings.selectedModel;
-							const removedSnapshot = copyProvider(provider);
 							const providerIndex = providers.indexOf(provider);
 							if (providerIndex === -1) return;
 							const remainingProviders = providers.slice();
@@ -154,7 +160,6 @@ export class ProviderSection {
 					const index = providers.indexOf(previousTarget);
 					if (
 						index === -1 ||
-						findUniqueProvider(providers, previousTarget.name) !== previousTarget ||
 						providers.filter((provider) => provider === previousTarget).length !== 1 ||
 						!previousTargetBaseline ||
 						!sameProvider(previousTarget, previousTargetBaseline)

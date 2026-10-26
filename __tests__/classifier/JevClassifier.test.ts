@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { JevClassificationError, JevClassifier } from '../../src/ui/JevClassifier';
 import { sendRequest } from '../../src/ui/request';
-import type { JevRequest } from '../../src/types/jev';
 
 vi.mock('../../src/ui/request', () => ({ sendRequest: vi.fn() }));
 const request = vi.mocked(sendRequest);
@@ -14,12 +13,24 @@ const input = {
 	max: 2,
 };
 const control = () => ({ deadline: Date.now() + 60_000, assertCurrent: vi.fn() });
-function answer(payload: object, probability = 0.8) {
-	const data = payload as JevRequest;
+function answer(payload: string | object, probability = 0.8) {
+	if (
+		typeof payload !== 'object' ||
+		payload === null ||
+		Array.isArray(payload) ||
+		!('model' in payload) ||
+		typeof payload.model !== 'string' ||
+		!('questions' in payload) ||
+		typeof payload.questions !== 'object' ||
+		payload.questions === null ||
+		Array.isArray(payload.questions)
+	) {
+		throw new Error('Expected a structured Jev request');
+	}
 	return {
-		model: data.model,
+		model: payload.model,
 		answers: Object.fromEntries(
-			Object.keys(data.questions).map((id) => [id, { type: 'noul', noul: probability }])
+			Object.keys(payload.questions).map((id) => [id, { type: 'noul', noul: probability }])
 		),
 		usage: { input_tokens: 12, output_tokens: 2 },
 	};

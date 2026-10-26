@@ -61,6 +61,7 @@ function hasFeature(
 					? isAlias(current) || ('anchor' in current && Boolean(current.anchor))
 					: current.commentBefore != null || (current.comment != null && !trailing);
 			if (found) return visit.BREAK;
+			return undefined;
 		},
 	});
 	return found;

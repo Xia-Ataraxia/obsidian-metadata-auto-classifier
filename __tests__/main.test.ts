@@ -1,13 +1,14 @@
-import { App, createMockTFile, type TFile } from 'obsidian';
+import { App, type TFile } from 'obsidian';
 import AutoClassifierPlugin from '../src/main';
 import { DEFAULT_SETTINGS, NOTICE_CATALOG } from '../src/domain/constants';
 import { Notice } from '../src/ui/settings/components/Notice';
 import type {
-	AutoClassifierSettings,
 	FrontmatterField,
 	OAuthTokens,
 	ProviderConfig,
+	PluginNoticesHost,
 } from '../src/types';
+import { createTestTFile, TEST_PLUGIN_MANIFEST } from './helpers/obsidian-fixtures';
 
 const mocks = vi.hoisted(() => ({
 	classify: vi.fn(),
@@ -15,14 +16,14 @@ const mocks = vi.hoisted(() => ({
 	classificationContexts: [] as unknown[],
 	noticeHosts: [] as unknown[],
 	settingTabPlugins: [] as unknown[],
-	noticeArguments: [] as unknown[][],
+	noticeArguments: [] as Array<[PluginNoticesHost, typeof NOTICE_CATALOG, string]>,
 	noticeShow: vi.fn(),
 	noticeUnload: vi.fn(),
 	loggerInfo: vi.fn(),
 	loggerError: vi.fn(),
 }));
 
-vi.mock('obsidian');
+vi.mock('obsidian', async (importOriginal) => importOriginal<typeof import('obsidian')>());
 
 vi.mock('../src/ui/ClassificationService', () => ({
 	ClassificationService: class {
@@ -56,9 +57,9 @@ vi.mock('../src/ui/settings/components/Notice', () => ({
 
 vi.mock('../src/ui/plugin-notices', () => ({
 	PluginNotices: class {
-		constructor(...args: unknown[]) {
-			mocks.noticeHosts.push(args[0]);
-			mocks.noticeArguments.push(args);
+		constructor(host: PluginNoticesHost, catalog: typeof NOTICE_CATALOG, head: string) {
+			mocks.noticeHosts.push(host);
+			mocks.noticeArguments.push([host, catalog, head]);
 		}
 
 		show(...args: unknown[]) {
@@ -95,15 +96,20 @@ function makeField(id: number): FrontmatterField {
 	};
 }
 
+function requireValue<T>(value: T | undefined, label: string): T {
+	if (value === undefined) throw new Error(`Expected ${label} to exist`);
+	return value;
+}
+
 describe('AutoClassifierPlugin', () => {
 	let app: App;
 	let plugin: AutoClassifierPlugin;
 
 	function installClassificationService(): void {
-		(plugin as any).classificationService = {
+		Reflect.set(plugin, 'classificationService', {
 			classify: (file: TFile, id: number) => mocks.classify(file, id),
 			deactivate: () => mocks.deactivate(),
-		};
+		});
 	}
 
 	beforeEach(() => {
@@ -120,27 +126,29 @@ describe('AutoClassifierPlugin', () => {
 		mocks.loggerError.mockReset();
 
 		app = new App();
-		plugin = new AutoClassifierPlugin(app);
+		plugin = new AutoClassifierPlugin(app, TEST_PLUGIN_MANIFEST);
 		plugin.settings = {
 			...DEFAULT_SETTINGS,
 			jev: { ...DEFAULT_SETTINGS.jev },
 			providers: [],
 			frontmatter: [makeField(1)],
 			classificationRule: 'synthetic instructions',
-		} as AutoClassifierSettings;
-		plugin.notices = {
+		};
+		const notices: Pick<AutoClassifierPlugin['notices'], 'show' | 'unload'> = {
 			show: mocks.noticeShow,
 			unload: mocks.noticeUnload,
-		} as any;
-		plugin.logger = {
+		};
+		plugin.notices = notices as unknown as AutoClassifierPlugin['notices'];
+		const logger: Pick<AutoClassifierPlugin['logger'], 'info' | 'error'> = {
 			info: mocks.loggerInfo,
 			error: mocks.loggerError,
-		} as any;
+		};
+		plugin.logger = logger as unknown as AutoClassifierPlugin['logger'];
 	});
 
 	describe('settings persistence', () => {
 		it('merges stored settings with Jev defaults and repairs missing field counts', async () => {
-			(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue({
+			vi.mocked(plugin.loadData).mockResolvedValue({
 				selectedProvider: 'Stored provider',
 				jev: { apiKey: 'stored-key' },
 				frontmatter: [{ ...makeField(1), count: undefined }],
@@ -153,7 +161,10 @@ describe('AutoClassifierPlugin', () => {
 				apiKey: 'stored-key',
 				model: DEFAULT_SETTINGS.jev.model,
 			});
-			expect(plugin.settings.frontmatter[0].count).toEqual({ min: 1, max: 5 });
+			expect(requireValue(plugin.settings.frontmatter[0], 'stored frontmatter field').count).toEqual({
+				min: 1,
+				max: 5,
+			});
 			expect(plugin.saveData).toHaveBeenCalledWith(plugin.settings);
 		});
 
@@ -162,6 +173,51 @@ describe('AutoClassifierPlugin', () => {
 
 			expect(plugin.saveData).toHaveBeenCalledWith(plugin.settings);
 		});
+	});
+
+	it('does not publish settings or initialize after unload while loadData is pending', async () => {
+		const initialSettings = plugin.settings;
+		let resolveLoad: ((settings: unknown) => void) | undefined;
+		vi.mocked(plugin.loadData).mockReturnValue(
+			new Promise((resolve) => {
+				resolveLoad = resolve;
+			})
+		);
+
+		const pendingOnload = plugin.onload();
+		expect(plugin.loadData).toHaveBeenCalledOnce();
+		plugin.onunload();
+		requireValue(resolveLoad, 'loadData completion callback')({ selectedProvider: 'late settings' });
+		await pendingOnload;
+
+		expect(plugin.settings).toBe(initialSettings);
+		expect(plugin.settings.selectedProvider).toBe('');
+		expect(plugin.saveData).not.toHaveBeenCalled();
+		expect(mocks.classificationContexts).toHaveLength(0);
+		expect(plugin.addCommand).not.toHaveBeenCalled();
+		expect(plugin.addSettingTab).not.toHaveBeenCalled();
+	});
+
+	it('does not activate or initialize after unload while saveData is pending', async () => {
+		let resolveSave: (() => void) | undefined;
+		vi.mocked(plugin.saveData).mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveSave = resolve;
+				})
+		);
+
+		const pendingOnload = plugin.onload();
+		await vi.waitFor(() => expect(plugin.saveData).toHaveBeenCalledOnce());
+		expect(plugin.isActive()).toBe(false);
+		plugin.onunload();
+		requireValue(resolveSave, 'saveData completion callback')();
+		await pendingOnload;
+
+		expect(plugin.isActive()).toBe(false);
+		expect(mocks.classificationContexts).toHaveLength(0);
+		expect(plugin.addCommand).not.toHaveBeenCalled();
+		expect(plugin.addSettingTab).not.toHaveBeenCalled();
 	});
 
 	describe('commands', () => {
@@ -184,7 +240,12 @@ describe('AutoClassifierPlugin', () => {
 			const callback = vi.fn().mockResolvedValue(undefined);
 
 			plugin.registerCommand('synthetic', callback);
-			const command = (plugin.addCommand as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			const commandCall = requireValue(
+				vi.mocked(plugin.addCommand).mock.calls[0],
+				'registered command call'
+			);
+			const command = commandCall[0];
+			if (!command.callback) throw new Error('Expected registered command to include a callback');
 			await command.callback();
 
 			expect(callback).toHaveBeenCalledOnce();
@@ -204,7 +265,7 @@ describe('AutoClassifierPlugin', () => {
 			models: [{ id: 'model-1', name: 'Model 1' }],
 			auth: { type: 'oauth', oauth: expiredTokens },
 		};
-		(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue({
+		vi.mocked(plugin.loadData).mockResolvedValue({
 			frontmatter: [makeField(1)],
 			providers: [provider],
 			selectedProvider: 'Codex',
@@ -213,15 +274,18 @@ describe('AutoClassifierPlugin', () => {
 		});
 		await plugin.onload();
 
-		const file = createMockTFile('notes/one.md', 'one');
-		app.workspace.getActiveFile.mockReturnValue(file);
+		const file = createTestTFile('notes/one.md', 'one');
+		vi.mocked(app.workspace.getActiveFile).mockReturnValue(file);
 		await plugin.processFrontmatter(1);
 		await plugin.processFrontmatter(1);
 
 		expect(mocks.classificationContexts).toHaveLength(1);
 		expect(mocks.classify).toHaveBeenNthCalledWith(1, file, 1);
 		expect(mocks.classify).toHaveBeenNthCalledWith(2, file, 1);
-		expect(plugin.settings.providers[0].auth).toEqual({ type: 'oauth', oauth: expiredTokens });
+		expect(requireValue(plugin.settings.providers[0], 'loaded provider').auth).toEqual({
+			type: 'oauth',
+			oauth: expiredTokens,
+		});
 		expect(plugin.settings.classificationRule).toBe('stored user instructions');
 		expect(plugin.addSettingTab).toHaveBeenCalledOnce();
 
@@ -233,15 +297,15 @@ describe('AutoClassifierPlugin', () => {
 
 	it('pins the active file at command invocation even if the user switches tabs while it is pending', async () => {
 		installClassificationService();
-		const originalFile = createMockTFile('notes/original.md', 'original');
-		const otherFile = createMockTFile('notes/other.md', 'other');
-		let finish!: () => void;
+		const originalFile = createTestTFile('notes/original.md', 'original');
+		const otherFile = createTestTFile('notes/other.md', 'other');
+		let finish: (() => void) | undefined;
 		mocks.classify.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
-		app.workspace.getActiveFile.mockReturnValue(originalFile);
+		vi.mocked(app.workspace.getActiveFile).mockReturnValue(originalFile);
 
 		const pending = plugin.processFrontmatter(1);
-		app.workspace.getActiveFile.mockReturnValue(otherFile);
-		finish();
+		vi.mocked(app.workspace.getActiveFile).mockReturnValue(otherFile);
+		requireValue(finish, 'classification completion callback')();
 		await pending;
 
 		expect(mocks.classify).toHaveBeenCalledOnce();
@@ -251,22 +315,22 @@ describe('AutoClassifierPlugin', () => {
 	it('pins the original file and field list for overlapping batches', async () => {
 		installClassificationService();
 		plugin.settings.frontmatter = [makeField(1), makeField(2)];
-		const originalFile = createMockTFile('notes/original.md', 'original');
-		const otherFile = createMockTFile('notes/other.md', 'other');
-		let finishFirst!: () => void;
+		const originalFile = createTestTFile('notes/original.md', 'original');
+		const otherFile = createTestTFile('notes/other.md', 'other');
+		let finishFirst: (() => void) | undefined;
 		let call = 0;
 		mocks.classify.mockImplementation((file: TFile, id: number) => {
 			call += 1;
 			if (call === 1) return new Promise<void>((resolve) => (finishFirst = resolve));
 			return Promise.resolve();
 		});
-		app.workspace.getActiveFile.mockReturnValue(originalFile);
+		vi.mocked(app.workspace.getActiveFile).mockReturnValue(originalFile);
 
 		const firstBatch = plugin.processAllFrontmatter();
-		app.workspace.getActiveFile.mockReturnValue(otherFile);
+		vi.mocked(app.workspace.getActiveFile).mockReturnValue(otherFile);
 		const overlappingBatch = plugin.processAllFrontmatter();
 		await overlappingBatch;
-		finishFirst();
+		requireValue(finishFirst, 'first batch completion callback')();
 		await firstBatch;
 
 		expect(mocks.classify.mock.calls).toEqual([
@@ -282,9 +346,9 @@ describe('AutoClassifierPlugin', () => {
 		plugin.settings.frontmatter = [makeField(1), makeField(2)];
 		const replacement = vi.fn().mockResolvedValue(undefined);
 		mocks.classify.mockImplementationOnce(async () => {
-			(plugin as any).classificationService = { classify: replacement };
+			Reflect.set(plugin, 'classificationService', { classify: replacement });
 		});
-		app.workspace.getActiveFile.mockReturnValue(createMockTFile('notes/one.md', 'one'));
+		vi.mocked(app.workspace.getActiveFile).mockReturnValue(createTestTFile('notes/one.md', 'one'));
 		await plugin.processAllFrontmatter();
 		expect(mocks.classify).toHaveBeenCalledTimes(2);
 		expect(replacement).not.toHaveBeenCalled();
@@ -292,7 +356,7 @@ describe('AutoClassifierPlugin', () => {
 
 	it('reports missing active files and unknown field IDs without invoking classification', async () => {
 		installClassificationService();
-		app.workspace.getActiveFile.mockReturnValue(null);
+		vi.mocked(app.workspace.getActiveFile).mockReturnValue(null);
 
 		await plugin.processFrontmatter(1);
 		await plugin.processAllFrontmatter();
@@ -301,8 +365,8 @@ describe('AutoClassifierPlugin', () => {
 		expect(mocks.noticeShow).toHaveBeenCalledWith('no_active_file');
 		expect(mocks.classify).not.toHaveBeenCalled();
 
-		const file = createMockTFile('notes/one.md', 'one');
-		app.workspace.getActiveFile.mockReturnValue(file);
+		const file = createTestTFile('notes/one.md', 'one');
+		vi.mocked(app.workspace.getActiveFile).mockReturnValue(file);
 		await plugin.processFrontmatter(99);
 
 		expect(mocks.noticeShow).toHaveBeenCalledWith('no_frontmatter_setting', { id: 99 });
@@ -323,7 +387,7 @@ describe('AutoClassifierPlugin', () => {
 			auth: { type: 'oauth', oauth: tokens },
 		};
 		const providers = [provider];
-		(plugin.loadData as ReturnType<typeof vi.fn>).mockResolvedValue({
+		vi.mocked(plugin.loadData).mockResolvedValue({
 			frontmatter: [makeField(1)],
 			providers,
 		});
@@ -331,8 +395,9 @@ describe('AutoClassifierPlugin', () => {
 		await plugin.onload();
 
 		expect(plugin.settings.providers).toBe(providers);
-		expect(plugin.settings.providers[0]).toBe(provider);
-		expect(plugin.settings.providers[0]).toEqual({
+		const persistedProvider = requireValue(plugin.settings.providers[0], 'persisted provider');
+		expect(persistedProvider).toBe(provider);
+		expect(persistedProvider).toEqual({
 			name: 'Codex',
 			baseUrl: 'https://provider.invalid',
 			models: [{ id: 'model-1', name: 'Model 1' }],
@@ -344,22 +409,21 @@ describe('AutoClassifierPlugin', () => {
 	it('uses the manifest name for native notices and routes notice actions to settings', async () => {
 		const open = vi.fn();
 		const openTabById = vi.fn();
-		(app as App & { setting?: { open: () => void; openTabById: (id: string) => void } }).setting = {
+		Reflect.set(app, 'setting', {
 			open,
 			openTabById,
-		};
+		});
 
 		await plugin.onload();
 
 		expect(Notice.head).toBe(plugin.manifest.name);
-		const [host, catalog, head] = mocks.noticeArguments[0] as [
-			{ openSettings: () => void },
-			typeof NOTICE_CATALOG,
-			string,
-		];
+		const [host, catalog, head] = requireValue(
+			mocks.noticeArguments[0],
+			'plugin notice constructor arguments'
+		);
 		expect(catalog).toBe(NOTICE_CATALOG);
 		expect(head).toBe(plugin.manifest.name);
-		host.openSettings();
+		requireValue(host.openSettings, 'notice settings action')();
 		expect(open).toHaveBeenCalledOnce();
 		expect(openTabById).toHaveBeenCalledWith(plugin.manifest.id);
 	});

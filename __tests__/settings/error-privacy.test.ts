@@ -6,6 +6,40 @@ import { testModel } from '../../src/ui/provider-api';
 import type AutoClassifierPlugin from '../../src/main';
 import type { PluginNotices } from '../../src/ui/plugin-notices';
 
+class TestElement {
+	readonly children: TestElement[] = [];
+	className = '';
+	settingName = '';
+
+	createDiv(options?: { cls?: string }): TestElement {
+		const element = new TestElement();
+		element.className = options?.cls ?? '';
+		this.children.push(element);
+		return element;
+	}
+}
+
+vi.mock('obsidian', async (importOriginal) => {
+	const sharedObsidian = await importOriginal<typeof import('obsidian')>();
+
+	class TestSetting {
+		readonly settingEl: TestElement;
+		constructor(containerEl: HTMLElement) {
+			this.settingEl = (containerEl as unknown as TestElement).createDiv({ cls: 'setting-item' });
+		}
+		setName(name: string): this {
+			this.settingEl.settingName = name;
+			return this;
+		}
+		setHeading(): this {
+			this.settingEl.className = `${this.settingEl.className} setting-item-heading`;
+			return this;
+		}
+	}
+
+	return { ...sharedObsidian, Setting: TestSetting };
+});
+
 const { startAuthFlow } = vi.hoisted(() => ({ startAuthFlow: vi.fn() }));
 vi.mock('../../src/ui/provider-api', () => ({ testModel: vi.fn() }));
 vi.mock('../../src/ui/settings/components/Setting', () => ({ Setting: { create: vi.fn() } }));
@@ -36,9 +70,19 @@ describe('settings error privacy', () => {
 			saveSettings: vi.fn().mockResolvedValue(undefined),
 			notices: { show },
 		} as unknown as AutoClassifierPlugin;
-		const node = { createEl: vi.fn() };
-		node.createEl.mockReturnValue(node);
-		new ModelSection(plugin, app, vi.fn()).render(node as unknown as HTMLElement, [provider], '');
+		const container = new TestElement();
+		new ModelSection(plugin, app, vi.fn()).render(
+			container as unknown as HTMLElement,
+			[provider],
+			''
+		);
+		const section = container.children[0];
+		const heading = section?.children[0];
+		expect(section?.className).toBe('model-section');
+		expect(heading).toMatchObject({
+			settingName: 'Models',
+			className: 'setting-item setting-item-heading',
+		});
 		const action = vi
 			.mocked(Setting.create)
 			.mock.calls.flatMap((call) => call[1].buttons ?? [])
@@ -47,6 +91,7 @@ describe('settings error privacy', () => {
 		vi.mocked(testModel).mockRejectedValueOnce(new Error(canary));
 		await action?.onClick();
 		expect(show).toHaveBeenCalledWith('model_test_error', {
+			name: 'Test',
 			message: 'The connection test failed. Check the provider configuration.',
 		});
 		expect(JSON.stringify(show.mock.calls)).not.toContain(canary);

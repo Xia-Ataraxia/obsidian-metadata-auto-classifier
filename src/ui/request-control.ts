@@ -1,4 +1,4 @@
-import type { RequestUrlResponse } from 'obsidian';
+import { Component, type RequestUrlResponse } from 'obsidian';
 
 export type HttpErrorCode =
 	| 'HTTP_ERROR'
@@ -46,8 +46,10 @@ function createDeadlineControl(
 	promise: Promise<never>;
 	cleanup: () => void;
 } {
-	let timer: ReturnType<typeof setTimeout> | undefined;
+	let timer: number | undefined;
 	let listenerRegistered = false;
+	const scope = new Component();
+	scope.load();
 	let rejectControl!: (error: HttpError) => void;
 	const onAbort = (): void => rejectControl(new HttpError('CANCELLED'));
 	const promise = new Promise<never>((_resolve, reject) => {
@@ -64,13 +66,14 @@ function createDeadlineControl(
 
 		listenerRegistered = signal !== undefined;
 		signal?.addEventListener('abort', onAbort);
-		timer = setTimeout(() => rejectControl(new HttpError('TIMEOUT')), remaining);
+		timer = window.setTimeout(() => rejectControl(new HttpError('TIMEOUT')), remaining);
 		if (signal?.aborted) onAbort();
 	});
-	const cleanup = (): void => {
-		if (timer !== undefined) clearTimeout(timer);
+	scope.register(() => {
+		if (timer !== undefined) window.clearTimeout(timer);
 		if (listenerRegistered) signal?.removeEventListener('abort', onAbort);
-	};
+	});
+	const cleanup = (): void => scope.unload();
 	return { promise, cleanup };
 }
 
@@ -111,13 +114,11 @@ export function waitBeforeDeadline(
 ): Promise<void> {
 	return new Promise((resolve, reject) => {
 		let settled = false;
-		let timer: ReturnType<typeof setTimeout> | undefined;
+		let timer: number | undefined;
 		let listenerRegistered = false;
-
-		const cleanup = (): void => {
-			if (timer !== undefined) clearTimeout(timer);
-			if (listenerRegistered) signal?.removeEventListener('abort', onAbort);
-		};
+		const scope = new Component();
+		scope.load();
+		const cleanup = (): void => scope.unload();
 		const resolveOnce = (): void => {
 			if (settled) return;
 			settled = true;
@@ -131,6 +132,10 @@ export function waitBeforeDeadline(
 			reject(error);
 		};
 		const onAbort = (): void => rejectOnce(new HttpError('CANCELLED'));
+		scope.register(() => {
+			if (timer !== undefined) window.clearTimeout(timer);
+			if (listenerRegistered) signal?.removeEventListener('abort', onAbort);
+		});
 
 		if (signal?.aborted) {
 			rejectOnce(new HttpError('CANCELLED'));
@@ -144,7 +149,7 @@ export function waitBeforeDeadline(
 
 		listenerRegistered = signal !== undefined;
 		signal?.addEventListener('abort', onAbort);
-		timer = setTimeout(
+		timer = window.setTimeout(
 			() => {
 				if (signal?.aborted) rejectOnce(new HttpError('CANCELLED'));
 				else if (Date.now() >= deadline) rejectOnce(new HttpError('TIMEOUT'));

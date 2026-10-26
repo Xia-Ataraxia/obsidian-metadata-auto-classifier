@@ -1,11 +1,14 @@
 import { App, Platform } from 'obsidian';
+import type { Mock } from 'vitest';
 import { CODEX_OAUTH, CodexOAuth } from '../../src/ui/auth';
 import { ProviderModal } from '../../src/ui/settings/modals/ProviderModal';
 import { Notice } from '../../src/ui/settings/components/Notice';
 import type { PluginNotices } from '../../src/ui/plugin-notices';
 import type { OAuthTokens, ProviderConfig } from '../../src/types';
 
-vi.mock('obsidian', () => {
+vi.mock('obsidian', async (importOriginal) => {
+	const sharedObsidian = await importOriginal<typeof import('obsidian')>();
+
 	class TestElement {
 		readonly children: TestElement[] = [];
 		readonly attributes = new Map<string, string>();
@@ -13,6 +16,7 @@ vi.mock('obsidian', () => {
 		className = '';
 		textContent = '';
 		innerHTML = '';
+		style: Record<string, string> = {};
 		value = '';
 		disabled = false;
 		rows = 0;
@@ -44,13 +48,7 @@ vi.mock('obsidian', () => {
 			tag: string,
 			options?: { cls?: string; text?: string; attr?: Record<string, string> }
 		): TestElement {
-			const child = new TestElement(tag, this);
-			this.children.push(child);
-			if (options?.cls) child.classList.add(...options.cls.split(/\s+/));
-			if (options?.text !== undefined) child.textContent = options.text;
-			for (const [name, value] of Object.entries(options?.attr ?? {}))
-				child.setAttribute(name, value);
-			return child;
+			return this.createChild(tag, options);
 		}
 
 		createDiv(options?: {
@@ -58,7 +56,20 @@ vi.mock('obsidian', () => {
 			text?: string;
 			attr?: Record<string, string>;
 		}): TestElement {
-			return this.createEl('div', options);
+			return this.createChild('div', options);
+		}
+
+		private createChild(
+			tag: string,
+			options?: { cls?: string; text?: string; attr?: Record<string, string> }
+		): TestElement {
+			const child = new TestElement(tag, this);
+			this.children.push(child);
+			if (options?.cls) child.classList.add(...options.cls.split(/\s+/));
+			if (options?.text !== undefined) child.textContent = options.text;
+			for (const [name, value] of Object.entries(options?.attr ?? {}))
+				child.setAttribute(name, value);
+			return child;
 		}
 
 		appendChild(child: TestElement): TestElement {
@@ -71,7 +82,9 @@ vi.mock('obsidian', () => {
 			this.attributes.set(name, value);
 		}
 
-		setCssProps(_props: Record<string, string>): void {}
+		setCssProps(props: Record<string, string>): void {
+			Object.assign(this.style, props);
+		}
 
 		empty(): void {
 			this.children.length = 0;
@@ -91,7 +104,8 @@ vi.mock('obsidian', () => {
 		querySelector(selector: string): TestElement | null {
 			if (selector === '.setting-item:last-child .setting-item-description') {
 				const items = this.querySelectorAll('.setting-item');
-				return items.at(-1)?.querySelector('.setting-item-description') ?? null;
+				const lastItem = items[items.length - 1];
+				return lastItem?.querySelector('.setting-item-description') ?? null;
 			}
 			return this.querySelectorAll(selector)[0] ?? null;
 		}
@@ -258,30 +272,44 @@ vi.mock('obsidian', () => {
 		}
 	}
 
-	class Modal {
-		readonly contentEl = new TestElement();
-		readonly modalEl = { addClass: vi.fn() };
-		constructor(_app: unknown) {}
-		open(): void {}
-		close(): void {
-			this.onClose();
+	class Modal extends sharedObsidian.Modal {
+		declare contentEl: HTMLElement;
+		declare titleEl: HTMLElement;
+		open = vi.fn(() => this.onOpen());
+		close = vi.fn(() => this.onClose());
+
+		constructor(app: App) {
+			super(app);
+			this.contentEl = new TestElement() as unknown as HTMLElement;
+			this.titleEl = new TestElement('h2') as unknown as HTMLElement;
 		}
-		onOpen(): void {}
-		onClose(): void {}
+
+		setTitle(title: string): this {
+			(this.titleEl as unknown as TestElement).textContent = title;
+			return this;
+		}
 	}
 
 	return {
-		App: class App {},
+		...sharedObsidian,
 		ButtonComponent,
 		ExtraButtonComponent: ButtonComponent,
 		Modal,
-		Platform: { isDesktop: true, isMobile: false, isDesktopApp: true, isMobileApp: false },
-		requestUrl: vi.fn(),
+		Platform: {
+			...sharedObsidian.Platform,
+			isDesktop: true,
+			isMobile: false,
+			isDesktopApp: true,
+			isMobileApp: false,
+		},
 		Setting,
 		TextAreaComponent,
 		TextComponent,
 	};
 });
+
+const { confirmAction } = vi.hoisted(() => ({ confirmAction: vi.fn() }));
+vi.mock('../../src/ui/settings/modals/ConfirmModal', () => ({ confirmAction }));
 
 vi.mock('../../src/utils/lib-utils', () => {
 	const presets = [
@@ -296,8 +324,11 @@ vi.mock('../../src/utils/lib-utils', () => {
 	];
 	return {
 		getProviderPresets: () => presets,
-		getProviderPreset: (name: string) =>
-			presets.find((preset) => preset.name === name) ?? presets[0],
+		getProviderPreset: (name: string) => {
+			const preset = presets.find((item) => item.name === name) ?? presets[0];
+			if (!preset) throw new Error('No provider presets are configured');
+			return preset;
+		},
 	};
 });
 
@@ -323,24 +354,44 @@ interface TestSetting {
 }
 
 function getControl(modal: ProviderModal, settingName: string): TestControl {
-	const controls = modal.contentEl.querySelectorAll('input, select') as unknown as TestControl[];
+	const controls = getControls(modal);
 	const control = controls.find((candidate) => candidate.settingName === settingName);
 	if (!control) throw new Error(`Missing control: ${settingName}`);
 	return control;
 }
 
 function getButton(modal: ProviderModal, label: string): TestButton {
-	const buttons = modal.contentEl.querySelectorAll('button') as unknown as TestButton[];
+	const buttons = getButtons(modal);
 	const button = buttons.find((candidate) => candidate.textContent === label);
 	if (!button) throw new Error(`Missing button: ${label}`);
 	return button;
 }
 
 function getSettingDescription(modal: ProviderModal, name: string): string | undefined {
-	const settings = modal.contentEl.querySelectorAll('.setting-item') as unknown as TestSetting[];
+	const settings = getSettings(modal);
 	return settings
 		.find((setting) => setting.settingName === name)
 		?.querySelector('.setting-item-description')?.textContent;
+}
+
+function getControls(modal: ProviderModal): TestControl[] {
+	return Array.from(
+		modal.contentEl.querySelectorAll('input, select')
+	) as unknown as TestControl[];
+}
+
+function getInputs(modal: ProviderModal): TestControl[] {
+	return Array.from(modal.contentEl.querySelectorAll('input')) as unknown as TestControl[];
+}
+
+function getButtons(modal: ProviderModal): TestButton[] {
+	return Array.from(modal.contentEl.querySelectorAll('button')) as unknown as TestButton[];
+}
+
+function getSettings(modal: ProviderModal): TestSetting[] {
+	return Array.from(
+		modal.contentEl.querySelectorAll('.setting-item')
+	) as unknown as TestSetting[];
 }
 
 function makeDeferred<T>() {
@@ -361,11 +412,22 @@ const tokens: OAuthTokens = {
 };
 
 function selectCodex(modal: ProviderModal): void {
-	getControl(modal, 'Provider Preset').change('Codex');
+	getControl(modal, 'Provider preset').change('Codex');
+}
+
+type ProviderSave = (provider: ProviderConfig) => void | Promise<void>;
+
+function savedProviderAt(onSave: Mock<ProviderSave>, callIndex: number): ProviderConfig {
+	const call = onSave.mock.calls[callIndex];
+	if (!call) throw new Error(`Provider save call ${callIndex + 1} was not recorded`);
+	const provider = call[0];
+	if (!provider) throw new Error(`Provider save call ${callIndex + 1} had no provider`);
+	return provider;
 }
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	confirmAction.mockReset().mockResolvedValue(false);
 	Platform.isDesktop = true;
 });
 
@@ -381,6 +443,7 @@ describe('ProviderModal device-code authentication UI', () => {
 		const show = vi.fn();
 		const modal = new ProviderModal(new App(), onSave, { show } as unknown as PluginNotices);
 		modal.onOpen();
+		expect(modal.titleEl.textContent).toBe('Provider settings');
 		selectCodex(modal);
 
 		const pending = makeDeferred<OAuthTokens>();
@@ -481,10 +544,10 @@ describe('ProviderModal device-code authentication UI', () => {
 		} as unknown as PluginNotices);
 		modal.onOpen();
 
-		expect(getSettingDescription(modal, 'Provider Name')).toBe('Custom Provider');
-		expect(() => getControl(modal, 'Provider Name')).toThrow('Missing control: Provider Name');
-		getControl(modal, 'Provider Preset').change('OpenAI');
-		expect(getSettingDescription(modal, 'Provider Name')).toBe('OpenAI');
+		expect(getSettingDescription(modal, 'Provider name')).toBe('Custom Provider');
+		expect(() => getControl(modal, 'Provider name')).toThrow('Missing control: Provider name');
+		getControl(modal, 'Provider preset').change('OpenAI');
+		expect(getSettingDescription(modal, 'Provider name')).toBe('OpenAI');
 		expect((modal as any).providerConfig.name).toBe('OpenAI');
 	});
 
@@ -496,7 +559,7 @@ describe('ProviderModal device-code authentication UI', () => {
 		(modal as any).providerConfig.baseUrl = 'https://unsupported.example/v1/chat';
 		modal.onOpen();
 
-		expect(getSettingDescription(modal, 'Provider Name')).toBe('Unsupported Backend');
+		expect(getSettingDescription(modal, 'Provider name')).toBe('Unsupported Backend');
 		expect(() => getButton(modal, 'Connect Account')).toThrow('Missing button: Connect Account');
 		await getButton(modal, 'Save').click();
 
@@ -529,7 +592,7 @@ describe('ProviderModal device-code authentication UI', () => {
 		);
 		modal.onOpen();
 
-		const apiKey = getControl(modal, 'API Key');
+		const apiKey = getControl(modal, 'API key');
 		expect(apiKey.value).toBe('');
 		expect(() => getButton(modal, 'Connect Account')).toThrow('Missing button: Connect Account');
 		expect((modal as any).oauthTokens).toBeUndefined();
@@ -581,9 +644,7 @@ describe('ProviderModal device-code authentication UI', () => {
 		modal.onOpen();
 
 		expect(getButton(modal, 'Connect Account')).toBeDefined();
-		expect(
-			modal.contentEl.querySelectorAll('input').map((input) => input.settingName)
-		).not.toContain('API Key');
+		expect(getInputs(modal).map((input) => input.settingName)).not.toContain('API key');
 		expect((modal as any).providerConfig.auth).toEqual({
 			type: 'apiKey',
 			apiKey: 'stale-structured-key',
@@ -643,7 +704,7 @@ describe('ProviderModal device-code authentication UI', () => {
 			);
 			modal.onOpen();
 
-			expect(getControl(modal, 'API Key').value).toBe('');
+			expect(getControl(modal, 'API key').value).toBe('');
 			expect(() => getButton(modal, 'Connect Account')).toThrow('Missing button: Connect Account');
 			expect((modal as any).providerConfig.auth).toEqual(auth);
 			await getButton(modal, 'Save').click();
@@ -653,7 +714,7 @@ describe('ProviderModal device-code authentication UI', () => {
 				message: 'Enter an API key for this provider or select a compatible preset.',
 			});
 
-			getControl(modal, 'API Key').change('repaired-key');
+			getControl(modal, 'API key').change('repaired-key');
 			expect((modal as any).providerConfig.auth).toEqual({
 				type: 'apiKey',
 				apiKey: 'repaired-key',
@@ -667,13 +728,13 @@ describe('ProviderModal device-code authentication UI', () => {
 	it('retains newer draft edits after a deferred save failure and retries the edited snapshot', async () => {
 		const pending = makeDeferred<void>();
 		const onSave = vi
-			.fn()
+			.fn<ProviderSave>()
 			.mockImplementationOnce(() => pending.promise)
 			.mockResolvedValue(undefined);
 		const show = vi.fn();
 		const modal = new ProviderModal(new App(), onSave, { show } as unknown as PluginNotices);
 		modal.onOpen();
-		getControl(modal, 'Provider Preset').change('OpenAI');
+		getControl(modal, 'Provider preset').change('OpenAI');
 		const save = getButton(modal, 'Save').click() as Promise<void>;
 		getControl(modal, 'API URL').change('https://retry.example/v1/chat');
 		pending.reject(new Error('synthetic persistence failure'));
@@ -688,7 +749,7 @@ describe('ProviderModal device-code authentication UI', () => {
 
 		await getButton(modal, 'Save').click();
 		expect(onSave).toHaveBeenCalledTimes(2);
-		expect(onSave.mock.calls[1]![0]).toMatchObject({
+		expect(savedProviderAt(onSave, 1)).toMatchObject({
 			baseUrl: 'https://retry.example/v1/chat',
 		});
 	});
@@ -696,19 +757,19 @@ describe('ProviderModal device-code authentication UI', () => {
 	it('keeps draft edits made during a successful save open for a follow-up save', async () => {
 		const pending = makeDeferred<void>();
 		const onSave = vi
-			.fn()
+			.fn<ProviderSave>()
 			.mockImplementationOnce(() => pending.promise)
 			.mockResolvedValue(undefined);
 		const modal = new ProviderModal(new App(), onSave, {
 			show: vi.fn(),
 		} as unknown as PluginNotices);
 		modal.onOpen();
-		getControl(modal, 'Provider Preset').change('OpenAI');
+		getControl(modal, 'Provider preset').change('OpenAI');
 		const save = getButton(modal, 'Save').click() as Promise<void>;
-		const firstSnapshot = onSave.mock.calls[0]![0] as ProviderConfig;
+		const firstSnapshot = savedProviderAt(onSave, 0);
 
 		getControl(modal, 'API URL').change('https://edited.example/v1/chat');
-		getControl(modal, 'API Key').change('edited-key');
+		getControl(modal, 'API key').change('edited-key');
 		pending.resolve(undefined);
 		await save;
 
@@ -716,17 +777,17 @@ describe('ProviderModal device-code authentication UI', () => {
 		expect(firstSnapshot.auth).toBeUndefined();
 		expect(firstSnapshot.apiKey).toBe('');
 		expect(getControl(modal, 'API URL').value).toBe('https://edited.example/v1/chat');
-		expect(getControl(modal, 'API Key').value).toBe('edited-key');
+		expect(getControl(modal, 'API key').value).toBe('edited-key');
 		expect(getButton(modal, 'Save')).toBeDefined();
 
 		await getButton(modal, 'Save').click();
 		expect(onSave).toHaveBeenCalledTimes(2);
-		expect(onSave.mock.calls[1]![0]).toMatchObject({
+		expect(savedProviderAt(onSave, 1)).toMatchObject({
 			baseUrl: 'https://edited.example/v1/chat',
 			apiKey: 'edited-key',
 			authType: 'apiKey',
 		});
-		expect(modal.contentEl.querySelectorAll('button')).toHaveLength(0);
+		expect(getButtons(modal)).toHaveLength(0);
 	});
 
 	it('preserves existing provider fields when edited settings are saved', async () => {
@@ -779,7 +840,7 @@ describe('ProviderModal device-code authentication UI', () => {
 		);
 		modal.onOpen();
 
-		const apiKey = getControl(modal, 'API Key');
+		const apiKey = getControl(modal, 'API key');
 		expect(apiKey.value).toBe('structured-api-key');
 		apiKey.change('updated-structured-key');
 		expect((modal as any).providerConfig.auth).toEqual({
@@ -818,7 +879,7 @@ describe('ProviderModal device-code authentication UI', () => {
 		);
 		modal.onOpen();
 
-		const apiKey = getControl(modal, 'API Key');
+		const apiKey = getControl(modal, 'API key');
 		expect(apiKey.value).toBe('legacy-key');
 		apiKey.change('updated-legacy-key');
 		await getButton(modal, 'Save').click();
@@ -854,9 +915,7 @@ describe('ProviderModal device-code authentication UI', () => {
 		);
 		modal.onOpen();
 		expect(getButton(modal, 'Connect Account')).toBeDefined();
-		expect(
-			modal.contentEl.querySelectorAll('input').map((input) => input.settingName)
-		).not.toContain('API Key');
+		expect(getInputs(modal).map((input) => input.settingName)).not.toContain('API key');
 
 		vi.spyOn(CodexOAuth.prototype, 'startAuthFlow').mockResolvedValue(tokens);
 		await getButton(modal, 'Connect Account').click();
@@ -887,15 +946,15 @@ describe('ProviderModal device-code authentication UI', () => {
 		);
 		modal.onOpen();
 
-		getControl(modal, 'Provider Preset').change('OpenAI');
+		getControl(modal, 'Provider preset').change('OpenAI');
 		expect((modal as any).providerConfig.auth).toEqual({ type: 'apiKey', apiKey: '' });
 		expect((modal as any).providerConfig.authType).toBe('apiKey');
 		expect((modal as any).providerConfig.apiKey).toBeUndefined();
 		expect((modal as any).providerConfig.oauth).toBeUndefined();
-		expect(getControl(modal, 'API Key').value).toBe('');
+		expect(getControl(modal, 'API key').value).toBe('');
 		expect((modal as any).providerConfig.models).toEqual([{ id: 'model-1', name: 'Model 1' }]);
 
-		getControl(modal, 'Provider Preset').change('Codex');
+		getControl(modal, 'Provider preset').change('Codex');
 		expect((modal as any).providerConfig.auth).toBeUndefined();
 		expect((modal as any).providerConfig.authType).toBe('oauth');
 		expect((modal as any).providerConfig.apiKey).toBeUndefined();
@@ -919,7 +978,7 @@ describe('ProviderModal device-code authentication UI', () => {
 			existingProvider
 		);
 		modal.onOpen();
-		getControl(modal, 'API Key').change('draft-only-key');
+		getControl(modal, 'API key').change('draft-only-key');
 		getButton(modal, 'Cancel').click();
 
 		expect(existingProvider.apiKey).toBe('original-key');
@@ -933,7 +992,7 @@ describe('ProviderModal device-code authentication UI', () => {
 		const onSave = vi.fn(() => pending.promise);
 		const modal = new ProviderModal(new App(), onSave, { show } as unknown as PluginNotices);
 		modal.onOpen();
-		getControl(modal, 'Provider Preset').change('OpenAI');
+		getControl(modal, 'Provider preset').change('OpenAI');
 		getControl(modal, 'API URL').change('https://api.example.com/v1/chat');
 
 		const saveButton = getButton(modal, 'Save');
@@ -948,30 +1007,30 @@ describe('ProviderModal device-code authentication UI', () => {
 			component: 'Provider',
 			message: 'Could not save provider settings. Please try again.',
 		});
-		expect(
-			modal.contentEl.querySelectorAll('button').some((button) => button.textContent === 'Save')
-		).toBe(true);
+		expect(getButtons(modal).some((button) => button.textContent === 'Save')).toBe(true);
 		expect(saveButton.disabled).toBe(false);
 		expect(Notice.endProgress).toHaveBeenCalledOnce();
 	});
 
-	it('does not update the UI when a pending provider save settles after close', async () => {
+	it('ends save progress on close without updating the UI after a pending save settles', async () => {
 		const pending = makeDeferred<void>();
 		const show = vi.fn();
 		const onSave = vi.fn(() => pending.promise);
 		const modal = new ProviderModal(new App(), onSave, { show } as unknown as PluginNotices);
 		modal.onOpen();
-		getControl(modal, 'Provider Preset').change('OpenAI');
+		getControl(modal, 'Provider preset').change('OpenAI');
 		getControl(modal, 'API URL').change('https://api.example.com/v1/chat');
 
 		const saveButton = getButton(modal, 'Save');
 		const save = saveButton.click() as Promise<void>;
+		expect(Notice.startProgress).toHaveBeenCalledWith('Saving provider...');
 		modal.close();
+		expect(Notice.endProgress).toHaveBeenCalledOnce();
 		pending.reject(new Error('late persistence failure'));
 		await save;
 
 		expect(show).not.toHaveBeenCalled();
-		expect(modal.contentEl.querySelectorAll('button')).toHaveLength(0);
+		expect(getButtons(modal)).toHaveLength(0);
 		expect(saveButton.disabled).toBe(false);
 		expect(Notice.endProgress).toHaveBeenCalledOnce();
 	});
@@ -1001,7 +1060,22 @@ describe('ProviderModal device-code authentication UI', () => {
 		const cancelFlow = vi.spyOn(CodexOAuth.prototype, 'cancelFlow');
 		vi.spyOn(CodexOAuth.prototype, 'startAuthFlow').mockReturnValue(pending.promise);
 		const connection = getButton(modal, 'Connect Account').click() as Promise<void>;
-		(modal as any).disconnectOAuth();
+
+		confirmAction.mockResolvedValueOnce(false);
+		await (modal as any).disconnectOAuth();
+		expect(confirmAction).toHaveBeenLastCalledWith(
+			modal.app,
+			'Disconnect this account?',
+			'Disconnect'
+		);
+		expect(cancelFlow).not.toHaveBeenCalled();
+		expect((modal as any).providerConfig.auth).toEqual({
+			type: 'oauth',
+			oauth: expiredTokens,
+		});
+
+		confirmAction.mockResolvedValueOnce(true);
+		await (modal as any).disconnectOAuth();
 
 		const draft = (modal as any).providerConfig as ProviderConfig;
 		expect(cancelFlow).toHaveBeenCalledOnce();

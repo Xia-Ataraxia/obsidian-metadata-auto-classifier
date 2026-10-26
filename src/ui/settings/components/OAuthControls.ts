@@ -8,7 +8,7 @@ export function renderOAuthSection(
 	containerEl: HTMLElement,
 	tokens: OAuthTokens | undefined,
 	onConnect: () => void | Promise<void>,
-	onDisconnect: () => void
+	onDisconnect: () => void | Promise<void>
 ): void {
 	const connectedTokens = tokens && !isTokenExpired(tokens) ? tokens : undefined;
 	const isConnected = Boolean(connectedTokens);
@@ -27,14 +27,8 @@ export function renderOAuthSection(
 	});
 
 	if (!isConnected) {
-		const infoEl = containerEl.createEl('div', {
+		const infoEl = containerEl.createDiv({
 			cls: 'setting-item-description oauth-connection-info',
-		});
-		infoEl.setCssProps({
-			'margin-top': '-8px',
-			'margin-bottom': '16px',
-			'padding-left': '16px',
-			color: 'var(--text-muted)',
 		});
 		infoEl.textContent = 'Device-code sign-in may be disabled by account or workspace settings.';
 	}

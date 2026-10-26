@@ -17,6 +17,7 @@ export class ProviderModal extends Modal {
 	private providerConfig: ProviderConfig;
 	private readonly onSave: (provider: ProviderConfig) => void | Promise<void>;
 	private readonly notices: PluginNotices;
+	private readonly activeProgressNotices = new Set<ReturnType<typeof Notice.startProgress>>();
 	private readonly accessibilityHelper = new ModalAccessibilityHelper();
 	private readonly codexOAuth = new CodexOAuth();
 	private readonly structuredAuth: boolean;
@@ -391,6 +392,7 @@ export class ProviderModal extends Modal {
 				const saveSnapshot = copyProvider(this.providerConfig);
 				try {
 					notice = Notice.startProgress('Saving provider...');
+					this.activeProgressNotices.add(notice);
 					if (!this.validateForm()) return;
 					await this.onSave(saveSnapshot);
 					if (this.isCurrentModal(modalGeneration) && this.draftRevision === draftRevision) {
@@ -405,7 +407,13 @@ export class ProviderModal extends Modal {
 					}
 				} finally {
 					try {
-						if (notice) Notice.endProgress(notice);
+						if (notice && this.activeProgressNotices.has(notice)) {
+							try {
+								Notice.endProgress(notice);
+							} finally {
+								this.activeProgressNotices.delete(notice);
+							}
+						}
 					} finally {
 						saveBtn.setDisabled(false);
 						if (this.isCurrentModal(modalGeneration)) this.saveInProgress = false;
@@ -537,6 +545,9 @@ export class ProviderModal extends Modal {
 		this.modalOpen = false;
 		this.modalGeneration++;
 		this.saveInProgress = false;
+		const progressNotices = [...this.activeProgressNotices];
+		this.activeProgressNotices.clear();
+		for (const notice of progressNotices) Notice.endProgress(notice);
 		this.invalidateOAuthFlow();
 		const { contentEl } = this;
 		this.accessibilityHelper.cleanup(contentEl);

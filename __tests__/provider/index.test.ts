@@ -1,6 +1,7 @@
 import type { RequestUrlResponse } from 'obsidian';
 import { requestUrl } from 'obsidian';
 import { HttpError, sendHttpRequest, sendRequest } from '../../src/ui/request';
+import { requestUrlPromise } from '../helpers/request-url';
 
 const url = 'https://api.test.com/v1?key=url-secret';
 const headers = { Authorization: 'Bearer header-secret' };
@@ -11,7 +12,13 @@ function response(
 	text = '{"ok":true}',
 	headers: Record<string, string> = {}
 ): RequestUrlResponse {
-	return { status, text, headers, json: undefined } as RequestUrlResponse;
+	return {
+		status,
+		text,
+		arrayBuffer: new TextEncoder().encode(text).buffer,
+		headers,
+		json: undefined,
+	};
 }
 
 describe('HTTP provider requests', () => {
@@ -35,7 +42,7 @@ describe('HTTP provider requests', () => {
 		vi.useFakeTimers();
 		const controller = new AbortController();
 		const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
-		const revoked = Symbol('Synthetic operation revoked');
+		const revoked: unknown = Symbol('Synthetic operation revoked');
 
 		await expect(
 			sendHttpRequest(url, headers, body, {
@@ -73,9 +80,9 @@ describe('HTTP provider requests', () => {
 	it('rejects a successful response whose operation has been revoked', async () => {
 		let current = true;
 		const revoked = new Error('Synthetic operation revoked');
-		vi.mocked(requestUrl).mockImplementationOnce(async () => {
+		vi.mocked(requestUrl).mockImplementationOnce(() => {
 			current = false;
-			return response(200);
+			return requestUrlPromise(response(200));
 		});
 		await expect(
 			sendHttpRequest(url, headers, body, {
@@ -215,9 +222,11 @@ describe('HTTP provider requests', () => {
 		vi.useFakeTimers();
 		let resolveRequest!: (value: RequestUrlResponse) => void;
 		vi.mocked(requestUrl).mockReturnValueOnce(
-			new Promise((resolve) => {
-				resolveRequest = resolve;
-			})
+			requestUrlPromise(
+				(resolve) => {
+					resolveRequest = resolve;
+				}
+			)
 		);
 		const request = sendHttpRequest(url, headers, body, { deadline: Date.now() + 100 });
 		const rejection = expect(request).rejects.toMatchObject({ code: 'TIMEOUT' });
@@ -234,9 +243,11 @@ describe('HTTP provider requests', () => {
 		vi.useFakeTimers();
 		let rejectRequest!: (reason?: unknown) => void;
 		vi.mocked(requestUrl).mockReturnValueOnce(
-			new Promise((_resolve, reject) => {
-				rejectRequest = reject;
-			})
+			requestUrlPromise(
+				(_resolve, reject) => {
+					rejectRequest = reject;
+				}
+			)
 		);
 		const deadline = Date.now() + 100;
 		const request = sendHttpRequest(url, headers, body, { deadline });
@@ -310,9 +321,11 @@ describe('HTTP provider requests', () => {
 		const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
 		let resolveRequest!: (value: RequestUrlResponse) => void;
 		vi.mocked(requestUrl).mockReturnValueOnce(
-			new Promise((resolve) => {
-				resolveRequest = resolve;
-			})
+			requestUrlPromise(
+				(resolve) => {
+					resolveRequest = resolve;
+				}
+			)
 		);
 		const request = sendHttpRequest(url, headers, body, { signal: controller.signal });
 
@@ -333,7 +346,7 @@ describe('HTTP provider requests', () => {
 		const controller = new AbortController();
 		vi.mocked(requestUrl).mockImplementationOnce(() => {
 			controller.abort();
-			return Promise.resolve(response(200));
+			return requestUrlPromise(response(200));
 		});
 
 		await expect(

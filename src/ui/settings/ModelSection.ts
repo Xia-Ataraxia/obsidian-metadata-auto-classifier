@@ -139,7 +139,14 @@ export class ModelSection {
 										this.plugin.notices.show('model_test_failed', { name: config.name });
 									}
 								} catch (error) {
-									if (!this.plugin.isActive() || error instanceof ClassificationStateError) return;
+									if (!this.plugin.isActive()) return;
+									if (error instanceof ClassificationStateError) {
+										this.plugin.notices.show('model_test_error', {
+											name: config.name,
+											message: 'The connection test failed. Check the provider configuration.',
+										});
+										return;
+									}
 									const safeProviderName = getProviderPresets().some(
 										(preset) => preset.name === provider.name
 									)
@@ -174,7 +181,6 @@ export class ModelSection {
 								const providers = this.plugin.settings.providers;
 								if (
 									!this.plugin.isActive() ||
-									findUniqueProvider(providers, provider.name) !== provider ||
 									providers.filter((item) => item === provider).length !== 1 ||
 									provider.models.filter((model) => model.id === config.id).length !== 1 ||
 									provider.models.find((model) => model.id === config.id) !== config

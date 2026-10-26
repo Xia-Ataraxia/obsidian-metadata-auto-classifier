@@ -228,5 +228,6 @@
 .oauth-connection-info {
 	margin-top: calc(-1 * var(--size-4-2));
 	margin-bottom: var(--size-4-4);
+	padding-left: var(--size-4-4);
 	color: var(--text-muted);
 }

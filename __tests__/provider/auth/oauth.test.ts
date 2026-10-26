@@ -4,6 +4,7 @@ import type { RequestUrlParam, RequestUrlResponse } from 'obsidian';
 import { CODEX_OAUTH } from '../../../src/domain/auth/oauth-constants';
 import { CodexOAuth, OAuthError } from '../../../src/ui/auth/oauth';
 import type { OAuthTokens } from '../../../src/types/auth';
+import { requestUrlPromise } from '../../helpers/request-url';
 
 const sharedRequestMocks = vi.hoisted(() => ({ sendRequest: vi.fn() }));
 const tokenManagerMocks = vi.hoisted(() => ({
@@ -16,7 +17,10 @@ vi.mock('../../../src/ui/request', async (importOriginal) => {
 });
 
 vi.mock('../../../src/domain/auth/token-manager', () => tokenManagerMocks);
-vi.mock('obsidian', () => ({ requestUrl: vi.fn() }));
+vi.mock('obsidian', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('obsidian')>();
+	return { ...actual, requestUrl: vi.fn() };
+});
 
 const mockRequestUrl = vi.mocked(requestUrl);
 const tokenResponse = {
@@ -32,12 +36,21 @@ const tokens: OAuthTokens = {
 
 function response(status: number, body: unknown): RequestUrlResponse {
 	const text = typeof body === 'string' ? body : JSON.stringify(body);
-	return { status, text, json: body, headers: {} } as RequestUrlResponse;
+	if (text === undefined) throw new Error('Synthetic response body is not serializable');
+	return {
+		status,
+		text,
+		arrayBuffer: new TextEncoder().encode(text).buffer,
+		json: body,
+		headers: {},
+	};
 }
 
 function requestParam(index: number): RequestUrlParam {
 	const param = mockRequestUrl.mock.calls[index]?.[0];
-	if (!param) throw new Error(`Missing request ${index}`);
+	if (typeof param !== 'object' || param === null) {
+		throw new Error(`Missing request ${index}`);
+	}
 	return param;
 }
 
@@ -242,7 +255,9 @@ describe('CodexOAuth device authorization', () => {
 	});
 
 	it('cancels an in-flight request promptly', async () => {
-		mockRequestUrl.mockImplementationOnce(() => new Promise<RequestUrlResponse>(() => {}));
+		mockRequestUrl.mockImplementationOnce(() =>
+			requestUrlPromise(() => undefined)
+		);
 		const flow = oauth.startAuthFlow(vi.fn());
 		await flushPromises();
 		oauth.cancelFlow();
@@ -293,9 +308,11 @@ describe('CodexOAuth device authorization', () => {
 		let resolveStaleRequest!: (value: RequestUrlResponse) => void;
 		mockRequestUrl.mockImplementationOnce(
 			() =>
-				new Promise<RequestUrlResponse>((resolve) => {
-					resolveStaleRequest = resolve;
-				})
+				requestUrlPromise(
+					(resolve) => {
+						resolveStaleRequest = resolve;
+					}
+				)
 		);
 		const staleCodeCallback = vi.fn();
 		const staleFlow = oauth.startAuthFlow(staleCodeCallback);

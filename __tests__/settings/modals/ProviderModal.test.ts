@@ -1,10 +1,10 @@
 import type { Mock } from 'vitest';
 import { App } from 'obsidian';
-import { ProviderModal } from 'settings/modals/ProviderModal';
-import type { ProviderConfig } from 'types';
+import { ProviderModal } from '../../../src/ui/settings/modals/ProviderModal';
+import type { ProviderConfig } from '../../../src/types';
 
 // Mock Notice
-vi.mock('settings/components/Notice', () => ({
+vi.mock('../../../src/ui/settings/components/Notice', () => ({
 	Notice: {
 		error: vi.fn(),
 		success: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock('settings/components/Notice', () => ({
 }));
 
 // Mock lib
-vi.mock('lib', () => ({
+vi.mock('../../../src/utils/lib-utils', () => ({
 	getProviderPresets: vi.fn().mockReturnValue([
 		{
 			name: 'OpenAI',
@@ -103,7 +103,9 @@ describe('ProviderModal', () => {
 			const modal = new ProviderModal(mockApp, mockOnSave, mockNotices, existingProvider);
 			const draft = (modal as any).providerConfig as ProviderConfig;
 			if (draft.auth?.type === 'oauth') draft.auth.oauth.accessToken = 'edited-access';
-			draft.models[0]!.name = 'Edited Model';
+			const draftModel = draft.models[0];
+			if (!draftModel) throw new Error('Expected the copied provider model');
+			draftModel.name = 'Edited Model';
 
 			expect(existingProvider.auth).toMatchObject({
 				type: 'oauth',
@@ -122,6 +124,7 @@ describe('ProviderModal', () => {
 			expect(modal.contentEl.setAttribute).toHaveBeenCalledWith('role', 'dialog');
 			expect(modal.contentEl.setAttribute).toHaveBeenCalledWith('aria-modal', 'true');
 			expect(modal.contentEl.setAttribute).toHaveBeenCalledWith('aria-label', 'Provider settings');
+			expect(modal.titleEl.textContent).toBe('Provider settings');
 		});
 	});
 
@@ -137,7 +140,7 @@ describe('ProviderModal', () => {
 				'validation_error',
 				expect.objectContaining({
 					component: 'Provider',
-					message: expect.stringContaining('Provider name is required'),
+					message: 'Enter a provider name.',
 				})
 			);
 		});
@@ -154,7 +157,7 @@ describe('ProviderModal', () => {
 				'validation_error',
 				expect.objectContaining({
 					component: 'Provider',
-					message: expect.stringContaining('API URL is required'),
+					message: 'Enter an API URL.',
 				})
 			);
 		});

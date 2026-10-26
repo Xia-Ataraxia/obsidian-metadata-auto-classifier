@@ -207,7 +207,12 @@ vi.mock('obsidian', () => {
 	}
 
 	class TextAreaComponent {
-		inputEl = { rows: 0, setCssStyles: () => {} };
+		private readonly classes = new Set<string>();
+		inputEl = {
+			rows: 0,
+			addClass: (...names: string[]) => { for (const name of names) this.classes.add(name); },
+			hasClass: (name: string) => this.classes.has(name),
+		};
 		setPlaceholder() {
 			return this;
 		}
@@ -261,6 +266,21 @@ const activeGenerationToggles = () =>
 			name === 'Generate new tags' && container.children.includes(setting)
 	);
 
+const currentModal = (): ConfigurableSettingModal => {
+	const modal = settingHarness.modals[0];
+	if (!(modal instanceof ConfigurableSettingModal))
+		throw new Error('Expected the tag editor modal to be created');
+	return modal;
+};
+
+const saveChanges = async (): Promise<void> => {
+	const saveButton = settingHarness.buttons.find(({ component }) => component.text === 'Save');
+	if (!saveButton) throw new Error('Expected the tag editor save button to be rendered');
+	const onSave = saveButton.component.callback;
+	if (!onSave) throw new Error('Expected the tag editor save callback to be registered');
+	await onSave();
+};
+
 const createTagContainer = () => {
 	const createElement = () => {
 		const children: unknown[] = [];
@@ -298,7 +318,11 @@ describe('Tag generation eligibility', () => {
 			createModal(field).onOpen();
 			const toggles = activeGenerationToggles();
 			expect(toggles).toHaveLength(visible ? 1 : 0);
-			if (visible) expect(toggles[0].component.value).toBe(expected);
+			if (visible) {
+				const toggle = toggles[0];
+				if (!toggle) throw new Error('Expected the generation permission toggle to be rendered');
+				expect(toggle.component.value).toBe(expected);
+			}
 		}
 	);
 
@@ -311,13 +335,19 @@ describe('Tag generation eligibility', () => {
 		};
 		const tagSection = new Tag(plugin as never, createTagContainer() as never);
 		(tagSection as any).handleEdit(tagField);
-		const modal = settingHarness.modals[0] as ConfigurableSettingModal;
+		const modal = currentModal();
 		modal.onOpen();
 
-		activeGenerationToggles()[0].component.callback?.(true);
-		const saveButton = settingHarness.buttons.find(({ component }) => component.text === 'Save');
-		await saveButton?.component.callback?.();
-		expect(plugin.settings.frontmatter[0].generateNewTags).toBe(true);
+		const toggle = activeGenerationToggles()[0];
+		if (!toggle) throw new Error('Expected the generation permission toggle to be rendered');
+		const setGenerationPermission = toggle.component.callback;
+		if (!setGenerationPermission)
+			throw new Error('Expected the generation permission callback to be registered');
+		setGenerationPermission(true);
+		await saveChanges();
+		const savedField = plugin.settings.frontmatter[0];
+		if (!savedField) throw new Error('Expected the edited tag field to remain in settings');
+		expect(savedField.generateNewTags).toBe(true);
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 	});
 
@@ -330,15 +360,20 @@ describe('Tag generation eligibility', () => {
 		};
 		const tagSection = new Tag(plugin as never, createTagContainer() as never);
 		(tagSection as any).handleEdit(tagField);
-		const modal = settingHarness.modals[0] as ConfigurableSettingModal;
+		const modal = currentModal();
 		modal.onOpen();
 
-		settingHarness.textInputs.find(({ name }) => name === 'Name')?.component.callback?.('Tags');
+		const nameInput = settingHarness.textInputs.find(({ name }) => name === 'Name');
+		if (!nameInput) throw new Error('Expected the tag-name input to be rendered');
+		const updateName = nameInput.component.callback;
+		if (!updateName) throw new Error('Expected the tag-name callback to be registered');
+		updateName('Tags');
 		expect(activeGenerationToggles()).toHaveLength(0);
-		const saveButton = settingHarness.buttons.find(({ component }) => component.text === 'Save');
-		await saveButton?.component.callback?.();
-		expect(plugin.settings.frontmatter[0].name).toBe('Tags');
-		expect(plugin.settings.frontmatter[0].generateNewTags).toBe(false);
+		await saveChanges();
+		const savedField = plugin.settings.frontmatter[0];
+		if (!savedField) throw new Error('Expected the renamed tag field to remain in settings');
+		expect(savedField.name).toBe('Tags');
+		expect(savedField.generateNewTags).toBe(false);
 		expect(plugin.saveSettings).toHaveBeenCalledTimes(1);
 	});
 
@@ -351,12 +386,13 @@ describe('Tag generation eligibility', () => {
 		};
 		const tagSection = new Tag(plugin as never, createTagContainer() as never);
 		(tagSection as any).handleEdit(field);
-		const modal = settingHarness.modals[0] as ConfigurableSettingModal;
+		const modal = currentModal();
 		modal.onOpen();
 
 		expect(activeGenerationToggles()).toHaveLength(0);
-		const saveButton = settingHarness.buttons.find(({ component }) => component.text === 'Save');
-		await saveButton?.component.callback?.();
-		expect(plugin.settings.frontmatter[0].generateNewTags).toBe(false);
+		await saveChanges();
+		const savedField = plugin.settings.frontmatter[0];
+		if (!savedField) throw new Error('Expected the ordinary field to remain in settings');
+		expect(savedField.generateNewTags).toBe(false);
 	});
 });

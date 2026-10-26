@@ -1,19 +1,24 @@
 import { App } from 'obsidian';
-import type { Model, OAuthTokens, ProviderConfig } from '../../src/types';
+import type { OAuthTokens, ProviderConfig } from '../../src/types';
 import { COMMON_CONSTANTS } from '../../src/domain/constants';
 import { ClassificationStateError, copyProvider } from '../../src/domain/classification-state';
 import { ModelSection } from '../../src/ui/settings/ModelSection';
 import { Setting } from '../../src/ui/settings/components/Setting';
 import { testModel } from '../../src/ui/provider-api';
 import { createProviderSession } from '../../src/ui/provider-session';
+import type { UnifiedProvider } from '../../src/ui/UnifiedProvider';
+import type { ModelModalProps } from '../../src/ui/settings/modals/ModelModal';
 import type { HttpRequestOptions } from '../../src/ui/request';
 import type AutoClassifierPlugin from '../../src/main';
 import type { OnTokenRefreshCallback } from '../../src/types';
 
-const { callAPI, modelModalProps, modelModalCloses } = vi.hoisted(() => ({
-	callAPI: vi.fn(),
-	modelModalProps: [] as unknown[],
+type CallAPI = UnifiedProvider['callAPI'];
+
+const { callAPI, modelModalProps, modelModalCloses, confirmAction } = vi.hoisted(() => ({
+	callAPI: vi.fn<CallAPI>(),
+	modelModalProps: [] as ModelModalProps[],
 	modelModalCloses: [] as Array<ReturnType<typeof vi.fn>>,
+	confirmAction: vi.fn(),
 }));
 vi.mock('../../src/ui/UnifiedProvider', () => ({
 	UnifiedProvider: class {
@@ -21,10 +26,11 @@ vi.mock('../../src/ui/UnifiedProvider', () => ({
 	},
 }));
 vi.mock('../../src/ui/settings/components/Setting', () => ({ Setting: { create: vi.fn() } }));
+vi.mock('../../src/ui/settings/modals/ConfirmModal', () => ({ confirmAction }));
 vi.mock('../../src/ui/settings/modals/ModelModal', () => ({
 	ModelModal: class {
 		close = vi.fn();
-		constructor(_app: unknown, props: unknown) {
+		constructor(_app: unknown, props: ModelModalProps) {
 			modelModalProps.push(props);
 			modelModalCloses.push(this.close);
 		}
@@ -64,9 +70,26 @@ function oauthProvider(): ProviderConfig {
 	};
 }
 
+interface TestContainerElement {
+	cls?: string;
+	children: TestContainerElement[];
+	createDiv(options?: { cls?: string }): TestContainerElement;
+}
+
+function createContainerElement(cls?: string): TestContainerElement {
+	return {
+		cls,
+		children: [],
+		createDiv(options) {
+			const child = createContainerElement(options?.cls);
+			this.children.push(child);
+			return child;
+		},
+	};
+}
+
 function renderModelSection(plugin: AutoClassifierPlugin, onRefresh = vi.fn()): void {
-	const container = { createEl: vi.fn() };
-	container.createEl.mockReturnValue(container);
+	const container = createContainerElement();
 	new ModelSection(plugin, new App(), onRefresh).render(
 		container as unknown as HTMLElement,
 		plugin.settings.providers,
@@ -93,26 +116,35 @@ function modelAction(plugin: AutoClassifierPlugin, row = 0): () => void | Promis
 	return modelRowAction(plugin, 'Test', row);
 }
 
-function modelSaveAction(
-	plugin: AutoClassifierPlugin,
-	row = 0
-): (result: {
-	provider: string;
-	model: Model;
-	isEdit: boolean;
-	oldModel?: { model: string; provider: string };
-}) => Promise<void> {
-	modelRowAction(plugin, 'Edit', row)();
-	const props = modelModalProps.at(-1) as {
-		onSave: (result: {
-			provider: string;
-			model: Model;
-			isEdit: boolean;
-			oldModel?: { model: string; provider: string };
-		}) => Promise<void>;
-	};
+function modelSaveAction(plugin: AutoClassifierPlugin, row = 0): ModelModalProps['onSave'] {
+	void modelRowAction(plugin, 'Edit', row)();
+	const props = modelModalProps[modelModalProps.length - 1];
 	if (!props) throw new Error('Model modal was not opened');
 	return props.onSave;
+}
+
+function providerAt(providers: ProviderConfig[], index: number): ProviderConfig {
+	const provider = providers[index];
+	if (!provider) throw new Error(`Provider at index ${index} was not found`);
+	return provider;
+}
+
+function callAPIArgsAt(index: number): Parameters<CallAPI> {
+	const args = callAPI.mock.calls[index];
+	if (!args) throw new Error(`Model API call ${index + 1} was not recorded`);
+	return args;
+}
+
+function refreshCallbackAt(index: number): OnTokenRefreshCallback {
+	const callback = callAPIArgsAt(index)[5];
+	if (!callback) throw new Error(`Model API call ${index + 1} had no token refresh callback`);
+	return callback;
+}
+
+function requestOptionsAt(index: number): HttpRequestOptions {
+	const options = callAPIArgsAt(index)[6];
+	if (!options) throw new Error(`Model API call ${index + 1} had no request options`);
+	return options;
 }
 
 function modelPlugin(provider: ProviderConfig | ProviderConfig[]) {
@@ -150,6 +182,7 @@ beforeEach(() => {
 	modelModalProps.length = 0;
 	modelModalCloses.length = 0;
 	callAPI.mockReset().mockResolvedValue({ tags: [] });
+	confirmAction.mockReset().mockResolvedValue(false);
 });
 
 afterEach(() => {
@@ -282,14 +315,16 @@ describe('provider session token persistence', () => {
 		};
 		const session = createProviderSession(context);
 		const refresh = session.refreshTokens(refreshedTokens);
+		const model = provider.models[0];
+		if (!model) throw new Error('Expected an OAuth provider model');
 		provider.baseUrl = 'https://user-edited.invalid/v2';
-		provider.models[0].name = 'User-edited model';
+		model.name = 'User-edited model';
 
 		save.reject(new Error('sensitive save failure'));
 		await expect(refresh).rejects.toBeInstanceOf(ClassificationStateError);
 		expect(provider.auth?.type === 'oauth' && provider.auth.oauth).toEqual(initialTokens);
 		expect(provider.baseUrl).toBe('https://user-edited.invalid/v2');
-		expect(provider.models[0].name).toBe('User-edited model');
+		expect(model.name).toBe('User-edited model');
 		expect(() => createProviderSession(context)).not.toThrow();
 	});
 
@@ -451,7 +486,7 @@ describe('model test session', () => {
 
 		const fixture = modelPlugin(provider);
 		await modelAction(fixture.plugin)();
-		const requestOptions = callAPI.mock.calls[1][6] as HttpRequestOptions;
+		const requestOptions = requestOptionsAt(1);
 		expect(requestOptions.deadline).toBeGreaterThan(Date.now());
 		expect(requestOptions.deadline).toBeLessThanOrEqual(Date.now() + 60_000);
 		expect(requestOptions.assertCurrent).toEqual(expect.any(Function));
@@ -471,6 +506,7 @@ describe('model test session', () => {
 		expect(first.auth?.type === 'oauth' && first.auth.oauth).toEqual(initialTokens);
 		expect(second.auth?.type === 'oauth' && second.auth.oauth).toEqual(initialTokens);
 		expect(fixture.show).toHaveBeenCalledWith('model_test_error', {
+			name: 'Model A',
 			message: 'The connection test failed. Check the provider configuration.',
 		});
 	});
@@ -480,8 +516,10 @@ describe('model test session', () => {
 		async (action) => {
 			const provider = oauthProvider();
 			const fixture = modelPlugin(provider);
-			if (action === 'Delete') vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+			if (action === 'Delete') confirmAction.mockResolvedValueOnce(true);
 			const callback = modelRowAction(fixture.plugin, action, 0, fixture.onRefresh);
+			if (providerAt(fixture.state.settings.providers, 0) !== provider)
+				throw new Error('Expected the rendered provider at index 0');
 			fixture.state.settings.providers[0] = oauthProvider();
 
 			await callback();
@@ -500,6 +538,7 @@ describe('model test session', () => {
 		const select = modelRowAction(fixture.plugin, 'Select', 0, fixture.onRefresh);
 		const deletion = modelRowAction(fixture.plugin, 'Delete', 0, fixture.onRefresh);
 		const onSave = modelSaveAction(fixture.plugin);
+		confirmAction.mockResolvedValueOnce(true);
 		fixture.state.active = false;
 
 		await select();
@@ -529,8 +568,12 @@ describe('model test session', () => {
 			if (operation === 'selection') {
 				pending = modelRowAction(fixture.plugin, 'Select', 0, fixture.onRefresh)();
 			} else if (operation === 'deletion') {
-				vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+				const confirmation = deferred<boolean>();
+				confirmAction.mockReturnValueOnce(confirmation.promise);
 				pending = modelRowAction(fixture.plugin, 'Delete', 0, fixture.onRefresh)();
+				expect(fixture.saveSettings).not.toHaveBeenCalled();
+				confirmation.resolve(true);
+				await confirmation.promise;
 			} else {
 				const onSave = modelSaveAction(fixture.plugin);
 				pending = onSave({
@@ -553,13 +596,17 @@ describe('model test session', () => {
 	it('registers modal close with plugin lifecycle cleanup', () => {
 		const fixture = modelPlugin(oauthProvider());
 
-		modelRowAction(fixture.plugin, 'Edit')();
+		void modelRowAction(fixture.plugin, 'Edit')();
 
 		expect(fixture.state.register).toHaveBeenCalledOnce();
 		expect(fixture.state.cleanups).toHaveLength(1);
 		expect(modelModalCloses).toHaveLength(1);
-		fixture.state.cleanups[0]();
-		expect(modelModalCloses[0]).toHaveBeenCalledOnce();
+		const cleanup = fixture.state.cleanups[0];
+		if (!cleanup) throw new Error('Plugin cleanup was not registered');
+		const closeModal = modelModalCloses[0];
+		if (!closeModal) throw new Error('Model modal close callback was not captured');
+		cleanup();
+		expect(closeModal).toHaveBeenCalledOnce();
 	});
 
 	it('deletes a model from the captured provider identity, not another duplicate-name profile', async () => {
@@ -568,7 +615,7 @@ describe('model test session', () => {
 		const fixture = modelPlugin([first, second]);
 		fixture.state.settings.selectedProvider = 'Codex';
 		fixture.state.settings.selectedModel = 'shared-model';
-		vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+		confirmAction.mockResolvedValueOnce(true);
 
 		await modelRowAction(fixture.plugin, 'Delete', 1)();
 
@@ -577,6 +624,22 @@ describe('model test session', () => {
 		expect(fixture.state.settings.selectedProvider).toBe('Codex');
 		expect(fixture.state.settings.selectedModel).toBe('shared-model');
 		expect(fixture.saveSettings).toHaveBeenCalledOnce();
+	});
+
+	it('leaves a model and its selection unchanged when deletion is canceled', async () => {
+		const provider = oauthProvider();
+		const fixture = modelPlugin(provider);
+		fixture.state.settings.selectedProvider = 'Codex';
+		fixture.state.settings.selectedModel = 'model-a';
+		confirmAction.mockResolvedValueOnce(false);
+
+		await modelRowAction(fixture.plugin, 'Delete')();
+
+		expect(confirmAction).toHaveBeenCalledWith(expect.any(App), 'Delete "Model A"?', 'Delete');
+		expect(provider.models).toEqual([{ id: 'model-a', name: 'Model A' }]);
+		expect(fixture.state.settings.selectedProvider).toBe('Codex');
+		expect(fixture.state.settings.selectedModel).toBe('model-a');
+		expect(fixture.saveSettings).not.toHaveBeenCalled();
 	});
 
 	it('does not partially move a model when the destination name is duplicated', async () => {
@@ -638,6 +701,8 @@ describe('model test session', () => {
 			baseUrl: 'https://replacement.invalid/v1',
 			models: [],
 		};
+		if (providerAt(fixture.state.settings.providers, 1) !== openedTarget)
+			throw new Error('Expected the opened destination at index 1');
 		fixture.state.settings.providers[1] = replacementTarget;
 
 		await onSave({
@@ -658,8 +723,10 @@ describe('model test session', () => {
 		const fixture = modelPlugin(provider);
 		const save = deferred<void>();
 		fixture.saveSettings.mockImplementation(() => save.promise);
-		callAPI.mockImplementation(async (...args: unknown[]) => {
-			await (args[5] as OnTokenRefreshCallback)(refreshedTokens);
+		callAPI.mockImplementation(async (...args) => {
+			const refresh = args[5];
+			if (!refresh) throw new Error('Model test request omitted token refresh callback');
+			await refresh(refreshedTokens);
 			return { tags: [] };
 		});
 
@@ -681,10 +748,12 @@ describe('model test session', () => {
 			const response = deferred<{ tags: string[] }>();
 			callAPI.mockReturnValue(response.promise);
 			const completion = modelAction(fixture.plugin)();
-			const refresh = callAPI.mock.calls[0][5] as OnTokenRefreshCallback;
+			const refresh = refreshCallbackAt(0);
 
 			if (change === 'edited') provider.baseUrl = 'https://user-edited.invalid/v2';
 			if (change === 'replaced') {
+				if (providerAt(fixture.state.settings.providers, 0) !== provider)
+					throw new Error('Expected the requested provider at index 0');
 				fixture.state.settings.providers[0] = {
 					...oauthProvider(),
 					baseUrl: 'https://user-replacement.invalid/v2',
@@ -697,6 +766,7 @@ describe('model test session', () => {
 			response.resolve({ tags: [] });
 			await completion;
 			expect(fixture.show).toHaveBeenCalledWith('model_test_error', {
+				name: 'Model A',
 				message: 'The connection test failed. Check the provider configuration.',
 			});
 			if (change === 'edited') {
@@ -704,12 +774,10 @@ describe('model test session', () => {
 				expect(provider.auth?.type === 'oauth' && provider.auth.oauth).toEqual(initialTokens);
 			}
 			if (change === 'replaced') {
-				expect(fixture.state.settings.providers[0].baseUrl).toBe(
-					'https://user-replacement.invalid/v2'
-				);
+				const replacement = providerAt(fixture.state.settings.providers, 0);
+				expect(replacement.baseUrl).toBe('https://user-replacement.invalid/v2');
 				expect(
-					fixture.state.settings.providers[0].auth?.type === 'oauth' &&
-						fixture.state.settings.providers[0].auth.oauth
+					replacement.auth?.type === 'oauth' && replacement.auth.oauth
 				).toEqual(initialTokens);
 			}
 			expect(JSON.stringify(fixture.state.settings.providers)).not.toContain(
@@ -725,8 +793,10 @@ describe('model test session', () => {
 			const fixture = modelPlugin(provider);
 			const save = deferred<void>();
 			fixture.saveSettings.mockImplementation(() => save.promise);
-			callAPI.mockImplementation(async (...args: unknown[]) => {
-				await (args[5] as OnTokenRefreshCallback)(refreshedTokens);
+			callAPI.mockImplementation(async (...args) => {
+				const refresh = args[5];
+				if (!refresh) throw new Error('Model test request omitted token refresh callback');
+				await refresh(refreshedTokens);
 				return { tags: [] };
 			});
 			const completion = modelAction(fixture.plugin)();
@@ -740,6 +810,8 @@ describe('model test session', () => {
 				};
 			}
 			if (change === 'replaced') {
+				if (providerAt(fixture.state.settings.providers, 0) !== provider)
+					throw new Error('Expected the requested provider at index 0');
 				fixture.state.settings.providers[0] = {
 					...oauthProvider(),
 					baseUrl: 'https://user-replacement-during-save.invalid/v2',
@@ -754,6 +826,7 @@ describe('model test session', () => {
 			save.resolve();
 			await completion;
 			expect(fixture.show).toHaveBeenCalledWith('model_test_error', {
+				name: 'Model A',
 				message: 'The connection test failed. Check the provider configuration.',
 			});
 			if (change === 'edited') {
@@ -763,12 +836,10 @@ describe('model test session', () => {
 				);
 			}
 			if (change === 'replaced') {
-				expect(fixture.state.settings.providers[0].baseUrl).toBe(
-					'https://user-replacement-during-save.invalid/v2'
-				);
+				const replacement = providerAt(fixture.state.settings.providers, 0);
+				expect(replacement.baseUrl).toBe('https://user-replacement-during-save.invalid/v2');
 				expect(
-					fixture.state.settings.providers[0].auth?.type === 'oauth' &&
-						fixture.state.settings.providers[0].auth.oauth.accessToken
+					replacement.auth?.type === 'oauth' && replacement.auth.oauth.accessToken
 				).toBe('user-replacement-auth-secret');
 			}
 			expect(fixture.saveSettings).toHaveBeenCalledOnce();
@@ -780,13 +851,16 @@ describe('model test session', () => {
 		const fixture = modelPlugin(provider);
 		const canary = 'synthetic-save-secret /private/synthetic-note';
 		fixture.saveSettings.mockRejectedValueOnce(new Error(canary));
-		callAPI.mockImplementation(async (...args: unknown[]) => {
-			await (args[5] as OnTokenRefreshCallback)(refreshedTokens);
+		callAPI.mockImplementation(async (...args) => {
+			const refresh = args[5];
+			if (!refresh) throw new Error('Model test request omitted token refresh callback');
+			await refresh(refreshedTokens);
 			return { tags: [] };
 		});
 
 		await modelAction(fixture.plugin)();
 		expect(fixture.show).toHaveBeenCalledWith('model_test_error', {
+			name: 'Model A',
 			message: 'The connection test failed. Check the provider configuration.',
 		});
 		expect(JSON.stringify(fixture.show.mock.calls)).not.toContain(canary);
@@ -798,8 +872,8 @@ describe('model test session', () => {
 		const response = deferred<{ tags: string[] }>();
 		callAPI.mockReturnValue(response.promise);
 		const completion = modelAction(fixture.plugin)();
-		const refresh = callAPI.mock.calls[0][5] as OnTokenRefreshCallback;
-		const options = callAPI.mock.calls[0][6] as HttpRequestOptions;
+		const refresh = refreshCallbackAt(0);
+		const options = requestOptionsAt(0);
 
 		fixture.state.active = false;
 		await expect(refresh(refreshedTokens)).rejects.toBeInstanceOf(ClassificationStateError);

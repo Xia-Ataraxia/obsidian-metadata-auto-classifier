@@ -93,6 +93,7 @@ export function sameProvider(left: ProviderConfig | undefined, right: ProviderCo
 }
 
 export function providerHasAuth(provider: ProviderConfig): boolean {
+	if (!Object.values(PROVIDER_NAMES).includes(provider.name)) return false;
 	const optionalKey =
 		provider.name === PROVIDER_NAMES.OLLAMA || provider.name === PROVIDER_NAMES.LMSTUDIO;
 	const expectedAuth = provider.name === PROVIDER_NAMES.CODEX ? 'oauth' : 'apiKey';

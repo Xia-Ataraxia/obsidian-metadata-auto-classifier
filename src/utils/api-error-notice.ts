@@ -3,15 +3,27 @@ const RECONNECT_ERROR_PATTERN = /OAuth tokens (not found|incomplete)|Token refre
 const NETWORK_ERROR_PATTERN = /net::ERR_|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|ECONNRESET|Failed to fetch|NetworkError/i;
 
 function getStatus(error: unknown, message: string): number | undefined {
-	const status = (error as { status?: unknown } | null)?.status;
-	if (typeof status === 'number') return status;
+	const status = ownValue(error, 'status');
+	if (typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599) return status;
 	const match = /status (\d{3})|HTTP (\d{3})/.exec(message);
-	return match ? Number(match[1] ?? match[2]) : undefined;
+	const parsed = match ? Number(match[1] ?? match[2]) : undefined;
+	return parsed !== undefined && parsed >= 100 && parsed <= 599 ? parsed : undefined;
 }
 
-// Notices never show request URLs, response bodies, or raw error text; the full error goes to the console
+function ownValue(error: unknown, key: string): unknown {
+	if (typeof error !== 'object' || error === null) return undefined;
+	try {
+		const descriptor = Object.getOwnPropertyDescriptor(error, key);
+		return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+// Neither notices nor diagnostics disclose raw errors; avoid invoking arbitrary getters/stringifiers.
 export function toApiErrorNotice(error: unknown, provider: string): string {
-	const message = error instanceof Error ? error.message : String(error);
+	const rawMessage = typeof error === 'string' ? error : ownValue(error, 'message');
+	const message = typeof rawMessage === 'string' ? rawMessage : '';
 	// These carry no trustworthy status: OAuth failures may wrap a 401, parse errors embed raw note text.
 	if (RECONNECT_ERROR_PATTERN.test(message)) return `Reconnect your ${provider} account in settings.`;
 	if (message.startsWith('Failed to parse')) return `${provider} returned an unexpected response. Try again.`;
@@ -22,5 +34,5 @@ export function toApiErrorNotice(error: unknown, provider: string): string {
 	if (status !== undefined && status >= 500) return `${provider} is unavailable (${status}). Try again later.`;
 	if (status !== undefined) return `Request to ${provider} failed (${status}).`;
 	if (NETWORK_ERROR_PATTERN.test(message)) return `Couldn't reach ${provider}.`;
-	return 'Request failed. See the console for details.';
+	return 'Request failed. Please try again.';
 }

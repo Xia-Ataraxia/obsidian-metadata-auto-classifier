@@ -16,16 +16,21 @@ export default class AutoClassifierPlugin extends Plugin {
 	private classificationService: ClassificationService | null = null;
 	private commandService: CommandService | null = null;
 	private active = false;
+	private lifecycleGeneration = 0;
 
 	isActive(): boolean {
 		return this.active;
 	}
 
 	async onload() {
+		const generation = ++this.lifecycleGeneration;
+		this.active = false;
+		this.classificationService?.deactivate();
 		this.logger = new PluginLogger();
 		Notice.head = this.manifest.name;
 
 		await this.loadSettings();
+		if (generation !== this.lifecycleGeneration) return;
 		this.active = true;
 		this.classificationService = new ClassificationService({
 			app: this.app,
@@ -44,6 +49,7 @@ export default class AutoClassifierPlugin extends Plugin {
 	}
 
 	onunload(): void {
+		++this.lifecycleGeneration;
 		this.active = false;
 		this.classificationService?.deactivate();
 		this.notices?.unload();
@@ -93,11 +99,14 @@ export default class AutoClassifierPlugin extends Plugin {
 	}
 
 	async loadSettings() {
+		const generation = this.lifecycleGeneration;
+		const storedSettings: unknown = await this.loadData();
+		if (generation !== this.lifecycleGeneration) return;
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
-			await this.loadData()
-		) as typeof DEFAULT_SETTINGS;
+			storedSettings
+		);
 		this.settings.jev = { ...DEFAULT_SETTINGS.jev, ...this.settings.jev };
 
 		// Migrate old frontmatter settings that may be missing count

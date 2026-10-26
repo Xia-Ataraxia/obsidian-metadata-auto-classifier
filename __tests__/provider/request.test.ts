@@ -3,13 +3,20 @@ import type { RequestUrlResponse } from 'obsidian';
 import { HttpError } from '../../src/ui/request';
 import { sendStreamingRequest } from '../../src/ui/streaming-request';
 import type { SSEEvent, SSEEventOutcome } from '../../src/ui/streaming-request';
+import { requestUrlPromise } from '../helpers/request-url';
 
 const url = 'https://api.test.com/stream?token=url-secret';
 const headers = { Authorization: 'Bearer header-secret' };
 const body = { prompt: 'body-secret' };
 
 function response(status: number, text: string): RequestUrlResponse {
-	return { status, text, headers: {}, json: undefined } as RequestUrlResponse;
+	return {
+		status,
+		text,
+		arrayBuffer: new TextEncoder().encode(text).buffer,
+		headers: {},
+		json: undefined,
+	};
 }
 
 function eventFrame(event: unknown): string {
@@ -59,7 +66,9 @@ describe('sendStreamingRequest', () => {
 
 	it('uses the remaining shared deadline rather than starting a new minute', async () => {
 		vi.useFakeTimers();
-		vi.mocked(requestUrl).mockReturnValueOnce(new Promise(() => undefined));
+		vi.mocked(requestUrl).mockReturnValueOnce(
+			requestUrlPromise(() => undefined)
+		);
 		const assertion = expect(
 			sendStreamingRequest(url, headers, body, parseTestEvent, { deadline: Date.now() + 25 })
 		).rejects.toMatchObject({ code: 'TIMEOUT' });

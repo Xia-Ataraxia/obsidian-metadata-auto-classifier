@@ -166,7 +166,7 @@ export class Setting {
 			const tooltip = props.tooltip ?? (props.icon ? props.text : undefined);
 			if (tooltip) btn.setTooltip(tooltip);
 			if (props.cta) btn.setCta();
-			if (props.warning) btn.setDestructive();
+			if (props.warning) btn.buttonEl.addClass('mod-warning');
 			if (props.disabled) btn.setDisabled(props.disabled);
 			const { busyText } = props;
 			if (!busyText) {
