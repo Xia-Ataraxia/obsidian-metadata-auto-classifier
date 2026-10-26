@@ -61,7 +61,7 @@ export const hasValidAuth = (provider: ProviderConfig): boolean => {
 	if (apiKey) return true;
 	return getProviderPresets().find((p) => p.name === provider.name)?.apiKeyRequired === false;
 };
-
+/**
  * Writes an edited clone back into the settings list by id (the editor modal works on a copy).
  */
 export function replaceFrontmatterById(list: FrontmatterField[], updated: FrontmatterField): FrontmatterField[] {
