@@ -5,7 +5,7 @@ import { globalIgnores } from 'eslint/config';
 
 let vitestPlugin = null;
 try {
-	const imported = await import('eslint-plugin-vitest');
+	const imported = await import('@vitest/eslint-plugin');
 	vitestPlugin = imported.default ?? imported;
 } catch {
 	vitestPlugin = null;
@@ -100,7 +100,7 @@ export default tseslint.config(
 		},
 		rules: {
 			...(vitestPlugin ? {
-				'vitest/expect-expect': 'error',
+				'vitest/expect-expect': ['error', { assertFunctionNames: ['expect', 'expect*'] }],
 				'vitest/no-disabled-tests': 'warn',
 				'vitest/no-conditional-tests': 'error',
 			} : {}),
