@@ -28,6 +28,7 @@ Automatically classifies and applies metadata to your notes.
 - **Network use**: the active note's content and your classification rules are sent to the AI provider you select (OpenAI, Anthropic, Gemini, OpenRouter, DeepSeek, a custom endpoint, or `localhost` for Ollama and LM Studio) to generate metadata.
 - **Account or payment**: a provider API key, or a ChatGPT account for Codex sign-in. Usage is billed by the provider. Keys are stored in the plugin's settings file.
 - **Codex sign-in**: the OAuth flow contacts `auth.openai.com` and `chatgpt.com`, and briefly listens on `localhost:1455` for the callback.
+- **Node networking (desktop only)**: the plugin imports Node's `http` for that temporary local OAuth callback server (bound to `localhost`) and `https` to stream responses from your configured providers. Neither runs on mobile.
 - **Telemetry**: none.
 
 ## Development
