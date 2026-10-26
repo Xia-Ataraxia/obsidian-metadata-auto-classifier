@@ -73,13 +73,16 @@ export class ClassificationService {
 		const before = this.context.getSettings();
 		const field = findField(before, fieldId);
 		if (!field) throw new ClassificationIssue('invalid_settings');
-		let snapshot = readFieldSnapshot(field, before.classificationRule);
+		const snapshot = readFieldSnapshot(field, before.classificationRule);
 		validateCount(field);
-		if (snapshot.refs.length === 0)
-			snapshot = await this.prepareRefs(file, path, fieldId, token, snapshot, deadline);
 		const assertBase = () => this.assertBase(file, path, fieldId, token, snapshot, deadline);
 		assertBase();
-		const candidates = classificationCandidates(snapshot);
+		// Folder-local fallback is per run; persisting it would freeze one folder's values as the global list.
+		const candidates = classificationCandidates(
+			snapshot.refs.length === 0
+				? { ...snapshot, refs: this.folderRefs(file, snapshot.name) }
+				: snapshot
+		);
 		const mayGenerate = isTagGenerationAllowed({
 			name: snapshot.name,
 			generateNewTags: snapshot.generateNewTags,
@@ -143,43 +146,16 @@ export class ClassificationService {
 		this.show('completed');
 	}
 
-	private async prepareRefs(
-		file: TFile,
-		path: string,
-		id: number,
-		token: symbol,
-		initial: FieldSnapshot,
-		deadline: number
-	): Promise<FieldSnapshot> {
-		let values: string[];
+	private folderRefs(file: TFile, fieldName: string): string[] {
 		try {
-			values = getFieldValues(
-				initial.name,
+			return getFieldValues(
+				fieldName,
 				siblingMarkdownFiles(file),
 				this.context.app.metadataCache
 			);
 		} catch {
 			throw new ClassificationIssue('preparation_failed');
 		}
-		this.assertBase(file, path, id, token, initial, deadline);
-		const beforeSave = this.context.getSettings();
-		const liveField = findField(beforeSave, id);
-		if (!liveField || !sameFieldSnapshot(liveField, initial, beforeSave.classificationRule))
-			throw new ClassificationStateError('field-changed');
-		liveField.refs = [...values];
-		const prepared = readFieldSnapshot(liveField, beforeSave.classificationRule);
-		this.assertBase(file, path, id, token, prepared, deadline);
-		try {
-			await this.context.saveSettings();
-		} catch {
-			const failed = this.context.getSettings();
-			const failedField = findField(failed, id);
-			if (failedField && sameFieldSnapshot(failedField, prepared, failed.classificationRule))
-				failedField.refs = [...initial.refs];
-			throw new ClassificationIssue('preparation_failed');
-		}
-		this.assertBase(file, path, id, token, prepared, deadline);
-		return prepared;
 	}
 
 	private assertBase(

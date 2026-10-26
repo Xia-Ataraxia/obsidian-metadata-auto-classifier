@@ -234,7 +234,7 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(getFieldValues).toHaveBeenCalledWith('tags', expect.any(Array), app.metadataCache);
-		expect(saveSettings).toHaveBeenCalledOnce();
+		expect(saveSettings).not.toHaveBeenCalled();
 		expect(mocks.classify).not.toHaveBeenCalled();
 		expect(mocks.generate).toHaveBeenCalledOnce();
 		const generationCall = requireValue(mocks.generate.mock.calls[0], 'tag generation call');
@@ -586,47 +586,17 @@ describe('ClassificationService', () => {
 		expect(app.vault.process).not.toHaveBeenCalled();
 	});
 
-	it('uses successfully collected references in the same operation', async () => {
+	it('uses folder references for this run without persisting them', async () => {
 		settings.frontmatter[0] = makeField({ refs: [] });
 		vi.mocked(getFieldValues).mockReturnValue(['collected-one', 'collected-two']);
 
 		await service.classify(file, 9);
 
-		expect(saveSettings).toHaveBeenCalledOnce();
+		expect(saveSettings).not.toHaveBeenCalled();
+		expect(requireValue(settings.frontmatter[0], 'current frontmatter field').refs).toEqual([]);
 		const classifyCall = requireValue(mocks.classify.mock.calls[0], 'Jev classification call');
 		expect(classifyCall[0].candidates).toEqual(['collected-one', 'collected-two']);
 		expect(app.vault.process).toHaveBeenCalledOnce();
-	});
-
-	it('does not use references replaced while their prepared snapshot is being saved', async () => {
-		settings.frontmatter[0] = makeField({ refs: [] });
-		vi.mocked(getFieldValues).mockReturnValue(['collected']);
-		saveSettings.mockImplementation(async () => {
-			requireValue(settings.frontmatter[0], 'current frontmatter field').refs = ['user-edited'];
-		});
-
-		await service.classify(file, 9);
-
-		expect(requireValue(settings.frontmatter[0], 'current frontmatter field').refs).toEqual([
-			'user-edited',
-		]);
-		expect(saveSettings).toHaveBeenCalledOnce();
-		expect(mocks.classify).not.toHaveBeenCalled();
-		expect(app.vault.process).not.toHaveBeenCalled();
-	});
-
-	it('does not classify collected references after global instructions change during save', async () => {
-		settings.frontmatter[0] = makeField({ refs: [] });
-		vi.mocked(getFieldValues).mockReturnValue(['collected']);
-		saveSettings.mockImplementation(async () => {
-			settings.classificationRule = 'user-edited instructions';
-		});
-
-		await service.classify(file, 9);
-
-		expect(settings.classificationRule).toBe('user-edited instructions');
-		expect(mocks.classify).not.toHaveBeenCalled();
-		expect(app.vault.process).not.toHaveBeenCalled();
 	});
 
 	it('reuses the Jev configuration guard while generation is pending', async () => {
