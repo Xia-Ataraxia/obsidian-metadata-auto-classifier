@@ -137,7 +137,6 @@ export default class AutoClassifierPlugin extends Plugin {
 			provider,
 			model: this.settings.selectedModel,
 			classificationRule: this.settings.classificationRule,
-			saveSettings: () => this.saveSettings(),
 			notices: this.notices,
 		});
 

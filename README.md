@@ -29,7 +29,7 @@ Automatically classifies and applies metadata to your notes.
 - **Account or payment**: a provider API key, or a ChatGPT account for Codex sign-in. Usage is billed by the provider. Keys are stored in the plugin's settings file.
 - **Codex sign-in**: the OAuth flow contacts `auth.openai.com` and `chatgpt.com`, and briefly listens on `localhost:1455` for the callback.
 - **Node networking (desktop only)**: the plugin imports Node's `http` for that temporary local OAuth callback server (bound to `localhost`) and `https` to stream responses from your configured providers. Neither runs on mobile.
-- **Vault file list**: the plugin reads your vault's Markdown file list locally to offer wikilink suggestions and to build classification reference values. Nothing beyond the note being classified is sent to a provider.
+- **Folder contents**: the note picker for reference values lists one folder at a time as you browse. When a field has no reference values, the plugin reads the tags or property values used by notes in the classified note's own folder. It never scans the whole vault, and nothing beyond the note being classified is sent to a provider.
 - **Telemetry**: none.
 
 ## Development
