@@ -10,8 +10,15 @@ const CLS = 'metadata-auto-classifier-notice';
 
 const BUILTIN_NOTICES: NoticeCatalog = {
 	notice_muted: {
-		template: 'Notice muted. Reset it in settings.',
+		template: 'Notice muted. Undo, or reset it in settings.',
 		timeout: 4000,
+		immutable: true,
+		action: 'open-settings',
+	},
+	notice_unmuted: { template: 'Notice unmuted.', timeout: 2500, immutable: true },
+	notice_unmute_failed: {
+		template: 'Notice could not be unmuted. Try again in settings.',
+		timeout: 6000,
 		immutable: true,
 		action: 'open-settings',
 	},
@@ -76,7 +83,13 @@ export class PluginNotices {
 		const store = this.getMutedStore();
 		if (store[id]) {
 			delete store[id];
-			await this.plugin.saveSettings();
+			try {
+				await this.plugin.saveSettings();
+			} catch (error) {
+				// Keep memory in step with disk so Reset in settings can still clear it.
+				store[id] = true;
+				throw error;
+			}
 		}
 	}
 
@@ -174,6 +187,15 @@ export class PluginNotices {
 		return fragment;
 	}
 
+	private async undoMute(id: string): Promise<void> {
+		try {
+			await this.unmute(id);
+			this.show('notice_unmuted');
+		} catch {
+			this.show('notice_unmute_failed');
+		}
+	}
+
 	private createMuteButton(id: string, container: HTMLElement): void {
 		const button = new ButtonComponent(container);
 		button.buttonEl.addClass(`${CLS}-mute`);
@@ -185,7 +207,7 @@ export class PluginNotices {
 			void this.mute(id)
 				.then(() => {
 					this.remove(id);
-					this.show('notice_muted', {}, { undo: () => void this.unmute(id).catch(() => console.error('[MAC] Failed to unmute notice.')) });
+					this.show('notice_muted', {}, { undo: () => void this.undoMute(id) });
 				})
 				.catch(() => {
 					console.error('[MAC] Failed to mute notice.');

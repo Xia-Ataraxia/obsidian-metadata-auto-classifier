@@ -156,8 +156,17 @@
 	transition: background-color 120ms ease-out;
 }
 
-.notice .metadata-auto-classifier-notice-action:hover {
+.notice .metadata-auto-classifier-notice-action:hover,
+.notice .metadata-auto-classifier-notice-action:focus-visible {
 	background: color-mix(in srgb, currentColor 26%, transparent);
+}
+
+.notice .metadata-auto-classifier-notice-action:focus-visible {
+	box-shadow: 0 0 0 var(--border-width) currentColor;
+}
+
+.notice .metadata-auto-classifier-notice-action:active {
+	background: color-mix(in srgb, currentColor 34%, transparent);
 }
 
 .notice .metadata-auto-classifier-notice-mute {

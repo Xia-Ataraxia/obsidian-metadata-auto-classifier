@@ -538,7 +538,7 @@ describe('Notice', () => {
 
 		expect(row.children).toHaveLength(1);
 		expect(noticeChildAt(root, 0).textContent).toBe('Metadata Auto Classifier');
-		expect(noticeChildAt(row, 0).textContent).toBe('Notice muted. Reset it in settings.');
+		expect(noticeChildAt(row, 0).textContent).toBe('Notice muted. Undo, or reset it in settings.');
 		expect(actionButton.textContent).toBe('Open settings');
 		expect(buttonComponentFor(actionButton).onClick).toHaveBeenCalledOnce();
 		actionButton.click();
@@ -569,6 +569,28 @@ describe('Notice', () => {
 		expect(pluginNotices.listMuted()).toEqual([]);
 		expect(saveSettings).toHaveBeenCalledTimes(2);
 		expect(openSettings).not.toHaveBeenCalled();
+		await vi.waitFor(() => expect(mockNotice).toHaveBeenCalledTimes(3));
+		expect(noticeChildAt(noticeChildAt(noticeChildAt(noticeFragmentAt(2), 0), 1), 0).textContent).toBe('Notice unmuted.');
+	});
+
+	test('a failed Undo shows a visible failure notice', async () => {
+		activateDocumentBoundary(createObsidianDocumentBoundary());
+		const saveSettings = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValue(new Error('disk'));
+		const pluginNotices = new PluginNotices(
+			{ settings: {}, saveSettings },
+			{ 'notice-id': { template: 'A fixed notice.' } },
+			'Metadata Auto Classifier'
+		);
+		pluginNotices.show('notice-id', {}, { timeout: 0 });
+		noticeChildAt(noticeChildAt(noticeChildAt(noticeFragmentAt(0), 0), 1), 1).click();
+		await vi.waitFor(() => expect(mockNotice).toHaveBeenCalledTimes(2));
+		noticeChildAt(noticeChildAt(noticeChildAt(noticeFragmentAt(1), 0), 2), 0).click();
+		await vi.waitFor(() => expect(mockNotice).toHaveBeenCalledTimes(3));
+		expect(noticeChildAt(noticeChildAt(noticeChildAt(noticeFragmentAt(2), 0), 1), 0).textContent).toBe(
+			'Notice could not be unmuted. Try again in settings.'
+		);
+		expect(pluginNotices.isMuted('notice-id')).toBe(true);
+		expect(pluginNotices.listMuted()).toEqual(['notice-id']);
 	});
 
 	test('repeated plugin notices are freshly re-announced', () => {
