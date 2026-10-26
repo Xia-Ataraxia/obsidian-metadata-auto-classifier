@@ -10,7 +10,8 @@ import type { ProviderSpec } from './provider-chat-specs';
 import { nativeProviderSpecs } from './provider-native-specs';
 
 const REQUEST_TIMEOUT_MS = 60_000;
-const inFlightCodexRefreshTokens = new Set<string>();
+// Concurrent 401s on one refresh token share a single network refresh.
+const inFlightCodexRefreshes = new Map<string, Promise<CodexTokens>>();
 
 type ProviderAuthMode = 'apiKey' | 'oauth';
 
@@ -35,6 +36,8 @@ function hasOAuthCredential(value: unknown): boolean {
 		Number.isFinite(value.expiresAt)
 	);
 }
+
+type CodexTokens = Awaited<ReturnType<CodexOAuth['refreshTokens']>>;
 
 function resolveApiKey(provider: ProviderConfig): string {
 	const expectedAuth: ProviderAuthMode =
@@ -199,15 +202,20 @@ export class UnifiedProvider implements APIProvider {
 	): Promise<GeneratedTags> {
 		const oauth = extractOAuthTokens(provider);
 		if (!oauth) throw new Error('Codex authentication is unavailable');
-		if (inFlightCodexRefreshTokens.has(oauth.refreshToken))
-			throw new Error('Codex token refresh is already in progress');
 		if (!onTokenRefresh) throw new Error('Codex token persistence is unavailable');
 
-		inFlightCodexRefreshTokens.add(oauth.refreshToken);
+		const key = oauth.refreshToken;
+		let pending = inFlightCodexRefreshes.get(key);
+		// The owner keeps the entry until its tokens are persisted, so late 401s still share it.
+		const owner = !pending;
+		if (!pending) {
+			pending = new CodexOAuth().refreshTokens(key, requestOptions);
+			inFlightCodexRefreshes.set(key, pending);
+		}
 		try {
-			let newTokens: Awaited<ReturnType<CodexOAuth['refreshTokens']>>;
+			let newTokens: CodexTokens;
 			try {
-				newTokens = await new CodexOAuth().refreshTokens(oauth.refreshToken, requestOptions);
+				newTokens = await pending;
 			} catch (error) {
 				assertDeadline(requestOptions);
 				if (error instanceof HttpError) throw error;
@@ -245,7 +253,7 @@ export class UnifiedProvider implements APIProvider {
 			assertDeadline(requestOptions);
 			return spec.parseStreamResponse(text);
 		} finally {
-			inFlightCodexRefreshTokens.delete(oauth.refreshToken);
+			if (owner) inFlightCodexRefreshes.delete(key);
 		}
 	}
 

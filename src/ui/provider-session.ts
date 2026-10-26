@@ -13,6 +13,8 @@ export interface ProviderSessionContext {
 	getProvider: () => ProviderConfig | undefined;
 	saveSettings: () => Promise<void>;
 	assertCurrent: () => void;
+	/** Called when refreshed tokens could not be persisted; they stay in memory for this run. */
+	onPersistFailed?: () => void;
 }
 
 function selectedOAuth(provider: ProviderConfig): OAuthTokens | undefined {
@@ -20,11 +22,6 @@ function selectedOAuth(provider: ProviderConfig): OAuthTokens | undefined {
 	if (provider.auth !== undefined)
 		return provider.auth?.type === 'oauth' ? provider.auth.oauth : undefined;
 	return provider.oauth;
-}
-
-function selectedOAuthOwner(provider: ProviderConfig): object | undefined {
-	if (!selectedOAuth(provider)) return undefined;
-	return provider.auth ?? provider;
 }
 
 function replaceSelectedOAuth(provider: ProviderConfig, tokens: OAuthTokens): boolean {
@@ -53,26 +50,6 @@ function carriesPendingCredential(tokens: OAuthTokens | undefined): boolean {
 	return false;
 }
 
-function restoreOwnedOAuth(
-	provider: ProviderConfig,
-	owner: object,
-	written: OAuthTokens,
-	refreshed: OAuthTokens,
-	previous: OAuthTokens
-): void {
-	const current = selectedOAuth(provider);
-	if (selectedOAuthOwner(provider) !== owner || current !== written) return;
-	// Any credential edit transfers ownership of the entire bundle.
-	if (
-		current.accessToken !== refreshed.accessToken ||
-		current.refreshToken !== refreshed.refreshToken ||
-		current.expiresAt !== refreshed.expiresAt ||
-		current.accountId !== refreshed.accountId
-	)
-		return;
-	replaceSelectedOAuth(provider, previous);
-}
-
 export function createProviderSession(context: ProviderSessionContext) {
 	context.assertCurrent();
 	const configured = context.getProvider();
@@ -97,6 +74,14 @@ export function createProviderSession(context: ProviderSessionContext) {
 	};
 
 	const refreshTokens = async (tokens: OAuthTokens): Promise<void> => {
+		context.assertCurrent();
+		const live = context.getProvider();
+		const liveTokens = live && selectedOAuth(live);
+		// Another session already persisted this exact refresh result (single-flight refresh).
+		if (live && liveTokens?.accessToken === tokens.accessToken && liveTokens.refreshToken === tokens.refreshToken) {
+			expected = copyProvider(live);
+			return;
+		}
 		assertCurrent();
 		const current = context.getProvider();
 		const previousTokens = current && selectedOAuth(current);
@@ -105,24 +90,21 @@ export function createProviderSession(context: ProviderSessionContext) {
 		}
 
 		const refreshed = { ...tokens };
-		const previous = { ...previousTokens };
 		const next = copyProvider(expected);
-		const owner = selectedOAuthOwner(current);
-		if (!owner) throw new ClassificationStateError('provider-changed');
 		if (!replaceSelectedOAuth(next, refreshed) || !replaceSelectedOAuth(current, refreshed)) {
 			throw new ClassificationStateError('provider-changed');
 		}
-		const written = selectedOAuth(current);
-		if (!written) throw new ClassificationStateError('provider-changed');
 		pendingRefreshCredentials.add(refreshed);
 		try {
+			// The old refresh token is already consumed server-side: never roll back to it.
 			try {
 				await context.saveSettings();
 			} catch {
-				if (context.getProvider() === current) {
-					restoreOwnedOAuth(current, owner, written, refreshed, previous);
+				try {
+					await context.saveSettings();
+				} catch {
+					context.onPersistFailed?.();
 				}
-				throw new ClassificationStateError('provider-changed');
 			}
 			context.assertCurrent();
 			if (!sameProvider(context.getProvider(), next)) {

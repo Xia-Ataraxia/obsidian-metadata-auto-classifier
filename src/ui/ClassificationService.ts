@@ -123,6 +123,7 @@ export class ClassificationService {
 		const generation = createGenerationStage({
 			getSettings: () => this.context.getSettings(),
 			saveSettings: () => this.context.saveSettings(),
+			onPersistFailed: () => this.context.notices.show('settings_save_failed'),
 			snapshot,
 			body: baseline.body,
 			deadline,

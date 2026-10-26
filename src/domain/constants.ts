@@ -95,6 +95,10 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 		timeout: 5000,
 		immutable: true,
 	},
+	settings_save_failed: {
+		template: 'Settings could not be saved. If sign-in stops working, connect your account again.',
+		timeout: 8000,
+	},
 	classification_setup: {
 		template: '{{message}}',
 		timeout: 8000,

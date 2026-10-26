@@ -17,6 +17,7 @@ export class GenerationFailedError extends Error {
 interface GenerationContext {
 	getSettings: () => AutoClassifierSettings;
 	saveSettings: () => Promise<void>;
+	onPersistFailed?: () => void;
 	snapshot: FieldSnapshot;
 	body: string;
 	deadline: number;
@@ -55,6 +56,7 @@ export function createGenerationStage(context: GenerationContext) {
 		session = createProviderSession({
 			getProvider,
 			saveSettings: () => context.saveSettings(),
+			onPersistFailed: context.onPersistFailed,
 			assertCurrent: () => {
 				context.assertCurrent();
 				const live = context.getSettings();

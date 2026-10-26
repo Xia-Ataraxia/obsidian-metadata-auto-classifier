@@ -305,27 +305,39 @@ describe('provider session token persistence', () => {
 		expect(provider.oauth).toEqual(initialTokens);
 	});
 
-	it('restores still-owned credentials after a failed save while preserving unrelated edits', async () => {
+	it('keeps refreshed credentials after a failed save and reports it', async () => {
 		const provider = oauthProvider();
-		const save = deferred<void>();
+		const onPersistFailed = vi.fn();
 		const context = {
 			getProvider: () => provider,
-			saveSettings: () => save.promise,
+			saveSettings: vi.fn().mockRejectedValue(new Error('sensitive save failure')),
 			assertCurrent: vi.fn(),
+			onPersistFailed,
 		};
 		const session = createProviderSession(context);
-		const refresh = session.refreshTokens(refreshedTokens);
-		const model = provider.models[0];
-		if (!model) throw new Error('Expected an OAuth provider model');
-		provider.baseUrl = 'https://user-edited.invalid/v2';
-		model.name = 'User-edited model';
 
-		save.reject(new Error('sensitive save failure'));
-		await expect(refresh).rejects.toBeInstanceOf(ClassificationStateError);
-		expect(provider.auth?.type === 'oauth' && provider.auth.oauth).toEqual(initialTokens);
-		expect(provider.baseUrl).toBe('https://user-edited.invalid/v2');
-		expect(model.name).toBe('User-edited model');
-		expect(() => createProviderSession(context)).not.toThrow();
+		await expect(session.refreshTokens(refreshedTokens)).resolves.toBeUndefined();
+
+		expect(context.saveSettings).toHaveBeenCalledTimes(2);
+		expect(onPersistFailed).toHaveBeenCalledOnce();
+		expect(provider.auth?.type === 'oauth' && provider.auth.oauth).toEqual(refreshedTokens);
+	});
+
+	it('adopts tokens another session already persisted without saving again', async () => {
+		const provider = oauthProvider();
+		const context = {
+			getProvider: () => provider,
+			saveSettings: vi.fn().mockResolvedValue(undefined),
+			assertCurrent: vi.fn(),
+		};
+		const first = createProviderSession(context);
+		const second = createProviderSession(context);
+
+		await first.refreshTokens(refreshedTokens);
+		await second.refreshTokens(refreshedTokens);
+
+		expect(context.saveSettings).toHaveBeenCalledOnce();
+		expect(() => second.assertCurrent()).not.toThrow();
 	});
 
 	it('does not restore credentials explicitly replaced while saving', async () => {
@@ -846,11 +858,11 @@ describe('model test session', () => {
 		}
 	);
 
-	it('keeps token-save failures out of the model test notice', async () => {
+	it('keeps token-save failure details out of notices', async () => {
 		const provider = oauthProvider();
 		const fixture = modelPlugin(provider);
 		const canary = 'synthetic-save-secret /private/synthetic-note';
-		fixture.saveSettings.mockRejectedValueOnce(new Error(canary));
+		fixture.saveSettings.mockRejectedValue(new Error(canary));
 		callAPI.mockImplementation(async (...args) => {
 			const refresh = args[5];
 			if (!refresh) throw new Error('Model test request omitted token refresh callback');
@@ -859,10 +871,6 @@ describe('model test session', () => {
 		});
 
 		await modelAction(fixture.plugin)();
-		expect(fixture.show).toHaveBeenCalledWith('model_test_error', {
-			name: 'Model A',
-			message: 'The connection test failed. Check the provider configuration.',
-		});
 		expect(JSON.stringify(fixture.show.mock.calls)).not.toContain(canary);
 	});
 

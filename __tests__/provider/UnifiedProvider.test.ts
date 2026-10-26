@@ -560,11 +560,11 @@ describe('UnifiedProvider generated-tags contract', () => {
 		expect(CODEX_OAUTH.API_ENDPOINT).toBe(mockSendStreamingRequest.mock.calls[0]?.[0]);
 	});
 
-	it('serializes refreshes across instances and holds ownership through token persistence', async () => {
+	it('shares one refresh between concurrent callers on the same refresh token', async () => {
 		mockSendStreamingRequest
 			.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401))
 			.mockRejectedValueOnce(new HttpError('HTTP_ERROR', 401))
-			.mockResolvedValueOnce(generatedJson);
+			.mockResolvedValue(generatedJson);
 		const tokens = {
 			accessToken: 'rotated-access-token',
 			refreshToken: 'rotated-refresh-token',
@@ -598,21 +598,20 @@ describe('UnifiedProvider generated-tags contract', () => {
 
 		try {
 			await persistenceStarted;
-			const competingError = await new UnifiedProvider()
-				.callAPI('system', 'prompt', config(PROVIDER_NAMES.CODEX), 'model', undefined, vi.fn())
-				.then(
-					() => new Error('Unexpected competing refresh success'),
-					(error: unknown) => error
-				);
-			expect(competingError).toBeInstanceOf(Error);
-			expect((competingError as Error).message).toBe('Codex token refresh is already in progress');
-			expect((competingError as Error).message).not.toContain('refresh-token-secret');
+			const competing = new UnifiedProvider().callAPI(
+				'system',
+				'prompt',
+				config(PROVIDER_NAMES.CODEX),
+				'model',
+				undefined,
+				vi.fn()
+			);
+			await expect(competing).resolves.toEqual(generated);
 			expect(refreshTokens).toHaveBeenCalledTimes(1);
-			expect(mockSendStreamingRequest).toHaveBeenCalledTimes(2);
 
 			releasePersistence();
 			await expect(firstCall).resolves.toEqual(generated);
-			expect(mockSendStreamingRequest).toHaveBeenCalledTimes(3);
+			expect(mockSendStreamingRequest).toHaveBeenCalledTimes(4);
 		} finally {
 			releasePersistence?.();
 			await firstCall.catch(() => undefined);
