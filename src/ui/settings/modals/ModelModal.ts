@@ -354,7 +354,7 @@ export class ModelModal extends Modal {
 		if (!this.selectedProvider) {
 			this.props.notices.show('validation_error', {
 				component: 'Model',
-				message: 'Provider is required',
+				message: 'Select a provider.',
 			});
 			return false;
 		}
@@ -362,7 +362,7 @@ export class ModelModal extends Modal {
 		if (!this.modelId.trim()) {
 			this.props.notices.show('validation_error', {
 				component: 'Model',
-				message: 'Model ID is required',
+				message: 'Enter a model ID.',
 			});
 			return false;
 		}
@@ -370,12 +370,17 @@ export class ModelModal extends Modal {
 		if (!this.modelName.trim()) {
 			this.props.notices.show('validation_error', {
 				component: 'Model',
-				message: 'Display name is required',
+				message: 'Enter a display name.',
 			});
 			return false;
 		}
 
-		if (this.updateDuplicateError()) return false;
+		if (this.updateDuplicateError()) {
+			// Re-announce the inline error on every blocked Save.
+			this.contentEl.querySelector<HTMLInputElement>('input[placeholder="Enter model ID"]')?.focus();
+			this.idErrorEl?.animate([{ opacity: 0.2 }, { opacity: 1 }], { duration: 320, easing: 'ease-out' });
+			return false;
+		}
 
 		return true;
 	}

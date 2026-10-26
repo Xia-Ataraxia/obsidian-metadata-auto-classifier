@@ -74,6 +74,16 @@
     from { opacity: 0; }
 }
 
+.mac-busy svg {
+    animation: metadata-auto-classifier-spin 900ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mac-busy svg {
+        animation: metadata-auto-classifier-pulse 1600ms ease-in-out infinite alternate;
+    }
+}
+
 /* Button Container for Modals */
 .mac-button-container {
     display: flex;
