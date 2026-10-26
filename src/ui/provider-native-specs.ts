@@ -1,17 +1,16 @@
-import { TAG_GENERATION_SCHEMA } from '../domain/constants';
 import { providerHasAuth } from '../domain/classification-state';
 import { CODEX_OAUTH } from '../domain/auth/oauth-constants';
 import { TagGenerationError } from '../domain/tag-generation';
 import { PROVIDER_NAMES } from '../utils/lib-utils';
-import type { GeneratedTags, ProviderConfig } from '../types';
+import type { ProviderConfig } from '../types';
 import type { SSEEvent, SSEEventOutcome } from './streaming-request';
-import { parseTagsJson } from './provider-chat-specs';
+import { parseJsonText } from './provider-chat-specs';
 import type { ProviderSpec } from './provider-chat-specs';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
 
-function parseGeminiResponse(data: unknown): GeneratedTags {
+function parseGeminiResponse(data: unknown): unknown {
 	if (!isRecord(data) || !Array.isArray(data.candidates) || data.candidates.length !== 1) {
 		throw new TagGenerationError('invalid-response');
 	}
@@ -31,10 +30,10 @@ function parseGeminiResponse(data: unknown): GeneratedTags {
 		if (typeof part.text !== 'string') throw new TagGenerationError('invalid-response');
 		text.push(part.text);
 	}
-	return parseTagsJson(text.join(''));
+	return parseJsonText(text.join(''));
 }
 
-function parseOllamaResponse(data: unknown): GeneratedTags {
+function parseOllamaResponse(data: unknown): unknown {
 	if (
 		!isRecord(data) ||
 		data.done !== true ||
@@ -43,7 +42,7 @@ function parseOllamaResponse(data: unknown): GeneratedTags {
 	) {
 		throw new TagGenerationError('invalid-response');
 	}
-	return parseTagsJson(data.message.content);
+	return parseJsonText(data.message.content);
 }
 
 function extractOAuthTokens(provider: ProviderConfig): ProviderConfig['oauth'] {
@@ -77,7 +76,7 @@ function containsRefusal(output: unknown): boolean {
 	);
 }
 
-function parseCodexResponse(data: unknown): GeneratedTags {
+function parseCodexResponse(data: unknown): unknown {
 	if (!isRecord(data) || data.status !== 'completed' || !Array.isArray(data.output)) {
 		throw new TagGenerationError('invalid-response');
 	}
@@ -88,7 +87,7 @@ function parseCodexResponse(data: unknown): GeneratedTags {
 		.filter((part) => isRecord(part) && part.type === 'output_text')
 		.map((part) => (part as Record<string, unknown>).text)
 		.join('');
-	return parseTagsJson(text);
+	return parseJsonText(text);
 }
 
 function parseCodexEvent(event: SSEEvent): SSEEventOutcome {
@@ -134,12 +133,12 @@ function parseCodexEvent(event: SSEEvent): SSEEventOutcome {
 export const nativeProviderSpecs: Record<string, ProviderSpec> = {
 	[PROVIDER_NAMES.GEMINI]: {
 		buildHeaders: () => ({ 'Content-Type': 'application/json' }),
-		buildRequestBody: (systemRole, userPrompt, _model, temperature) => ({
+		buildRequestBody: (systemRole, userPrompt, _model, temperature, format) => ({
 			contents: [{ parts: [{ text: `${systemRole}\n\n${userPrompt}` }] }],
 			generationConfig: {
 				temperature,
 				responseMimeType: 'application/json',
-				responseJsonSchema: TAG_GENERATION_SCHEMA,
+				responseJsonSchema: format.schema,
 			},
 		}),
 		buildUrl: (baseUrl, model, apiKey) =>
@@ -152,7 +151,7 @@ export const nativeProviderSpecs: Record<string, ProviderSpec> = {
 			if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 			return headers;
 		},
-		buildRequestBody: (systemRole, userPrompt, model, temperature) => ({
+		buildRequestBody: (systemRole, userPrompt, model, temperature, format) => ({
 			model,
 			messages: [
 				{ role: 'system', content: systemRole },
@@ -160,7 +159,7 @@ export const nativeProviderSpecs: Record<string, ProviderSpec> = {
 			],
 			options: { temperature },
 			stream: false,
-			format: TAG_GENERATION_SCHEMA,
+			format: format.schema,
 		}),
 		buildUrl: (baseUrl) => baseUrl,
 		parseResponse: parseOllamaResponse,
@@ -168,7 +167,7 @@ export const nativeProviderSpecs: Record<string, ProviderSpec> = {
 	[PROVIDER_NAMES.CODEX]: {
 		requiresStreaming: true,
 		buildHeaders: codexHeaders,
-		buildRequestBody: (systemRole, userPrompt, model) => ({
+		buildRequestBody: (systemRole, userPrompt, model, _temperature, format) => ({
 			model,
 			instructions: systemRole,
 			input: [{ role: 'user', content: [{ type: 'input_text', text: userPrompt }] }],
@@ -177,15 +176,15 @@ export const nativeProviderSpecs: Record<string, ProviderSpec> = {
 			text: {
 				format: {
 					type: 'json_schema',
-					name: 'generated_tags',
+					name: format.name,
 					strict: true,
-					schema: TAG_GENERATION_SCHEMA,
+					schema: format.schema,
 				},
 			},
 		}),
 		buildUrl: () => CODEX_OAUTH.API_ENDPOINT,
 		parseResponse: parseCodexResponse,
 		parseStreamEvent: parseCodexEvent,
-		parseStreamResponse: parseTagsJson,
+		parseStreamResponse: parseJsonText,
 	},
 };

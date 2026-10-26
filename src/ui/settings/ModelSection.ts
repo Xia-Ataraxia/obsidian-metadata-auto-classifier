@@ -6,6 +6,7 @@ import { testModel } from '../provider-api';
 import { toApiErrorNotice } from '../../utils/api-error-notice';
 import type { Model, ProviderConfig } from '../../types';
 import { ClassificationStateError } from '../../domain/classification-state';
+import { decisionTransport } from '../../domain/decision-formats';
 import { findUniqueProvider, getProviderPresets } from '../../utils/lib-utils';
 import { createProviderSession } from '../provider-session';
 import { Setting } from './components/Setting';
@@ -22,7 +23,12 @@ export class ModelSection {
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[], selectedModel: string): void {
 		const modelSection = containerEl.createDiv({ cls: 'model-section' });
-		new ObsidianSetting(modelSection).setName('Models').setHeading();
+		new ObsidianSetting(modelSection)
+			.setName('Models')
+			.setDesc(
+				'The selected model scores each existing value. Decision API models answer natively; chat models emulate the same yes/no scores. New tags use the selected model, or the first chat model when a decision API model is selected.'
+			)
+			.setHeading();
 
 		this.renderModelList(modelSection, providers, selectedModel);
 
@@ -58,11 +64,14 @@ export class ModelSection {
 					model: config.id,
 					name: config.name,
 					provider: provider.name,
+					decision: config.decision,
 				};
 
 				Setting.create(containerEl, {
 					name: config.name,
-					desc: provider.name,
+					desc: `${provider.name} · ${
+						decisionTransport(provider.name, config) === 'chat' ? 'Chat scoring' : 'Decision API'
+					}`,
 					buttons: [
 						{
 							icon: 'check',
@@ -206,7 +215,7 @@ export class ModelSection {
 
 	private openModelModal(
 		type: 'add' | 'edit',
-		editTarget?: { model: string; name: string; provider: string },
+		editTarget?: { model: string; name: string; provider: string; decision?: boolean },
 		capturedSource?: ProviderConfig,
 		capturedModel?: Model
 	): void {

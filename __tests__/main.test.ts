@@ -129,7 +129,6 @@ describe('AutoClassifierPlugin', () => {
 		plugin = new AutoClassifierPlugin(app, TEST_PLUGIN_MANIFEST);
 		plugin.settings = {
 			...DEFAULT_SETTINGS,
-			jev: { ...DEFAULT_SETTINGS.jev },
 			providers: [],
 			frontmatter: [makeField(1)],
 			classificationRule: 'synthetic instructions',
@@ -147,7 +146,7 @@ describe('AutoClassifierPlugin', () => {
 	});
 
 	describe('settings persistence', () => {
-		it('merges stored settings with Jev defaults and repairs missing field counts', async () => {
+		it('migrates a stored Jev key to a selected TypeSafe provider and repairs missing field counts', async () => {
 			vi.mocked(plugin.loadData).mockResolvedValue({
 				selectedProvider: 'Stored provider',
 				jev: { apiKey: 'stored-key' },
@@ -156,11 +155,15 @@ describe('AutoClassifierPlugin', () => {
 
 			await plugin.loadSettings();
 
-			expect(plugin.settings.selectedProvider).toBe('Stored provider');
-			expect(plugin.settings.jev).toEqual({
-				apiKey: 'stored-key',
-				model: DEFAULT_SETTINGS.jev.model,
+			expect(plugin.settings).not.toHaveProperty('jev');
+			expect(plugin.settings.selectedProvider).toBe('TypeSafe');
+			expect(plugin.settings.selectedModel).toBe('jev-1.14.0');
+			expect(plugin.settings.providers[plugin.settings.providers.length - 1]).toMatchObject({
+				name: 'TypeSafe',
+				models: [{ id: 'jev-1.14.0', decision: true }],
+				auth: { type: 'apiKey', apiKey: 'stored-key' },
 			});
+			expect(DEFAULT_SETTINGS.providers.some((p) => p.name === 'TypeSafe')).toBe(false);
 			expect(requireValue(plugin.settings.frontmatter[0], 'stored frontmatter field').count).toEqual({
 				min: 1,
 				max: 5,

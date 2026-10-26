@@ -17,6 +17,11 @@
 		"temperature": 0.6,
 		"popularModels": [
 			{
+				"id": "gpt-6-luna",
+				"name": "GPT-6 Luna (Decisions)",
+				"decision": true
+			},
+			{
 				"id": "gpt-4.1",
 				"name": "GPT-4.1"
 			},
@@ -70,6 +75,11 @@
 		"baseUrl": "https://openrouter.ai/api/v1/chat/completions",
 		"temperature": 0.6,
 		"popularModels": [
+			{
+				"id": "typesafe/jev-1.14",
+				"name": "Jev 1.14 (Decisions)",
+				"decision": true
+			},
 			{
 				"id": "meta-llama/llama-4-maverick",
 				"name": "Llama 4 Maverick"
@@ -162,6 +172,26 @@
 			{
 				"id": "gpt-5.2",
 				"name": "GPT-5.2 (Deprecated for ChatGPT sign-in)"
+			}
+		]
+	},
+	"typesafe": {
+		"name": "TypeSafe",
+		"apiKeyUrl": "https://typesafe.ai/",
+		"apiKeyRequired": true,
+		"modelsList": "https://docs.typesafe.ai/api",
+		"baseUrl": "https://api.typesafe.ai/v1/systemone",
+		"temperature": 0,
+		"popularModels": [
+			{
+				"id": "jev-1.14.0",
+				"name": "Jev 1.14",
+				"decision": true
+			},
+			{
+				"id": "jev-latest",
+				"name": "Jev (latest)",
+				"decision": true
 			}
 		]
 	}

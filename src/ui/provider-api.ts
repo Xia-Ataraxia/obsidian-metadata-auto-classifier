@@ -1,4 +1,5 @@
 import { COMMON_CONSTANTS } from '../domain/constants';
+import { decisionTransport } from '../domain/decision-formats';
 import {
 	buildTagGenerationPrompt,
 	isTagGenerationAllowed,
@@ -6,6 +7,7 @@ import {
 } from '../domain/tag-generation';
 import { HttpError } from './request';
 import type { OnTokenRefreshCallback, ProviderConfig } from '../types';
+import { DecisionClassifier } from './DecisionClassifier';
 import { UnifiedProvider } from './UnifiedProvider';
 import type { HttpRequestOptions } from './request';
 
@@ -37,6 +39,21 @@ export const testModel = async (
 	onTokenRefresh?: OnTokenRefreshCallback,
 	requestOptions?: HttpRequestOptions
 ): Promise<void> => {
+	const model = providerConfig.models.find((item) => item.id === modelName);
+	if (model && decisionTransport(providerConfig.name, model) !== 'chat') {
+		// A one-question probe exercises the same endpoint, auth and decoder as classification.
+		await new DecisionClassifier().classify(
+			{ body: 'Connection test', fieldName: 'test', instructions: '', candidates: ['ok'], max: 1 },
+			providerConfig,
+			model,
+			{
+				deadline: requestOptions?.deadline ?? Date.now() + 30_000,
+				assertCurrent: requestOptions?.assertCurrent ?? (() => {}),
+				onTokenRefresh,
+			}
+		);
+		return;
+	}
 	await new UnifiedProvider().callAPI(
 		COMMON_CONSTANTS.VERIFY_CONNECTION_SYSTEM_PROMPT,
 		COMMON_CONSTANTS.VERIFY_CONNECTION_USER_PROMPT,

@@ -10,6 +10,7 @@ export const PROVIDER_NAMES = {
 	LMSTUDIO: providerPresetsData.lmstudio.name,
 	OLLAMA: providerPresetsData.ollama.name,
 	CODEX: providerPresetsData.codex.name,
+	TYPESAFE: providerPresetsData.typesafe.name,
 	CUSTOM: providerPresetsData.custom.name,
 } as const;
 

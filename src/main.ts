@@ -3,6 +3,7 @@ import { ClassificationService } from './ui/ClassificationService';
 import { CommandService } from './ui/CommandService';
 import { DEFAULT_FRONTMATTER_SETTING, DEFAULT_SETTINGS, NOTICE_CATALOG } from './domain/constants';
 import { migrateStoredSettings } from './domain/settings-migration';
+import { migrateLegacyJev } from './domain/model-list';
 import type { AutoClassifierSettings } from './types';
 import { AutoClassifierSettingTab } from './ui/settings';
 import { PluginNotices } from './ui/plugin-notices';
@@ -108,7 +109,7 @@ export default class AutoClassifierPlugin extends Plugin {
 		if (generation !== this.lifecycleGeneration) return;
 		const defaults = structuredClone(DEFAULT_SETTINGS);
 		this.settings = { ...defaults, ...(migrateStoredSettings(storedSettings) as Partial<AutoClassifierSettings>) };
-		this.settings.jev = { ...DEFAULT_SETTINGS.jev, ...this.settings.jev };
+		migrateLegacyJev(this.settings);
 
 		// Migrate old frontmatter settings that may be missing count
 		this.settings.frontmatter = this.settings.frontmatter.map((fm) => ({

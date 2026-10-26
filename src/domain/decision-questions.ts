@@ -1,23 +1,25 @@
 import type {
-	BuildJevRequestsInput,
-	BuildJevRequestsResult,
-	JevCandidateMapping,
-	JevQuestion,
-	JevRequestChunk,
-	JevState,
-} from '../types/jev';
+	BuildDecisionRequestsInput,
+	BuildDecisionRequestsResult,
+	DecisionCandidateMapping,
+	DecisionQuestion,
+	DecisionRequestChunk,
+	DecisionState,
+} from '../types/decision';
 
 const REQUEST_CONTEXT_BYTE_BUDGET = 48 * 1024;
 const QUESTION_CONTEXT_BYTE_BUDGET = 24 * 1024;
 const REQUEST_CONTEXT_OVERHEAD_BYTES = 256;
 const QUESTION_CONTEXT_OVERHEAD_BYTES = 64;
+// OpenAI Decisions accepts at most 400 questions per request.
+const MAX_QUESTIONS_PER_REQUEST = 400;
 const utf8Encoder = new TextEncoder();
 
 function isArrayValue(value: unknown): boolean {
 	return Array.isArray(value);
 }
 
-function serializedUtf8Bytes(value: string | JevState): number {
+function serializedUtf8Bytes(value: string | DecisionState): number {
 	const serialized = JSON.stringify(value);
 	return serialized === undefined
 		? Number.POSITIVE_INFINITY
@@ -33,12 +35,12 @@ function questionInstructions(candidate: string): string {
 
 function failBuild(
 	code: 'invalid-input' | 'question-context-too-large' | 'request-context-too-large'
-): BuildJevRequestsResult {
+): BuildDecisionRequestsResult {
 	return { ok: false, error: { code } };
 }
 
 /** UTF-8 budgets are conservative packing heuristics, not token-limit guarantees. */
-export function buildJevRequests(input: BuildJevRequestsInput): BuildJevRequestsResult {
+export function buildDecisionRequests(input: BuildDecisionRequestsInput): BuildDecisionRequestsResult {
 	if (
 		!input ||
 		typeof input.model !== 'string' ||
@@ -51,7 +53,7 @@ export function buildJevRequests(input: BuildJevRequestsInput): BuildJevRequests
 	)
 		return failBuild('invalid-input');
 
-	const unique: JevCandidateMapping[] = [];
+	const unique: DecisionCandidateMapping[] = [];
 	const seen = new Set<string>();
 	input.candidates.forEach((value, index) => {
 		if (value.trim().length === 0 || seen.has(value)) return;
@@ -60,13 +62,13 @@ export function buildJevRequests(input: BuildJevRequestsInput): BuildJevRequests
 	});
 	if (unique.length === 0) return { ok: true, chunks: [] };
 
-	const state: JevState = {
+	const state: DecisionState = {
 		body: input.body,
 		fieldName: input.fieldName,
 		instructions: input.instructions,
 	};
 	const stateBytes = serializedUtf8Bytes(state);
-	const pending: Array<{ mapping: JevCandidateMapping; question: JevQuestion; bytes: number }> = [];
+	const pending: Array<{ mapping: DecisionCandidateMapping; question: DecisionQuestion; bytes: number }> = [];
 	for (const mapping of unique) {
 		const question = {
 			type: 'noul' as const,
@@ -79,18 +81,22 @@ export function buildJevRequests(input: BuildJevRequestsInput): BuildJevRequests
 		pending.push({ mapping, question, bytes });
 	}
 
-	const chunks: JevRequestChunk[] = [];
-	let current: JevRequestChunk | undefined;
+	const chunks: DecisionRequestChunk[] = [];
+	let current: DecisionRequestChunk | undefined;
 	let currentBytes = stateBytes + REQUEST_CONTEXT_OVERHEAD_BYTES;
 	for (const item of pending) {
 		const itemBytes =
 			item.bytes + serializedUtf8Bytes(item.mapping.id) + QUESTION_CONTEXT_OVERHEAD_BYTES;
-		if (!current || currentBytes + itemBytes > REQUEST_CONTEXT_BYTE_BUDGET) {
+		if (
+			!current ||
+			current.candidates.length >= MAX_QUESTIONS_PER_REQUEST ||
+			currentBytes + itemBytes > REQUEST_CONTEXT_BYTE_BUDGET
+		) {
 			current = {
 				request: {
 					model: input.model,
 					state,
-					questions: Object.create(null) as Record<string, JevQuestion>,
+					questions: Object.create(null) as Record<string, DecisionQuestion>,
 				},
 				candidates: [],
 			};

@@ -2,7 +2,7 @@ import type { App } from 'obsidian';
 import { ButtonComponent, Modal, Setting } from 'obsidian';
 
 import { isDuplicateModel } from '../../../domain/model-list';
-import { getProviderPresets } from '../../../utils/lib-utils';
+import { PROVIDER_NAMES, getProviderPresets } from '../../../utils/lib-utils';
 import type { Model, ProviderConfig, ProviderPreset } from '../../../types';
 import { ModalAccessibilityHelper } from '../components/ModalAccessibilityHelper';
 import type { PluginNotices } from '../../plugin-notices';
@@ -17,7 +17,7 @@ export interface ModelModalProps {
 		isEdit: boolean;
 		oldModel?: { model: string; provider: string };
 	}) => void | Promise<void>;
-	editTarget?: { model: string; name: string; provider: string };
+	editTarget?: { model: string; name: string; provider: string; decision?: boolean };
 	notices: PluginNotices;
 }
 
@@ -29,6 +29,7 @@ export class ModelModal extends Modal {
 	private selectedProvider: string = '';
 	private modelName: string = '';
 	private modelId: string = '';
+	private decision = false;
 	private idErrorEl: HTMLElement | null = null;
 
 	constructor(app: App, props: ModelModalProps) {
@@ -40,6 +41,7 @@ export class ModelModal extends Modal {
 			this.selectedProvider = props.editTarget.provider;
 			this.modelName = props.editTarget.name;
 			this.modelId = props.editTarget.model;
+			this.decision = props.editTarget.decision === true;
 		} else {
 			// Set default provider for new models
 			if (props.providers.length > 0) {
@@ -97,6 +99,7 @@ export class ModelModal extends Modal {
 				onChange: (value) => {
 					this.selectedProvider = value;
 					this.updatePopularModels();
+					this.renderDecisionToggle();
 					this.updateDuplicateError();
 				},
 			},
@@ -148,7 +151,9 @@ export class ModelModal extends Modal {
 					if (radio.checked) {
 						this.modelName = model.name;
 						this.modelId = model.id;
+						this.decision = model.decision === true;
 						this.updateFormInputs();
+						this.renderDecisionToggle();
 						this.updateRadioSelection();
 					}
 				});
@@ -236,6 +241,39 @@ export class ModelModal extends Modal {
 				attr: { 'aria-live': 'polite' },
 			}) ?? null;
 		this.updateDuplicateError();
+		formContainer.createDiv({ cls: 'mac-decision-toggle' });
+		this.renderDecisionToggle();
+	}
+
+	private offersDecisionChoice(): boolean {
+		const name = this.selectedProvider;
+		return name === PROVIDER_NAMES.OPENAI || name === PROVIDER_NAMES.OPENROUTER || name === PROVIDER_NAMES.CUSTOM;
+	}
+
+	/** Only endpoints that offer both chat and decision models need the choice. */
+	private renderDecisionToggle(): void {
+		const container = this.contentEl.querySelector<HTMLElement>('.mac-decision-toggle');
+		if (!container) return;
+		container.empty();
+		const name = this.selectedProvider;
+		if (name === PROVIDER_NAMES.TYPESAFE) {
+			CommonSetting.create(container, {
+				name: 'Decision API',
+				desc: 'TypeSafe models always answer through the decision API.',
+			});
+			return;
+		}
+		if (!this.offersDecisionChoice()) return;
+		CommonSetting.create(container, {
+			name: 'Decision API',
+			desc: 'Score values through the native decision endpoint instead of chat structured output.',
+			toggle: {
+				value: this.decision,
+				onChange: (value) => {
+					this.decision = value;
+				},
+			},
+		});
 	}
 
 	private updateDuplicateError(): boolean {
@@ -324,6 +362,7 @@ export class ModelModal extends Modal {
 				const model: Model = {
 					id: this.modelId,
 					name: this.modelName,
+					...(this.decision && this.offersDecisionChoice() && { decision: true }),
 				};
 
 				// Use callback to handle business logic

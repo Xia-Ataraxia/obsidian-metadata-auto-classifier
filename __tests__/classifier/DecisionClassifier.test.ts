@@ -1,10 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { JevClassificationError, JevClassifier } from '../../src/ui/JevClassifier';
+import { DecisionClassificationError, DecisionClassifier } from '../../src/ui/DecisionClassifier';
 import { sendRequest } from '../../src/ui/request';
+import { UnifiedProvider } from '../../src/ui/UnifiedProvider';
+import type { Model, ProviderConfig } from '../../src/types';
 
 vi.mock('../../src/ui/request', () => ({ sendRequest: vi.fn() }));
 const request = vi.mocked(sendRequest);
 const config = { apiKey: 'synthetic-key', model: 'jev-1.14.0' };
+const provider: ProviderConfig = {
+	name: 'TypeSafe',
+	baseUrl: 'https://api.typesafe.ai/v1/systemone',
+	models: [{ id: config.model, name: 'Jev', decision: true }],
+	auth: { type: 'apiKey', apiKey: config.apiKey },
+};
+const model: Model = { id: config.model, name: 'Jev', decision: true };
 const input = {
 	body: 'Synthetic document',
 	fieldName: 'topics',
@@ -25,7 +34,7 @@ function answer(payload: string | object, probability = 0.8) {
 		payload.questions === null ||
 		Array.isArray(payload.questions)
 	) {
-		throw new Error('Expected a structured Jev request');
+		throw new Error('Expected a structured decision request');
 	}
 	return {
 		model: payload.model,
@@ -38,11 +47,11 @@ function answer(payload: string | object, probability = 0.8) {
 
 beforeEach(() => vi.resetAllMocks());
 
-describe('JevClassifier', () => {
+describe('DecisionClassifier', () => {
 	it('sends the official typed request with shared deadline and original values', async () => {
 		request.mockImplementation(async (_url, _headers, payload) => answer(payload));
 		const operation = control();
-		const result = await new JevClassifier().classify(input, config, operation);
+		const result = await new DecisionClassifier().classify(input, provider, model, operation);
 		expect(result).toEqual({ status: 'selected', values: ['first', 'second'] });
 		expect(request).toHaveBeenCalledWith(
 			'https://api.typesafe.ai/v1/systemone',
@@ -61,9 +70,10 @@ describe('JevClassifier', () => {
 	});
 
 	it('does not require authentication or send empty questions without candidates', async () => {
-		const result = await new JevClassifier().classify(
+		const result = await new DecisionClassifier().classify(
 			{ ...input, candidates: ['', '  '] },
-			{ apiKey: '', model: '' },
+			{ ...provider, auth: { type: 'apiKey', apiKey: '' } },
+			model,
 			control()
 		);
 		expect(result).toEqual({ status: 'no-candidates' });
@@ -72,7 +82,7 @@ describe('JevClassifier', () => {
 
 	it('rejects expired work before making any request', async () => {
 		await expect(
-			new JevClassifier().classify(input, config, {
+			new DecisionClassifier().classify(input, provider, model, {
 				deadline: Date.now(),
 				assertCurrent: vi.fn(),
 			})
@@ -87,7 +97,7 @@ describe('JevClassifier', () => {
 			return answer(payload);
 		});
 		await expect(
-			new JevClassifier().classify(input, config, {
+			new DecisionClassifier().classify(input, provider, model, {
 				deadline: Date.now() + 60_000,
 				assertCurrent: () => {
 					if (!current) throw new Error('Synthetic conflict');
@@ -102,7 +112,7 @@ describe('JevClassifier', () => {
 		request.mockImplementationOnce(async (_url, _headers, payload) => answer(payload));
 		request.mockResolvedValueOnce({ model: config.model, answers: {}, usage: {} });
 		await expect(
-			new JevClassifier().classify({ ...input, candidates }, config, control())
+			new DecisionClassifier().classify({ ...input, candidates }, provider, model, control())
 		).rejects.toMatchObject({ code: 'answer-set-mismatch' });
 		expect(request).toHaveBeenCalledTimes(2);
 	});
@@ -111,12 +121,78 @@ describe('JevClassifier', () => {
 		request.mockResolvedValueOnce({ model: 'synthetic-response-secret', answers: {} });
 		let caught: unknown;
 		try {
-			await new JevClassifier().classify(input, config, control());
+			await new DecisionClassifier().classify(input, provider, model, control());
 		} catch (error) {
 			caught = error;
 		}
-		expect(caught).toBeInstanceOf(JevClassificationError);
+		expect(caught).toBeInstanceOf(DecisionClassificationError);
 		expect(String(caught)).not.toContain('synthetic-response-secret');
 		expect(String(caught)).not.toContain(config.apiKey);
+	});
+
+	it('sends OpenAI Decisions predicates for an OpenAI decision model', async () => {
+		request.mockImplementation(async (_url, _headers, payload) => ({
+			answers: (payload as { questions: Array<{ name: string }> }).questions.map(({ name }) => ({
+				type: 'predicate',
+				name,
+				probability: name === 'candidate_0000' ? 0.9 : 0.1,
+			})),
+		}));
+		const openai: ProviderConfig = {
+			name: 'OpenAI',
+			baseUrl: 'https://api.openai.com/v1/chat/completions',
+			models: [{ id: 'gpt-6-luna', name: 'Luna', decision: true }],
+			auth: { type: 'apiKey', apiKey: config.apiKey },
+		};
+		const result = await new DecisionClassifier().classify(
+			input,
+			openai,
+			{ id: 'gpt-6-luna', name: 'Luna', decision: true },
+			control()
+		);
+		expect(result).toEqual({ status: 'selected', values: ['first'] });
+		expect(request).toHaveBeenCalledWith(
+			'https://api.openai.com/v1/decisions',
+			expect.objectContaining({ Authorization: 'Bearer synthetic-key' }),
+			expect.objectContaining({
+				model: 'gpt-6-luna',
+				questions: [
+					expect.objectContaining({ type: 'predicate', name: 'candidate_0000' }),
+					expect.objectContaining({ type: 'predicate', name: 'candidate_0001' }),
+				],
+			}),
+			expect.anything()
+		);
+	});
+
+	it('emulates decisions with chat structured output for chat models', async () => {
+		const structured = vi
+			.spyOn(UnifiedProvider.prototype, 'callStructured')
+			.mockResolvedValue({ answers: { candidate_0000: 0.1, candidate_0001: 0.95 } });
+		const anthropic: ProviderConfig = {
+			name: 'Anthropic',
+			baseUrl: 'https://api.anthropic.com/v1/messages',
+			models: [{ id: 'claude', name: 'Claude' }],
+			auth: { type: 'apiKey', apiKey: config.apiKey },
+		};
+		const result = await new DecisionClassifier().classify(
+			input,
+			anthropic,
+			{ id: 'claude', name: 'Claude' },
+			control()
+		);
+		expect(result).toEqual({ status: 'selected', values: ['second'] });
+		expect(request).not.toHaveBeenCalled();
+		expect(structured).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.stringContaining('Candidate value (verbatim):\\nfirst'),
+			anthropic,
+			'claude',
+			expect.objectContaining({ name: 'decision_answers' }),
+			undefined,
+			undefined,
+			expect.objectContaining({ deadline: expect.any(Number) })
+		);
+		structured.mockRestore();
 	});
 });

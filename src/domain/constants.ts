@@ -8,6 +8,7 @@ import type {
 	ProviderConfig,
 	AutoClassifierSettings,
 	NoticeCatalog,
+	StructuredFormat,
 } from '../types';
 
 // ==========================================
@@ -47,11 +48,16 @@ export const TAG_GENERATION_SCHEMA = {
 	additionalProperties: false,
 } as const;
 
+export const TAG_GENERATION_FORMAT: StructuredFormat = {
+	name: 'generated_tags',
+	schema: TAG_GENERATION_SCHEMA,
+};
+
 // ==========================================
 // Default Settings
 // ==========================================
 
-// Semantic instructions only; the typed Jev questions own the response contract.
+// Semantic instructions only; the typed decision questions own the response contract.
 export const DEFAULT_TASK_TEMPLATE = `<task>
 Classify the following content using the provided reference categories.
 </task>
@@ -162,7 +168,6 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 
 // Default settings for the Auto Classifier plugin
 export const DEFAULT_SETTINGS: AutoClassifierSettings = {
-	jev: { apiKey: '', model: 'jev-1.14.0' },
 	providers: [DEFAULT_PROVIDER],
 	selectedProvider: '',
 	selectedModel: '',

@@ -1,6 +1,6 @@
-import { buildJevRequests } from '../../src/domain/jev-questions';
-import { decodeJevResponse } from '../../src/domain/jev-selection';
-import type { JevRequestChunk } from '../../src/types/jev';
+import { buildDecisionRequests } from '../../src/domain/decision-questions';
+import { decodeSystemOneResponse } from '../../src/domain/decision-selection';
+import type { DecisionRequestChunk } from '../../src/types/decision';
 
 function validResponse(
 	answers: Record<string, unknown> = { candidate_0000: { type: 'noul', noul: 0.8 } }
@@ -12,12 +12,12 @@ function validResponse(
 	};
 }
 
-describe('buildJevRequests', () => {
+describe('buildDecisionRequests', () => {
 	test('keeps body, field, and guidance verbatim in state while candidate text appears in Noul instructions', () => {
 		const body = '본문\r\nbody bytes';
 		const instructions = '  prefer 계층형 값\nkeep this exactly  ';
 		const candidate = 'Work/Projects/日本語';
-		const result = buildJevRequests({
+		const result = buildDecisionRequests({
 			model: 'jev-1.14.0',
 			body,
 			fieldName: '분류',
@@ -27,7 +27,7 @@ describe('buildJevRequests', () => {
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
 		expect(result.chunks).toHaveLength(1);
-		const chunk = result.chunks[0] as JevRequestChunk;
+		const chunk = result.chunks[0] as DecisionRequestChunk;
 		expect(chunk.request).toEqual({
 			model: 'jev-1.14.0',
 			state: { body, fieldName: '분류', instructions },
@@ -48,7 +48,7 @@ describe('buildJevRequests', () => {
 	});
 
 	test('removes blank-only and exact duplicates while preserving nonblank bytes, case, hierarchy, and original indexes', () => {
-		const result = buildJevRequests({
+		const result = buildDecisionRequests({
 			model: 'jev-1.14.0',
 			body: 'body',
 			fieldName: 'tags',
@@ -66,7 +66,7 @@ describe('buildJevRequests', () => {
 		});
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
-		const chunk = result.chunks[0] as JevRequestChunk;
+		const chunk = result.chunks[0] as DecisionRequestChunk;
 		expect(chunk.candidates).toEqual([
 			{ id: 'candidate_0000', value: '__proto__', index: 2 },
 			{ id: 'candidate_0001', value: 'Work/Note', index: 3 },
@@ -93,8 +93,8 @@ describe('buildJevRequests', () => {
 			instructions: '',
 			candidates,
 		};
-		const first = buildJevRequests(input);
-		const second = buildJevRequests(input);
+		const first = buildDecisionRequests(input);
+		const second = buildDecisionRequests(input);
 		expect(first).toEqual(second);
 		expect(first.ok).toBe(true);
 		if (!first.ok) return;
@@ -109,7 +109,7 @@ describe('buildJevRequests', () => {
 
 	test('returns no requests for empty or fully filtered candidate input', () => {
 		expect(
-			buildJevRequests({
+			buildDecisionRequests({
 				model: 'jev-1.14.0',
 				body: 'x'.repeat(100_000),
 				fieldName: 'tags',
@@ -118,7 +118,7 @@ describe('buildJevRequests', () => {
 			})
 		).toEqual({ ok: true, chunks: [] });
 		expect(
-			buildJevRequests({
+			buildDecisionRequests({
 				model: 'jev-1.14.0',
 				body: 'body',
 				fieldName: 'tags',
@@ -130,7 +130,7 @@ describe('buildJevRequests', () => {
 
 	test('fails safely on oversized UTF-8 context without truncating or exposing input', () => {
 		const body = '한'.repeat(8_300);
-		const result = buildJevRequests({
+		const result = buildDecisionRequests({
 			model: 'jev-1.14.0',
 			body,
 			fieldName: 'tags',
@@ -143,7 +143,7 @@ describe('buildJevRequests', () => {
 
 	test('budgets the serialized state including user instructions', () => {
 		const instructions = '한'.repeat(8_300);
-		const result = buildJevRequests({
+		const result = buildDecisionRequests({
 			model: 'jev-1.14.0',
 			body: 'short body',
 			fieldName: 'tags',
@@ -155,7 +155,7 @@ describe('buildJevRequests', () => {
 	});
 
 	test('rejects malformed inputs with a safe typed error', () => {
-		const result = buildJevRequests({
+		const result = buildDecisionRequests({
 			model: '',
 			body: 'private body',
 			fieldName: 'tags',
@@ -167,21 +167,19 @@ describe('buildJevRequests', () => {
 	});
 });
 
-describe('decodeJevResponse', () => {
-	test('decodes exact Noul answers and usage', () => {
+describe('decodeSystemOneResponse', () => {
+	test('decodes exact Noul answers', () => {
 		expect(
-			decodeJevResponse(
+			decodeSystemOneResponse(
 				validResponse({
 					candidate_0000: { type: 'noul', noul: 0 },
 					candidate_0001: { type: 'noul', noul: 1 },
 				}),
-				['candidate_0000', 'candidate_0001'],
-				'jev-1.14.0'
+				['candidate_0000', 'candidate_0001']
 			)
 		).toEqual({
 			ok: true,
 			probabilities: Object.assign(Object.create(null), { candidate_0000: 0, candidate_0001: 1 }),
-			usage: { input_tokens: 10, output_tokens: 2 },
 		});
 	});
 
@@ -248,46 +246,9 @@ describe('decodeJevResponse', () => {
 			'invalid-answer',
 		],
 	] as const)('rejects %s', (_label, answers, expectedIds, code) => {
-		const result = decodeJevResponse(validResponse(answers), expectedIds, 'jev-1.14.0');
+		const result = decodeSystemOneResponse(validResponse(answers), expectedIds);
 		expect(result).toEqual({ ok: false, error: { code } });
 		expect(JSON.stringify(result)).not.toContain('candidate_0000');
-	});
-
-	test.each([
-		['wrong model', { ...validResponse(), model: 'private-model' }, 'model-mismatch'],
-		['missing usage', { ...validResponse(), usage: undefined }, 'invalid-usage'],
-		[
-			'wrong usage type',
-			{ ...validResponse(), usage: { input_tokens: '10', output_tokens: 2 } },
-			'invalid-usage',
-		],
-		[
-			'negative usage',
-			{ ...validResponse(), usage: { input_tokens: -1, output_tokens: 2 } },
-			'invalid-usage',
-		],
-		[
-			'NaN usage',
-			{ ...validResponse(), usage: { input_tokens: Number.NaN, output_tokens: 2 } },
-			'invalid-usage',
-		],
-		[
-			'infinite usage',
-			{ ...validResponse(), usage: { input_tokens: 1, output_tokens: Number.POSITIVE_INFINITY } },
-			'invalid-usage',
-		],
-	] as const)('rejects %s with a safe error', (_label, response, code) => {
-		const result = decodeJevResponse(response, ['candidate_0000'], 'jev-1.14.0');
-		expect(result).toEqual({ ok: false, error: { code } });
-		expect(JSON.stringify(result)).not.toContain('private-model');
-	});
-
-	test('accepts zero token counts', () => {
-		const response = { ...validResponse(), usage: { input_tokens: 0, output_tokens: 0 } };
-		const result = decodeJevResponse(response, ['candidate_0000'], 'jev-1.14.0');
-		expect(result.ok).toBe(true);
-		if (!result.ok) return;
-		expect(result.usage).toEqual({ input_tokens: 0, output_tokens: 0 });
 	});
 
 	test('safely handles __proto__ as an expected answer key', () => {
@@ -295,7 +256,7 @@ describe('decodeJevResponse', () => {
 			string,
 			unknown
 		>;
-		const result = decodeJevResponse(validResponse(answers), ['__proto__'], 'jev-1.14.0');
+		const result = decodeSystemOneResponse(validResponse(answers), ['__proto__']);
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
 		expect(result.probabilities['__proto__']).toBe(0.7);
@@ -304,12 +265,12 @@ describe('decodeJevResponse', () => {
 
 	test('rejects duplicate expected ids and malformed response objects', () => {
 		expect(
-			decodeJevResponse(validResponse(), ['candidate_0000', 'candidate_0000'], 'jev-1.14.0')
+			decodeSystemOneResponse(validResponse(), ['candidate_0000', 'candidate_0000'])
 		).toEqual({
 			ok: false,
 			error: { code: 'invalid-expected-ids' },
 		});
-		expect(decodeJevResponse(null, ['candidate_0000'], 'jev-1.14.0')).toEqual({
+		expect(decodeSystemOneResponse(null, ['candidate_0000'])).toEqual({
 			ok: false,
 			error: { code: 'invalid-response' },
 		});

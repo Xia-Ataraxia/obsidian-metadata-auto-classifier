@@ -1,7 +1,7 @@
 import type { AutoClassifierSettings } from '../types';
 import { ClassificationStateError, providerHasAuth } from '../domain/classification-state';
 import type { FieldSnapshot } from '../domain/classification-state';
-import { findUniqueProvider } from '../utils/lib-utils';
+import { generationTarget } from '../domain/model-list';
 import { createProviderSession } from './provider-session';
 import { generateTags } from './provider-api';
 import { HttpError } from './request';
@@ -40,26 +40,18 @@ export function createGenerationStage(context: GenerationContext) {
 		maximum: number;
 	}): Promise<string[]> => {
 		context.assertCurrent();
-		const settings = context.getSettings();
-		const providerName = settings.selectedProvider;
-		const model = settings.selectedModel;
-		const getProvider = () => findUniqueProvider(context.getSettings().providers, providerName);
-		const configured = getProvider();
-		if (
-			!configured ||
-			!model ||
-			!configured.models.some((item) => item.id === model) ||
-			!providerHasAuth(configured)
-		)
-			throw new GenerationFailedError();
+		const target = generationTarget(context.getSettings());
+		if (!target || !providerHasAuth(target.provider)) throw new GenerationFailedError();
+		const providerName = target.provider.name;
+		const model = target.model.id;
 		session = createProviderSession({
-			getProvider,
+			getProvider: () => generationTarget(context.getSettings())?.provider,
 			saveSettings: () => context.saveSettings(),
 			onPersistFailed: context.onPersistFailed,
 			assertCurrent: () => {
 				context.assertCurrent();
-				const live = context.getSettings();
-				if (live.selectedProvider !== providerName || live.selectedModel !== model)
+				const live = generationTarget(context.getSettings());
+				if (live?.provider.name !== providerName || live.model.id !== model)
 					throw new ClassificationStateError('provider-changed');
 			},
 		});

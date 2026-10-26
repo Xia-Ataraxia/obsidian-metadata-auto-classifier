@@ -31,6 +31,9 @@ vi.mock('obsidian', async (importOriginal) => {
 			this.settingEl.settingName = name;
 			return this;
 		}
+		setDesc(): this {
+			return this;
+		}
 		setHeading(): this {
 			this.settingEl.className = `${this.settingEl.className} setting-item-heading`;
 			return this;

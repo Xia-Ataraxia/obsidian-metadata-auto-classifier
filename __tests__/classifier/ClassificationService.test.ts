@@ -14,13 +14,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('obsidian', async (importOriginal) => importOriginal<typeof import('obsidian')>());
 
-vi.mock('../../src/ui/JevClassifier', () => ({
-	JevClassifier: class {
+vi.mock('../../src/ui/DecisionClassifier', () => ({
+	DecisionClassifier: class {
 		classify(...args: unknown[]) {
 			return mocks.classify(...args);
 		}
 	},
-	JevClassificationError: class extends Error {
+	DecisionClassificationError: class extends Error {
 		code = 'invalid-response';
 	},
 }));
@@ -113,10 +113,9 @@ describe('ClassificationService', () => {
 		settings = {
 			classificationRule: 'global instructions',
 			frontmatter: [makeField()],
-			providers: [],
-			selectedProvider: '',
-			selectedModel: '',
-			jev: { apiKey: 'jev-secret', model: 'jev-model' },
+			providers: [makeProvider()],
+			selectedProvider: 'OpenAI',
+			selectedModel: 'model-1',
 		};
 		saveSettings = vi.fn<() => Promise<void>>(async () => undefined);
 		show = vi.fn<PluginNotices['show']>(() => null);
@@ -178,22 +177,40 @@ describe('ClassificationService', () => {
 		expect(app.vault.process).toHaveBeenCalledOnce();
 	});
 
-	it('uses Jev for references without requiring provider, model, or LLM authentication', async () => {
+	it('scores references with the selected provider and model', async () => {
 		await service.classify(file, 9);
 
 		expect(mocks.classify).toHaveBeenCalledOnce();
-		const classifyCall = requireValue(mocks.classify.mock.calls[0], 'Jev classification call');
+		const classifyCall = requireValue(mocks.classify.mock.calls[0], 'classification call');
 		expect(classifyCall[0]).toMatchObject({
 			fieldName: 'category',
 			instructions: 'global instructions\n\nfield instructions',
 			candidates: ['alpha', 'beta'],
 			max: 2,
 		});
+		expect(classifyCall[1]).toMatchObject({ name: 'OpenAI' });
+		expect(classifyCall[2]).toMatchObject({ id: 'model-1' });
 		expect(mocks.generate).not.toHaveBeenCalled();
 		expect(vault.process).toHaveBeenCalledOnce();
 		expect(requireValue(written[0], 'written frontmatter')).toContain('category: [alpha]');
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Classification completed.',
+		});
+	});
+
+	it.each([
+		['no selection', ''],
+		['missing auth', 'model-1'],
+	])('asks for a classification model with %s', async (_label, model) => {
+		settings.selectedModel = model;
+		settings.providers = [makeProvider({ auth: { type: 'apiKey', apiKey: '' } })];
+
+		await service.classify(file, 9);
+
+		expect(mocks.classify).not.toHaveBeenCalled();
+		expect(app.vault.process).not.toHaveBeenCalled();
+		expect(show).toHaveBeenCalledWith('classification_setup', {
+			message: 'Select a classification model in settings. No changes were made.',
 		});
 	});
 
@@ -222,7 +239,7 @@ describe('ClassificationService', () => {
 		});
 	});
 
-	it('does not call Jev for empty tags references and only generates when the exact tags opt-in is true', async () => {
+	it('does not classify empty tags references and only generates when the exact tags opt-in is true', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', refs: [], generateNewTags: true });
 		settings.providers = [makeProvider()];
 		settings.selectedProvider = 'OpenAI';
@@ -311,7 +328,7 @@ describe('ClassificationService', () => {
 		});
 	});
 
-	it('uses the tags opt-in to generate after Jev reports no usable candidates', async () => {
+	it('uses the tags opt-in to generate after the classifier reports no usable candidates', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
 		settings.selectedProvider = 'OpenAI';
@@ -337,7 +354,7 @@ describe('ClassificationService', () => {
 		});
 	});
 
-	it('does not generate or commit after an invalid Jev result', async () => {
+	it('does not generate or commit after an invalid decision result', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
 		settings.selectedProvider = 'OpenAI';
@@ -473,20 +490,6 @@ describe('ClassificationService', () => {
 		});
 	});
 
-	it('rechecks the Jev configuration inside the final native callback', async () => {
-		beforeProcess = () => {
-			settings.jev.model = 'user-changed-model';
-		};
-
-		await service.classify(file, 9);
-
-		expect(app.vault.process).toHaveBeenCalledOnce();
-		expect(written).toHaveLength(0);
-		expect(show).toHaveBeenCalledWith('classification_status', {
-			message: 'Settings or note content changed. No changes were made.',
-		});
-	});
-
 	it('rechecks the selected provider and model inside the final native callback', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
@@ -594,7 +597,7 @@ describe('ClassificationService', () => {
 
 		expect(saveSettings).not.toHaveBeenCalled();
 		expect(requireValue(settings.frontmatter[0], 'current frontmatter field').refs).toEqual([]);
-		const classifyCall = requireValue(mocks.classify.mock.calls[0], 'Jev classification call');
+		const classifyCall = requireValue(mocks.classify.mock.calls[0], 'classification call');
 		expect(classifyCall[0].candidates).toEqual(['collected-one', 'collected-two']);
 		expect(app.vault.process).toHaveBeenCalledOnce();
 	});
@@ -615,13 +618,13 @@ describe('ClassificationService', () => {
 		expect(saveSettings).not.toHaveBeenCalled();
 	});
 
-	it('reuses the Jev configuration guard while generation is pending', async () => {
+	it('rechecks the selected model while generation is pending', async () => {
 		settings.frontmatter[0] = makeField({ name: 'tags', generateNewTags: true });
 		settings.providers = [makeProvider()];
 		settings.selectedProvider = 'OpenAI';
 		settings.selectedModel = 'model-1';
 		mocks.generate.mockImplementation(async (input: { assertCurrent: () => void }) => {
-			settings.jev.model = 'changed-model';
+			settings.selectedModel = 'changed-model';
 			input.assertCurrent();
 			return ['fresh-tag'];
 		});
@@ -629,7 +632,7 @@ describe('ClassificationService', () => {
 		await service.classify(file, 9);
 
 		expect(app.vault.process).not.toHaveBeenCalled();
-		expect(settings.jev.model).toBe('changed-model');
+		expect(settings.selectedModel).toBe('changed-model');
 		expect(show).toHaveBeenCalledWith('classification_status', {
 			message: 'Settings or note content changed. No changes were made.',
 		});
