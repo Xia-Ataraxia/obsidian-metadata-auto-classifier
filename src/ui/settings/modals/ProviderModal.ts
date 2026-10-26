@@ -204,7 +204,8 @@ export class ProviderModal extends Modal {
 			const infoEl = containerEl.createDiv({
 				cls: 'setting-item-description oauth-connection-info',
 			});
-			infoEl.textContent = 'Requires a paid subscription';
+			const plan = 'ChatGPT Pro';
+			infoEl.textContent = `Requires a ${plan} subscription`;
 		}
 	}
 
@@ -238,7 +239,7 @@ export class ProviderModal extends Modal {
 	 * Disconnect OAuth
 	 */
 	private async disconnectOAuth(): Promise<void> {
-		const confirmed = await confirmAction(this.app, 'Are you sure you want to disconnect?');
+		const confirmed = await confirmAction(this.app, 'Disconnect this account?', 'Disconnect');
 		if (!confirmed) return;
 
 		this.oauthTokens = undefined;
