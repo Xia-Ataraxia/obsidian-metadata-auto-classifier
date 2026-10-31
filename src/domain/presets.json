@@ -22,12 +22,12 @@
 				"decision": true
 			},
 			{
-				"id": "gpt-4.1",
-				"name": "GPT-4.1"
+				"id": "gpt-6.1-sol",
+				"name": "GPT-6.1 Sol"
 			},
 			{
-				"id": "gpt-4.1-mini",
-				"name": "GPT-4.1 Mini"
+				"id": "gpt-6.1-terra",
+				"name": "GPT-6.1 Terra"
 			}
 		]
 	},
@@ -40,12 +40,16 @@
 		"temperature": 0.6,
 		"popularModels": [
 			{
-				"id": "claude-opus-4-6",
-				"name": "Claude Opus 4.6"
+				"id": "claude-opus-5-5",
+				"name": "Claude Opus 5.5"
 			},
 			{
-				"id": "claude-sonnet-4-6",
-				"name": "Claude Sonnet 4.6"
+				"id": "claude-sonnet-5-5",
+				"name": "Claude Sonnet 5.5"
+			},
+			{
+				"id": "claude-haiku-5-5",
+				"name": "Claude Haiku 5.5"
 			}
 		]
 	},
@@ -58,12 +62,16 @@
 		"temperature": 0.4,
 		"popularModels": [
 			{
-				"id": "gemini-2.5-pro",
-				"name": "Gemini 2.5 Pro"
+				"id": "gemini-4-argon",
+				"name": "Gemini 4 Argon"
 			},
 			{
 				"id": "gemini-3.8-flash",
 				"name": "Gemini 3.8 Flash"
+			},
+			{
+				"id": "gemini-3.5-flash-lite",
+				"name": "Gemini 3.5 Flash-Lite"
 			}
 		]
 	},
@@ -76,17 +84,17 @@
 		"temperature": 0.6,
 		"popularModels": [
 			{
-				"id": "typesafe/jev-1.14",
-				"name": "Jev 1.14 (Decisions)",
+				"id": "typesafe/jev-router",
+				"name": "Jev Router (Decisions)",
 				"decision": true
 			},
 			{
-				"id": "meta-llama/llama-4-maverick",
-				"name": "Llama 4 Maverick"
+				"id": "google/gemini-3.8-flash",
+				"name": "Gemini 3.8 Flash"
 			},
 			{
-				"id": "meta-llama/llama-4-scout",
-				"name": "Llama 4 Scout"
+				"id": "anthropic/claude-haiku-5.5",
+				"name": "Claude Haiku 5.5"
 			},
 			{
 				"id": "openrouter/auto",
@@ -103,20 +111,16 @@
 		"temperature": 0.7,
 		"popularModels": [
 			{
-				"id": "llama3.1",
-				"name": "Llama 3.1 8B"
+				"id": "qwen3.8:27b",
+				"name": "Qwen3.8 27B"
 			},
 			{
-				"id": "llama3.2",
-				"name": "Llama 3.2 3B"
+				"id": "gemma4:12b",
+				"name": "Gemma 4 12B"
 			},
 			{
-				"id": "llama3.3",
-				"name": "Llama 3.3 70B"
-			},
-			{
-				"id": "qwen2.5:7b",
-				"name": "Qwen2.5 7B"
+				"id": "gemma4:e4b",
+				"name": "Gemma 4 E4B"
 			}
 		]
 	},
@@ -147,16 +151,16 @@
 		"temperature": 0.7,
 		"popularModels": [
 			{
-				"id": "qwen2.5-7b-instruct",
-				"name": "Qwen2.5 7B Instruct"
+				"id": "qwen/qwen3.8-27b",
+				"name": "Qwen3.8 27B"
 			},
 			{
-				"id": "meta-llama-3.1-8b-instruct",
-				"name": "Meta Llama 3.1 8B Instruct"
+				"id": "google/gemma-4-12b",
+				"name": "Gemma 4 12B"
 			},
 			{
-				"id": "ministral-8b-instruct-2410",
-				"name": "Ministral 8B Instruct"
+				"id": "openai/gpt-oss-20b",
+				"name": "gpt-oss 20B"
 			}
 		]
 	},
@@ -170,8 +174,16 @@
 		"temperature": 0.6,
 		"popularModels": [
 			{
-				"id": "gpt-5.2",
-				"name": "GPT-5.2 (Deprecated for ChatGPT sign-in)"
+				"id": "gpt-6.1-sol",
+				"name": "GPT-6.1 Sol"
+			},
+			{
+				"id": "gpt-6.1-terra",
+				"name": "GPT-6.1 Terra"
+			},
+			{
+				"id": "gpt-6-luna",
+				"name": "GPT-6 Luna"
 			}
 		]
 	},

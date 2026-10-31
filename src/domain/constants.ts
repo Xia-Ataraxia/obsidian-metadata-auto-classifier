@@ -27,8 +27,8 @@ export const DEFAULT_PROVIDER: ProviderConfig = {
 	baseUrl: 'https://api.openai.com/v1/chat/completions',
 	models: [
 		{
-			id: 'gpt-4.1-mini',
-			name: 'GPT-4.1 Mini',
+			id: 'gpt-6.1-terra',
+			name: 'GPT-6.1 Terra',
 		},
 	],
 	temperature: COMMON_CONSTANTS.DEFAULT_TEMPERATURE,
