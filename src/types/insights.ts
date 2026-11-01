@@ -20,31 +20,3 @@ export interface ModelCatalog {
 	/** Provider display name -> model id -> metadata. */
 	models: Record<string, Record<string, ModelMeta>>;
 }
-
-/** `inputTokens` holds only tokens billed at the full input price; cached and cache-write tokens are separate. */
-export interface TokenUsage {
-	inputTokens: number;
-	outputTokens: number;
-	cachedInputTokens: number;
-	cacheWriteTokens: number;
-}
-
-export interface UsageBucket extends TokenUsage {
-	requests: number;
-	notes: number;
-	latenciesMs: number[];
-}
-
-export interface UsageLedger {
-	version: 1;
-	/** `YYYY-MM` -> `provider::model` -> totals. */
-	months: Record<string, Record<string, UsageBucket>>;
-}
-
-export type UsageCallback = (usage: TokenUsage, latencyMs: number) => void;
-
-export interface UsageSink {
-	record(provider: string, model: string, usage: TokenUsage, latencyMs: number): void;
-	recordLatency(provider: string, model: string, latencyMs: number): void;
-	noteClassified(provider: string, model: string): void;
-}

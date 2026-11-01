@@ -1,18 +1,14 @@
 import { efficiencyFrontier, logScale, placeLabels } from '../../src/domain/chart-scales';
 import {
-	AXES,
-	cacheStats,
-	costForNotes,
-	EXAMPLE_TOKENS_PER_NOTE,
+	costPerThousandNotes,
+	formatTokens,
 	formatUsd,
 	listInsightModels,
 	modelChips,
-	monthlySpend,
-	tokensPerNote,
+	splitForChart,
 } from '../../src/domain/insights-model';
 import { getBundledCatalog } from '../../src/domain/model-catalog';
-import { addLatency, addNote, addUsage, emptyLedger, parseLedger, usageCost } from '../../src/domain/usage-ledger';
-import type { ModelCatalog, ModelMeta } from '../../src/types/insights';
+import type { ModelMeta } from '../../src/types/insights';
 
 const meta = (over: Partial<ModelMeta> = {}): ModelMeta => ({
 	kind: 'priced',
@@ -26,114 +22,80 @@ const meta = (over: Partial<ModelMeta> = {}): ModelMeta => ({
 	intelligenceIndex: 50,
 	...over,
 });
-const catalog: ModelCatalog = {
-	schemaVersion: 1,
-	generatedAt: '2026-11-01',
-	sources: [],
-	models: { OpenAI: { m: meta() }, Ollama: { local: meta({ kind: 'local', inputPerMTok: null, outputPerMTok: null }) } },
-};
-const usage = (inputTokens: number, cachedInputTokens = 0, outputTokens = 0, cacheWriteTokens = 0) => ({
-	inputTokens,
-	cachedInputTokens,
-	outputTokens,
-	cacheWriteTokens,
-});
 
-describe('usageCost', () => {
-	test('prices each token class separately', () => {
-		expect(usageCost(usage(1e6, 1e6, 1e6, 1e6), meta())).toBeCloseTo(1 + 0.1 + 2 + 1.25);
+describe('costPerThousandNotes', () => {
+	test('uses the assumed note size', () => {
+		expect(costPerThousandNotes(meta())).toBeCloseTo((2500 * 1 + 120 * 2) / 1000);
 	});
-	test('local is free and unknown or unpriced has no cost', () => {
-		expect(usageCost(usage(1e6), meta({ kind: 'local' }))).toBe(0);
-		expect(usageCost(usage(1e6), undefined)).toBeNull();
-		expect(usageCost(usage(1e6), meta({ kind: 'subscription' }))).toBeNull();
-	});
-});
-
-describe('tokensPerNote', () => {
-	test('falls back from the model to all runs to a labeled example', () => {
-		const ledger = emptyLedger();
-		const selection = { provider: 'OpenAI', model: 'm' };
-		expect(tokensPerNote(ledger, selection)).toEqual({ tokens: EXAMPLE_TOKENS_PER_NOTE, source: 'example' });
-		addUsage(ledger, '2026-10', 'Other', 'x', usage(1000), 10);
-		addNote(ledger, '2026-10', 'Other', 'x');
-		expect(tokensPerNote(ledger, selection).source).toBe('blended');
-		addUsage(ledger, '2026-11', 'OpenAI', 'm', usage(300), 10);
-		addUsage(ledger, '2026-11', 'OpenAI', 'm', usage(100), 10);
-		addNote(ledger, '2026-11', 'OpenAI', 'm');
-		expect(tokensPerNote(ledger, selection)).toMatchObject({ source: 'real', tokens: { inputTokens: 400 } });
-	});
-	test('connection tests add latency without skewing token averages', () => {
-		const ledger = emptyLedger();
-		addLatency(ledger, '2026-11', 'OpenAI', 'm', 200);
-		expect(tokensPerNote(ledger, { provider: 'OpenAI', model: 'm' }).source).toBe('example');
-		const row = listInsightModels(
-			[{ name: 'OpenAI', baseUrl: '', models: [{ id: 'm', name: 'M' }] }],
-			catalog,
-			ledger,
-			{ provider: 'OpenAI', model: 'm' }
-		)[0];
-		expect(row).toMatchObject({ latencyMs: 200, selected: true, decision: false });
-	});
-});
-
-describe('cacheStats', () => {
-	test('no data is distinct from a zero hit rate', () => {
-		expect(cacheStats(emptyLedger(), catalog).hasData).toBe(false);
-	});
-	test('hit rate and savings come from recorded tokens', () => {
-		const ledger = emptyLedger();
-		addUsage(ledger, '2026-11', 'OpenAI', 'm', usage(1e6, 1e6), 1);
-		const stats = cacheStats(ledger, catalog);
-		expect(stats.hitRate).toBeCloseTo(0.5);
-		expect(stats.savedUsd).toBeCloseTo(0.9);
-		expect(stats.savedShare).toBeCloseTo(0.9 / (1.1 + 0.9));
-	});
-});
-
-describe('monthlySpend', () => {
-	test('returns six months and projects only the current one', () => {
-		const ledger = emptyLedger();
-		addUsage(ledger, '2026-11', 'OpenAI', 'm', usage(1e6), 1);
-		addUsage(ledger, '2026-10', 'OpenAI', 'm', usage(2e6), 1);
-		const series = monthlySpend(ledger, catalog, new Date(2026, 10, 15));
-		expect(series.map((month) => month.key)).toEqual([
-			'2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11',
-		]);
-		expect(series[4]).toMatchObject({ totalUsd: 2, projectedUsd: null });
-		expect(series[5]?.projectedUsd).toBeCloseTo(2);
-		expect(monthlySpend(ledger, catalog, new Date(2026, 10, 2))[5]?.projectedUsd).toBeNull();
+	test('local is free and anything without a public price has no cost', () => {
+		expect(costPerThousandNotes(meta({ kind: 'local' }))).toBe(0);
+		expect(costPerThousandNotes(meta({ kind: 'subscription' }))).toBeNull();
+		expect(costPerThousandNotes(meta({ kind: 'unpriced' }))).toBeNull();
+		expect(costPerThousandNotes(undefined)).toBeNull();
 	});
 });
 
 describe('listInsightModels', () => {
-	test('includes presets, skips duplicates, marks Decision models', () => {
-		const rows = listInsightModels(
-			[{ name: 'OpenAI', baseUrl: '', models: [{ id: 'gpt-6-luna', name: 'Mine', decision: true }] }],
-			getBundledCatalog(),
-			emptyLedger(),
-			undefined
-		);
+	const rows = listInsightModels(
+		[{ name: 'OpenAI', baseUrl: '', models: [{ id: 'gpt-6-luna', name: 'Mine (Decisions)', decision: true }] }],
+		getBundledCatalog(),
+		[{ provider: 'OpenAI', model: 'gpt-6-luna' }]
+	);
+
+	test('keeps one row per provider and model, preferring the configured name', () => {
 		const luna = rows.filter((row) => row.provider === 'OpenAI' && row.id === 'gpt-6-luna');
 		expect(luna).toHaveLength(1);
-		expect(luna[0]).toMatchObject({ name: 'Mine', decision: true });
+		expect(luna[0]).toMatchObject({ name: 'Mine', decision: true, inUse: true });
+	});
+
+	test('separates Decision models from Chat models', () => {
+		const decision = rows.filter((row) => row.decision).map((row) => row.provider);
+		expect(new Set(decision)).toEqual(new Set(['OpenAI', 'TypeSafe']));
+		expect(rows.find((row) => row.id === 'claude-haiku-5-5')?.decision).toBe(false);
+	});
+
+	test('leaves subscription providers out until configured and sorts cheapest first', () => {
 		expect(rows.some((row) => row.provider === 'Codex')).toBe(false);
-		expect(rows.some((row) => row.provider === 'Anthropic')).toBe(true);
+		const costs = rows.flatMap((row) => (row.costPerThousandNotes === null ? [] : [row.costPerThousandNotes]));
+		expect(costs).toEqual([...costs].sort((a, b) => a - b));
+		expect(rows[rows.length - 1]?.costPerThousandNotes).toBeNull();
+	});
+});
+
+describe('splitForChart', () => {
+	test('plots only models with a positive cost and an index', () => {
+		const row = {
+			provider: 'p',
+			name: 'n',
+			decision: false,
+			inUse: false,
+			meta: meta(),
+			costPerThousandNotes: 1,
+		};
+		const { plotted, notPlotted } = splitForChart([
+			{ ...row, id: 'good' },
+			{ ...row, id: 'free', costPerThousandNotes: 0 },
+			{ ...row, id: 'no-price', costPerThousandNotes: null },
+			{ ...row, id: 'no-index', meta: meta({ intelligenceIndex: null }) },
+		]);
+		expect(plotted.map((item) => item.id)).toEqual(['good']);
+		expect(plotted[0]).toMatchObject({ x: 1, y: 50 });
+		expect(notPlotted.map((item) => item.id)).toEqual(['free', 'no-price', 'no-index']);
 	});
 });
 
 describe('display helpers', () => {
-	test('costForNotes and the cost axis agree and stay null when unknown', () => {
-		const cost = AXES.find((axis) => axis.id === 'cost');
-		const row = { provider: 'p', id: 'i', name: 'n', meta: meta(), decision: false, selected: false, latencyMs: null };
-		expect(cost?.value(row, usage(1000))).toBeCloseTo(costForNotes(meta(), usage(1000), 1000) as number);
-		expect(cost?.value({ ...row, meta: undefined }, usage(1000))).toBeNull();
-	});
 	test('formatUsd keeps small values readable', () => {
 		expect(formatUsd(0)).toBe('$0');
 		expect(formatUsd(0.0025)).toBe('$0.0025');
 		expect(formatUsd(0.26)).toBe('$0.26');
 		expect(formatUsd(12.5)).toBe('$12.50');
+	});
+	test('formatTokens shortens by size', () => {
+		expect(formatTokens(1050000)).toBe('1.05M');
+		expect(formatTokens(128000)).toBe('128K');
+		expect(formatTokens(2500)).toBe('2.5K');
+		expect(formatTokens(120)).toBe('120');
 	});
 	test('chips describe price and context by kind', () => {
 		expect(modelChips(meta({ inputPerMTok: 0.1, outputPerMTok: 0.5, contextTokens: 1050000 }))).toEqual([
@@ -174,16 +136,14 @@ describe('chart scales', () => {
 		const c = labels.find((label) => label.id === 'c');
 		expect([b?.labelX, b?.labelY]).not.toEqual([c?.labelX, c?.labelY]);
 	});
-});
-
-describe('parseLedger', () => {
-	test('damaged files start a new ledger and damaged buckets are dropped', () => {
-		expect(parseLedger('nonsense')).toEqual(emptyLedger());
-		expect(parseLedger({ version: 9, months: {} })).toEqual(emptyLedger());
-		const ledger = emptyLedger();
-		addNote(ledger, '2026-11', 'OpenAI', 'm');
-		const raw = JSON.parse(JSON.stringify(ledger)) as { months: Record<string, Record<string, unknown>> };
-		(raw.months['2026-11'] as Record<string, unknown>).bad = { requests: 'x' };
-		expect(parseLedger(raw)).toEqual(ledger);
+	test('labels do not cover a neighboring dot', () => {
+		const labels = placeLabels(
+			[
+				{ id: 'near', text: 'Long model name', x: 150, y: 50 },
+				{ id: 'dot', text: 'B', x: 190, y: 52 },
+			],
+			{ left: 0, right: 300, top: 0, bottom: 100 }
+		);
+		expect(labels.find((label) => label.id === 'near')?.anchor).toBe('end');
 	});
 });

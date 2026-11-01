@@ -364,10 +364,3 @@ export class Workspace {
 }
 
 export const normalizePath = (path: string): string => path;
-
-export const debounce = <T extends unknown[]>(callback: (...args: T) => void) => {
-	const debounced = (...args: T) => callback(...args);
-	debounced.cancel = () => debounced;
-	debounced.run = () => undefined;
-	return debounced;
-};

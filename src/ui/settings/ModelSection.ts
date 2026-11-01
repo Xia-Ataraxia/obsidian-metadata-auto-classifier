@@ -9,7 +9,7 @@ import { ClassificationStateError } from '../../domain/classification-state';
 import { decisionTransport } from '../../domain/decision-formats';
 import { modelChips } from '../../domain/insights-model';
 import { resolveModelMeta } from '../../domain/model-catalog';
-import { classificationTarget } from '../../domain/model-list';
+import { classificationTarget, generationTarget } from '../../domain/model-list';
 import { findUniqueProvider, getProviderPresets } from '../../utils/lib-utils';
 import { createProviderSession } from '../provider-session';
 import { Setting } from './components/Setting';
@@ -153,8 +153,6 @@ export class ModelSection {
 										{
 											deadline: Date.now() + MODEL_TEST_TIMEOUT_MS,
 											assertCurrent: session.assertCurrent,
-											onUsage: (_usage, latencyMs) =>
-												this.plugin.usage?.recordLatency(providerName, modelId, latencyMs),
 										}
 									);
 									session.assertCurrent();
@@ -232,17 +230,16 @@ export class ModelSection {
 
 	private async openInsights(): Promise<void> {
 		if (!this.plugin.isActive()) return;
-		const { settings, catalog, usage } = this.plugin;
+		const { settings, catalog } = this.plugin;
 		await catalog.load();
-		const ledger = await usage.load();
 		if (!this.plugin.isActive()) return;
-		const target = classificationTarget(settings);
+		const inUse = [classificationTarget(settings), generationTarget(settings)].flatMap((target) =>
+			target ? [{ provider: target.provider.name, model: target.model.id }] : []
+		);
 		const modal = new InsightsModal(this.app, {
 			providers: settings.providers,
-			selection: target ? { provider: target.provider.name, model: target.model.id } : undefined,
+			inUse,
 			catalog,
-			ledger,
-			vaultNotes: this.app.vault.getMarkdownFiles().length,
 			onError: (message) => this.plugin.notices.show('validation_error', { message }),
 			onCatalogChanged: () => this.onRefresh(),
 		});

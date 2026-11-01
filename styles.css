@@ -273,39 +273,6 @@
 	max-width: 94vw;
 }
 
-.mac-tabs {
-	display: inline-flex;
-	gap: var(--size-2-1);
-	padding: var(--size-2-1);
-	margin-bottom: var(--size-4-4);
-	border-radius: var(--radius-m);
-	background: var(--background-modifier-hover);
-}
-
-.mac-tabs .mac-tab {
-	height: auto;
-	padding: var(--size-2-3) var(--size-4-4);
-	border: none;
-	border-radius: var(--radius-s);
-	background: transparent;
-	box-shadow: none;
-	color: var(--text-muted);
-	font-size: var(--font-ui-small);
-	cursor: pointer;
-	transition: background-color 160ms ease-out, color 160ms ease-out;
-}
-
-.mac-tabs .mac-tab:hover {
-	color: var(--text-normal);
-}
-
-.mac-tabs .mac-tab.is-active {
-	background: var(--background-primary);
-	box-shadow: var(--shadow-s);
-	color: var(--text-normal);
-	font-weight: var(--font-semibold);
-}
-
 .mac-insights-panel {
 	animation: mac-panel-in 220ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
@@ -317,127 +284,30 @@
 	}
 }
 
-.mac-insights-muted {
+.mac-insights-note {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
 
-.mac-hero {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--size-4-4);
-	padding-bottom: var(--size-4-4);
-	margin-bottom: var(--size-4-4);
-	border-bottom: var(--border-width) solid var(--background-modifier-border);
+.mac-section-heading {
+	margin: var(--size-4-5) 0 var(--size-4-2);
 }
 
-.mac-hero-copy {
-	flex: 1 1 320px;
-	min-width: 0;
+.mac-insights-panel > .mac-section-heading:first-child {
+	margin-top: 0;
 }
 
-.mac-hero-value {
-	margin: var(--size-2-1) 0;
-	font-size: 2.25em;
-	font-weight: var(--font-bold);
-	font-variant-numeric: tabular-nums;
-	letter-spacing: -0.02em;
-	line-height: 1.15;
-}
-
-.mac-cache {
-	display: flex;
-	align-items: center;
-	gap: var(--size-4-3);
-}
-
-.mac-cache-ring {
-	flex: none;
-	width: 76px;
-	height: 76px;
-}
-
-.mac-cache-track,
-.mac-cache-fill {
-	fill: none;
-	stroke-width: 3.2;
-}
-
-.mac-cache-track {
-	stroke: var(--background-modifier-border);
-}
-
-.mac-cache-fill {
-	stroke: var(--color-green);
-	stroke-linecap: round;
-	transform: rotate(-90deg);
-	transform-origin: center;
-	animation: mac-ring-in 600ms cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-
-@keyframes mac-ring-in {
-	from {
-		stroke-dasharray: 0 100;
-	}
-}
-
-.mac-cache-value {
-	fill: var(--text-normal);
-	font-size: 8px;
+.mac-section-title {
+	font-size: var(--font-ui-medium);
 	font-weight: var(--font-semibold);
-}
-
-.mac-cache-title {
-	font-size: var(--font-ui-small);
-	font-weight: var(--font-semibold);
-}
-
-.mac-cost-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: var(--size-4-3);
-}
-
-.mac-card {
-	min-width: 0;
-	padding: var(--size-4-3);
-	border-radius: var(--radius-m);
-	background: var(--background-secondary);
-}
-
-.mac-card-title {
-	margin-bottom: var(--size-4-2);
-	font-size: var(--font-ui-small);
-	font-weight: var(--font-semibold);
-}
-
-.mac-card-note {
-	margin-top: var(--size-4-2);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
 }
 
 .mac-chart {
 	display: block;
 	width: 100%;
 	height: auto;
+	margin-bottom: var(--size-4-2);
 	overflow: visible;
-}
-
-.mac-chart-empty {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: var(--size-2-1);
-	min-height: 160px;
-	padding: var(--size-4-4);
-	border: var(--border-width) dashed var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	font-size: var(--font-ui-small);
-	text-align: center;
 }
 
 .mac-chart-grid {
@@ -459,10 +329,6 @@
 .mac-chart-label {
 	fill: var(--text-muted);
 	font-size: 11.5px;
-	font-variant-numeric: tabular-nums;
-}
-
-.mac-scatter .mac-chart-label {
 	paint-order: stroke;
 	stroke: var(--background-primary);
 	stroke-width: 3px;
@@ -515,104 +381,10 @@
 .mac-provider-typesafe { fill: var(--color-green); }
 .mac-provider-other { fill: var(--text-faint); }
 
-.mac-bar {
-	transform-box: fill-box;
-	transform-origin: bottom;
-	animation: mac-bar-in 360ms cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-
-@keyframes mac-bar-in {
-	from { transform: scaleY(0); }
-}
-
-.mac-bar-input { fill: var(--color-blue); }
-.mac-bar-cached { fill: var(--color-green); }
-.mac-bar-output { fill: var(--color-orange); }
-
-.mac-bar-projection {
-	fill: none;
-	stroke: var(--text-faint);
-	stroke-dasharray: 3 3;
-	stroke-width: 1.25;
-}
-
-.mac-alt-track { fill: var(--background-modifier-border); }
-
-.mac-alt-bar {
-	transform-box: fill-box;
-	transform-origin: left;
-	animation: mac-alt-in 360ms cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-
-@keyframes mac-alt-in {
-	from { transform: scaleX(0); }
-}
-
-.mac-legend {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--size-2-3) var(--size-4-3);
-	margin-top: var(--size-4-2);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-}
-
-.mac-legend-item {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--size-2-2);
-}
-
 .mac-legend-swatch {
 	flex: none;
 	width: 9px;
 	height: 9px;
-}
-
-.mac-axes {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--size-4-2) var(--size-4-4);
-	margin-bottom: var(--size-4-3);
-}
-
-.mac-axis-field {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--size-4-2);
-}
-
-.mac-axes-legend {
-	margin-top: 0;
-	margin-left: auto;
-}
-
-.mac-chips {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--size-2-3);
-	margin: var(--size-4-4) 0 var(--size-4-2);
-}
-
-.mac-chips .mac-chip {
-	height: auto;
-	padding: var(--size-2-1) var(--size-4-3);
-	border: var(--border-width) solid var(--background-modifier-border);
-	border-radius: var(--radius-l);
-	background: transparent;
-	box-shadow: none;
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	cursor: pointer;
-	transition: background-color 140ms ease-out, color 140ms ease-out, border-color 140ms ease-out;
-}
-
-.mac-chips .mac-chip.is-active {
-	border-color: transparent;
-	background: var(--background-modifier-active-hover);
-	color: var(--text-normal);
 }
 
 .mac-table-wrap {
@@ -670,7 +442,6 @@
 
 .mac-model-title {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--size-2-3);
 }
@@ -685,11 +456,7 @@
 	background: var(--background-modifier-hover);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
-}
-
-.mac-pill.is-decision {
-	background: var(--background-modifier-success);
-	color: var(--text-normal);
+	white-space: nowrap;
 }
 
 .mac-insights-footer {
@@ -707,28 +474,9 @@
 }
 
 @media (max-width: 640px) {
-	.mac-cost-grid {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.mac-axes-legend {
-		margin-left: 0;
-	}
-
-	.mac-model-title {
-		display: grid;
-		grid-template-columns: auto minmax(0, 1fr);
-	}
-
-	.mac-model-title .mac-pill {
-		grid-column: 2;
-		justify-self: start;
-	}
-
 	.mac-col-cache,
 	.mac-col-limits,
-	.mac-col-knowledge,
-	.mac-col-intelligence {
+	.mac-col-index {
 		display: none;
 	}
 }
@@ -736,10 +484,7 @@
 /* Reduced motion keeps feedback as a soft fade instead of movement. */
 @media (prefers-reduced-motion: reduce) {
 	.mac-insights-panel,
-	.mac-chart-dot,
-	.mac-bar,
-	.mac-alt-bar,
-	.mac-cache-fill {
+	.mac-chart-dot {
 		animation: mac-fade-in 220ms ease-out;
 	}
 

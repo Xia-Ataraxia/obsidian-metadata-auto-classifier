@@ -152,22 +152,6 @@ describe('sendStreamingRequest', () => {
 		});
 	});
 
-	it('reports usage from the completed event without changing the text', async () => {
-		const onUsage = vi.fn();
-		const parse = (event: SSEEvent): SSEEventOutcome =>
-			event.type === 'done' ? { type: 'complete' } : { type: 'delta', text: 'hi' };
-		vi.mocked(requestUrl).mockResolvedValueOnce(
-			response(
-				200,
-				eventFrame({ type: 'text.delta' }) +
-					eventFrame({ type: 'done', response: { usage: { input_tokens: 10, output_tokens: 2 } } })
-			)
-		);
-		await expect(sendStreamingRequest(url, headers, body, parse, { onUsage })).resolves.toBe('hi');
-		expect(onUsage).toHaveBeenCalledTimes(1);
-		expect(onUsage.mock.calls[0]?.[0]).toMatchObject({ inputTokens: 10, outputTokens: 2 });
-	});
-
 	it('rejects empty or whitespace-only completed output', async () => {
 		vi.mocked(requestUrl).mockResolvedValueOnce(response(200, completed));
 		await expect(sendStreamingRequest(url, headers, body, parseTestEvent)).rejects.toMatchObject({

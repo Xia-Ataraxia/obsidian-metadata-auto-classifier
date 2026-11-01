@@ -1,5 +1,4 @@
 import type { AutoClassifierSettings } from '../types';
-import type { TokenUsage, UsageSink } from '../types/insights';
 import { ClassificationStateError, providerHasAuth } from '../domain/classification-state';
 import type { FieldSnapshot } from '../domain/classification-state';
 import { generationTarget } from '../domain/model-list';
@@ -22,7 +21,6 @@ interface GenerationContext {
 	body: string;
 	deadline: number;
 	assertCurrent: () => void;
-	usage?: UsageSink;
 }
 
 /** Provider settings become relevant only if the result policy requests generation. */
@@ -70,12 +68,6 @@ export function createGenerationStage(context: GenerationContext) {
 					maximum,
 					deadline: context.deadline,
 					assertCurrent,
-					...(context.usage
-						? {
-								onUsage: (usage: TokenUsage, latencyMs: number) =>
-									context.usage?.record(providerName, model, usage, latencyMs),
-							}
-						: {}),
 				},
 				session.provider,
 				model,

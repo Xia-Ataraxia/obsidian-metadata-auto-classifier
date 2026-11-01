@@ -9,7 +9,6 @@ import { migrateRetiredModels } from './domain/model-migration';
 import type { AutoClassifierSettings } from './types';
 import { AutoClassifierSettingTab } from './ui/settings';
 import { PluginNotices } from './ui/plugin-notices';
-import { UsageStore } from './ui/usage-store';
 import { Notice } from './ui/settings/components/Notice';
 import { PluginLogger } from './utils/plugin-logger';
 
@@ -17,7 +16,6 @@ export default class AutoClassifierPlugin extends Plugin {
 	settings!: AutoClassifierSettings;
 	logger!: PluginLogger;
 	notices!: PluginNotices;
-	usage!: UsageStore;
 	catalog!: CatalogStore;
 
 	private classificationService: ClassificationService | null = null;
@@ -38,9 +36,7 @@ export default class AutoClassifierPlugin extends Plugin {
 
 		await this.loadSettings();
 		if (generation !== this.lifecycleGeneration) return;
-		const { adapter, configDir } = this.app.vault;
-		this.usage = new UsageStore(adapter, configDir, this.manifest.id, () => this.logger.error('unexpected-error'));
-		this.catalog = new CatalogStore(adapter, configDir, this.manifest.id);
+		this.catalog = new CatalogStore(this.app.vault.adapter, this.app.vault.configDir, this.manifest.id);
 		this.active = true;
 		this.classificationService = new ClassificationService({
 			app: this.app,
@@ -48,7 +44,6 @@ export default class AutoClassifierPlugin extends Plugin {
 			isActive: () => this.active,
 			saveSettings: () => this.saveSettings(),
 			notices: this.notices,
-			usage: this.usage,
 		});
 		try {
 			this.setupCommand();
@@ -64,7 +59,6 @@ export default class AutoClassifierPlugin extends Plugin {
 		this.active = false;
 		this.classificationService?.deactivate();
 		this.notices?.unload();
-		void this.usage?.flush();
 	}
 
 	setupCommand() {

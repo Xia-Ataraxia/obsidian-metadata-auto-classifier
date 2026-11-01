@@ -76,13 +76,22 @@ export interface LabelBounds {
 const CHAR_WIDTH = 6.4;
 const LABEL_HEIGHT = 14;
 const LABEL_GAP = 10;
+const DOT_CLEARANCE = 8;
 
-/** Tries each side of a dot and keeps the first spot clear of placed labels and the plot edge. */
+/** Tries each side of a dot and keeps the first spot clear of other dots, placed labels and the plot edge. */
 export function placeLabels(requests: LabelRequest[], bounds: LabelBounds): PlacedLabel[] {
 	const taken: LabelBounds[] = [];
 	const placed: PlacedLabel[] = [];
 	for (const request of [...requests].sort((a, b) => a.x - b.x)) {
 		const width = request.text.length * CHAR_WIDTH;
+		const otherDots = requests
+			.filter((other) => other !== request)
+			.map((other) => ({
+				left: other.x - DOT_CLEARANCE,
+				right: other.x + DOT_CLEARANCE,
+				top: other.y - DOT_CLEARANCE,
+				bottom: other.y + DOT_CLEARANCE,
+			}));
 		type Option = Pick<PlacedLabel, 'labelX' | 'labelY' | 'anchor'>;
 		const preferred: Option = { labelX: request.x + LABEL_GAP, labelY: request.y, anchor: 'start' };
 		const options: Option[] = [
@@ -110,7 +119,7 @@ export function placeLabels(requests: LabelRequest[], bounds: LabelBounds): Plac
 			rect.right <= bounds.right &&
 			rect.top >= bounds.top &&
 			rect.bottom <= bounds.bottom &&
-			!taken.some(
+			![...taken, ...otherDots].some(
 				(other) =>
 					rect.left < other.right &&
 					rect.right > other.left &&
