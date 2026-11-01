@@ -12,6 +12,7 @@ import type { ModelCatalog } from '../types/insights';
 export class CatalogStore {
 	private catalog: ModelCatalog = getBundledCatalog();
 	private loading: Promise<boolean> | undefined;
+	private replacementReported = false;
 	private readonly path: string;
 
 	constructor(
@@ -26,10 +27,16 @@ export class CatalogStore {
 		return this.catalog;
 	}
 
-	/** Resolves true when a refreshed copy replaced the bundled snapshot. */
-	load(): Promise<boolean> {
+	/**
+	 * Resolves true only once, for the first caller after a saved copy replaced the bundled snapshot.
+	 * Callers re-render on true and rendering calls load again, so repeating it would never settle.
+	 */
+	async load(): Promise<boolean> {
 		this.loading ??= this.readCache();
-		return this.loading;
+		const replaced = await this.loading;
+		if (!replaced || this.replacementReported) return false;
+		this.replacementReported = true;
+		return true;
 	}
 
 	private async readCache(): Promise<boolean> {
