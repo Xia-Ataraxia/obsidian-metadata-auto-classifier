@@ -1,3 +1,4 @@
+import type { UsageCallback } from '../types/insights';
 import { Component, type RequestUrlResponse } from 'obsidian';
 
 export type HttpErrorCode =
@@ -33,6 +34,8 @@ export interface HttpRequestOptions {
 	signal?: AbortSignal;
 	/** Maximum total attempts; only HTTP 429 and 529 responses are retried. */
 	maxAttempts?: 1 | 3;
+	/** Receives token usage parsed from a successful response; never affects the request outcome. */
+	onUsage?: UsageCallback;
 }
 
 export function throwIfAborted(signal?: AbortSignal): void {

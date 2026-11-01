@@ -1,4 +1,5 @@
 import type { Model, OnTokenRefreshCallback, ProviderConfig } from '../types';
+import type { UsageCallback } from '../types/insights';
 import {
 	decisionEndpoint,
 	decisionTransport,
@@ -39,6 +40,7 @@ export interface DecisionOperationControl {
 	deadline: number;
 	assertCurrent: () => void;
 	onTokenRefresh?: OnTokenRefreshCallback;
+	onUsage?: UsageCallback;
 }
 
 /** All candidate chunks must succeed before any selection is returned. */
@@ -88,7 +90,11 @@ export class DecisionClassifier {
 	): Promise<DecodeDecisionResult> {
 		const transport = decisionTransport(provider.name, model);
 		if (!transport) throw new DecisionClassificationError('not-a-decision-model');
-		const requestOptions = { deadline: control.deadline, assertCurrent: control.assertCurrent };
+		const requestOptions = {
+			deadline: control.deadline,
+			assertCurrent: control.assertCurrent,
+			...(control.onUsage ? { onUsage: control.onUsage } : {}),
+		};
 		const apiKey = resolveApiKey(provider);
 		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 		if (apiKey) headers.Authorization = `Bearer ${apiKey}`;

@@ -38,6 +38,9 @@ vi.mock('obsidian', async (importOriginal) => {
 			this.settingEl.className = `${this.settingEl.className} setting-item-heading`;
 			return this;
 		}
+		addButton(): this {
+			return this;
+		}
 	}
 
 	return { ...sharedObsidian, Setting: TestSetting };

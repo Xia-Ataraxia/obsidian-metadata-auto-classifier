@@ -1,5 +1,6 @@
 import type { RequestUrlParam, RequestUrlResponse } from 'obsidian';
 import { requestUrl } from 'obsidian';
+import { parseUsage } from '../domain/usage-parsers';
 import {
 	HttpError,
 	requestBeforeDeadline,
@@ -117,6 +118,7 @@ export async function sendRequest(
 	data: object | string,
 	options?: HttpRequestOptions
 ): Promise<unknown> {
+	const startedAt = Date.now();
 	const response = await sendHttpRequest(url, headers, data, options);
 	throwIfAborted(options?.signal);
 	let parsed: unknown;
@@ -126,5 +128,7 @@ export async function sendRequest(
 		throw new HttpError('INVALID_JSON');
 	}
 	throwIfAborted(options?.signal);
+	const usage = options?.onUsage && parseUsage(parsed);
+	if (usage) options?.onUsage?.(usage, Date.now() - startedAt);
 	return parsed;
 }

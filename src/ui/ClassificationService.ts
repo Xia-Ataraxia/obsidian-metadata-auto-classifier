@@ -1,6 +1,7 @@
 import { TFile } from 'obsidian';
 import type { App } from 'obsidian';
 import type { AutoClassifierSettings } from '../types';
+import type { TokenUsage, UsageSink } from '../types/insights';
 import {
 	ClassificationState,
 	ClassificationStateError,
@@ -36,6 +37,7 @@ export interface ClassificationContext {
 	isActive: () => boolean;
 	saveSettings: () => Promise<void>;
 	notices: PluginNotices;
+	usage?: UsageSink;
 }
 
 const DEADLINE_MS = 60_000;
@@ -123,6 +125,9 @@ export class ClassificationService {
 				onPersistFailed: () => this.context.notices.show('settings_save_failed'),
 				assertCurrent: assertSelected,
 			});
+			const providerName = target.provider.name;
+			const modelId = target.model.id;
+			const usage = this.context.usage;
 			const result = await this.decisions.classify(
 				{
 					body: baseline.body,
@@ -135,9 +140,20 @@ export class ClassificationService {
 				},
 				session.provider,
 				target.model,
-				{ deadline, assertCurrent: assertSelection, onTokenRefresh: session.refreshTokens }
+				{
+					deadline,
+					assertCurrent: assertSelection,
+					onTokenRefresh: session.refreshTokens,
+					...(usage
+						? {
+								onUsage: (tokens: TokenUsage, latencyMs: number) =>
+									usage.record(providerName, modelId, tokens, latencyMs),
+							}
+						: {}),
+				}
 			);
 			assertSelection();
+			usage?.noteClassified(providerName, modelId);
 			return result;
 		};
 		const generation = createGenerationStage({
@@ -149,6 +165,7 @@ export class ClassificationService {
 			deadline,
 			// Generation guards its own provider; a token refresh there must not trip the scoring snapshot.
 			assertCurrent: assertSelected,
+			usage: this.context.usage,
 		});
 		const resolution = await resolveClassificationValues({
 			snapshot,
