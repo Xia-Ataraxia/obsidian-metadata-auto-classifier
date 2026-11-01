@@ -7,191 +7,15 @@
 	],
 	"models": {
 		"OpenAI": {
-			"gpt-5.3-codex": {
-				"kind": "priced",
-				"inputPerMTok": 1.75,
-				"outputPerMTok": 14,
-				"cacheReadPerMTok": 0.175,
-				"cacheWritePerMTok": null,
-				"contextTokens": 400000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2025-08-31",
-				"intelligenceIndex": null
-			},
-			"gpt-5.4-nano": {
-				"kind": "priced",
-				"inputPerMTok": 0.2,
-				"outputPerMTok": 1.25,
-				"cacheReadPerMTok": 0.02,
-				"cacheWritePerMTok": null,
-				"contextTokens": 400000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2025-08-31",
-				"intelligenceIndex": null
-			},
-			"gpt-daybreak-red-latest": {
-				"kind": "priced",
-				"inputPerMTok": 12.5,
-				"outputPerMTok": 75,
-				"cacheReadPerMTok": 1.25,
-				"cacheWritePerMTok": 15.625,
-				"contextTokens": 400000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-02-16",
-				"intelligenceIndex": null
-			},
-			"gpt-4o-2024-08-06": {
-				"kind": "priced",
-				"inputPerMTok": 2.5,
-				"outputPerMTok": 10,
-				"cacheReadPerMTok": 1.25,
-				"cacheWritePerMTok": null,
-				"contextTokens": 128000,
-				"maxOutputTokens": 16384,
-				"knowledge": "2023-09",
-				"intelligenceIndex": null
-			},
-			"gpt-5-pro": {
-				"kind": "priced",
-				"inputPerMTok": 15,
-				"outputPerMTok": 120,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": 400000,
-				"maxOutputTokens": 272000,
-				"knowledge": "2024-09-30",
-				"intelligenceIndex": null
-			},
-			"text-embedding-3-large": {
-				"kind": "priced",
-				"inputPerMTok": 0.13,
-				"outputPerMTok": 0,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": 8191,
-				"maxOutputTokens": 3072,
-				"knowledge": "2024-01",
-				"intelligenceIndex": null
-			},
-			"gpt-daybreak-blue-latest": {
-				"kind": "priced",
-				"inputPerMTok": 4,
-				"outputPerMTok": 20,
-				"cacheReadPerMTok": 0.4,
-				"cacheWritePerMTok": 5,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-02-16",
-				"intelligenceIndex": null
-			},
-			"gpt-5.5": {
-				"kind": "priced",
-				"inputPerMTok": 5,
-				"outputPerMTok": 30,
-				"cacheReadPerMTok": 0.5,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2025-12-01",
-				"intelligenceIndex": null
-			},
-			"text-embedding-ada-002": {
-				"kind": "priced",
-				"inputPerMTok": 0.1,
-				"outputPerMTok": 0,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": 8192,
-				"maxOutputTokens": 1536,
-				"knowledge": "2022-12",
-				"intelligenceIndex": null
-			},
-			"gpt-5.6-sol": {
-				"kind": "priced",
-				"inputPerMTok": 4,
-				"outputPerMTok": 20,
-				"cacheReadPerMTok": 0.4,
-				"cacheWritePerMTok": 5,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-02-16",
-				"intelligenceIndex": null
-			},
-			"gpt-5.3-codex-spark": {
-				"kind": "priced",
-				"inputPerMTok": 1.75,
-				"outputPerMTok": 14,
-				"cacheReadPerMTok": 0.175,
-				"cacheWritePerMTok": null,
-				"contextTokens": 128000,
-				"maxOutputTokens": 32000,
-				"knowledge": "2025-08-31",
-				"intelligenceIndex": null
-			},
-			"gpt-5.4-pro": {
-				"kind": "priced",
-				"inputPerMTok": 30,
-				"outputPerMTok": 180,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2025-08-31",
-				"intelligenceIndex": null
-			},
-			"gpt-5.4-mini": {
-				"kind": "priced",
-				"inputPerMTok": 0.75,
-				"outputPerMTok": 4.5,
-				"cacheReadPerMTok": 0.075,
-				"cacheWritePerMTok": null,
-				"contextTokens": 400000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2025-08-31",
-				"intelligenceIndex": null
-			},
-			"gpt-5.6": {
-				"kind": "priced",
-				"inputPerMTok": 4,
-				"outputPerMTok": 20,
-				"cacheReadPerMTok": 0.4,
-				"cacheWritePerMTok": 5,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-02-16",
-				"intelligenceIndex": null
-			},
-			"gpt-6-sol": {
+			"gpt-4.1": {
 				"kind": "priced",
 				"inputPerMTok": 2,
-				"outputPerMTok": 10,
-				"cacheReadPerMTok": 0.2,
-				"cacheWritePerMTok": 2.5,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-04-20",
-				"intelligenceIndex": null
-			},
-			"gpt-6.1-terra": {
-				"kind": "priced",
-				"inputPerMTok": 1,
-				"outputPerMTok": 5,
-				"cacheReadPerMTok": 0.05,
-				"cacheWritePerMTok": 1.25,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-06-01",
-				"intelligenceIndex": 51
-			},
-			"gpt-5.2-pro": {
-				"kind": "priced",
-				"inputPerMTok": 21,
-				"outputPerMTok": 168,
-				"cacheReadPerMTok": null,
+				"outputPerMTok": 8,
+				"cacheReadPerMTok": 0.5,
 				"cacheWritePerMTok": null,
-				"contextTokens": 400000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2025-08-31",
+				"contextTokens": 1047576,
+				"maxOutputTokens": 32768,
+				"knowledge": "2024-04",
 				"intelligenceIndex": null
 			},
 			"gpt-4.1-mini": {
@@ -216,15 +40,48 @@
 				"knowledge": "2023-09",
 				"intelligenceIndex": null
 			},
-			"o3": {
+			"gpt-4o-2024-08-06": {
 				"kind": "priced",
-				"inputPerMTok": 2,
-				"outputPerMTok": 8,
-				"cacheReadPerMTok": 0.5,
+				"inputPerMTok": 2.5,
+				"outputPerMTok": 10,
+				"cacheReadPerMTok": 1.25,
 				"cacheWritePerMTok": null,
-				"contextTokens": 200000,
-				"maxOutputTokens": 100000,
-				"knowledge": "2024-05",
+				"contextTokens": 128000,
+				"maxOutputTokens": 16384,
+				"knowledge": "2023-09",
+				"intelligenceIndex": null
+			},
+			"gpt-4o-2024-11-20": {
+				"kind": "priced",
+				"inputPerMTok": 2.5,
+				"outputPerMTok": 10,
+				"cacheReadPerMTok": 1.25,
+				"cacheWritePerMTok": null,
+				"contextTokens": 128000,
+				"maxOutputTokens": 16384,
+				"knowledge": "2023-09",
+				"intelligenceIndex": null
+			},
+			"gpt-4o-mini": {
+				"kind": "priced",
+				"inputPerMTok": 0.15,
+				"outputPerMTok": 0.6,
+				"cacheReadPerMTok": 0.075,
+				"cacheWritePerMTok": null,
+				"contextTokens": 128000,
+				"maxOutputTokens": 16384,
+				"knowledge": "2023-09",
+				"intelligenceIndex": null
+			},
+			"gpt-5": {
+				"kind": "priced",
+				"inputPerMTok": 1.25,
+				"outputPerMTok": 10,
+				"cacheReadPerMTok": 0.125,
+				"cacheWritePerMTok": null,
+				"contextTokens": 400000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2024-09-30",
 				"intelligenceIndex": null
 			},
 			"gpt-5-mini": {
@@ -238,28 +95,6 @@
 				"knowledge": "2024-05-30",
 				"intelligenceIndex": null
 			},
-			"gpt-6.1-sol": {
-				"kind": "priced",
-				"inputPerMTok": 2,
-				"outputPerMTok": 10,
-				"cacheReadPerMTok": 0.1,
-				"cacheWritePerMTok": 2.5,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-04-30",
-				"intelligenceIndex": 54.5
-			},
-			"gpt-5.6-luna": {
-				"kind": "priced",
-				"inputPerMTok": 0.2,
-				"outputPerMTok": 1.2,
-				"cacheReadPerMTok": 0.02,
-				"cacheWritePerMTok": 0.25,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-02-16",
-				"intelligenceIndex": null
-			},
 			"gpt-5-nano": {
 				"kind": "priced",
 				"inputPerMTok": 0.05,
@@ -271,14 +106,14 @@
 				"knowledge": "2024-05-30",
 				"intelligenceIndex": null
 			},
-			"gpt-5": {
+			"gpt-5-pro": {
 				"kind": "priced",
-				"inputPerMTok": 1.25,
-				"outputPerMTok": 10,
-				"cacheReadPerMTok": 0.125,
+				"inputPerMTok": 15,
+				"outputPerMTok": 120,
+				"cacheReadPerMTok": null,
 				"cacheWritePerMTok": null,
 				"contextTokens": 400000,
-				"maxOutputTokens": 128000,
+				"maxOutputTokens": 272000,
 				"knowledge": "2024-09-30",
 				"intelligenceIndex": null
 			},
@@ -293,92 +128,48 @@
 				"knowledge": "2024-09-30",
 				"intelligenceIndex": null
 			},
-			"gpt-6-astra": {
+			"gpt-5.2": {
 				"kind": "priced",
-				"inputPerMTok": 10,
-				"outputPerMTok": 50,
-				"cacheReadPerMTok": 1,
-				"cacheWritePerMTok": 12.5,
-				"contextTokens": 1050000,
+				"inputPerMTok": 1.75,
+				"outputPerMTok": 14,
+				"cacheReadPerMTok": 0.175,
+				"cacheWritePerMTok": null,
+				"contextTokens": 400000,
 				"maxOutputTokens": 128000,
-				"knowledge": "2026-04-30",
-				"intelligenceIndex": 56.9
+				"knowledge": "2025-08-31",
+				"intelligenceIndex": null
 			},
-			"gpt-realtime-2.1": {
+			"gpt-5.2-pro": {
 				"kind": "priced",
-				"inputPerMTok": 4,
-				"outputPerMTok": 24,
-				"cacheReadPerMTok": 0.4,
+				"inputPerMTok": 21,
+				"outputPerMTok": 168,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 400000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2025-08-31",
+				"intelligenceIndex": null
+			},
+			"gpt-5.3-codex": {
+				"kind": "priced",
+				"inputPerMTok": 1.75,
+				"outputPerMTok": 14,
+				"cacheReadPerMTok": 0.175,
+				"cacheWritePerMTok": null,
+				"contextTokens": 400000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2025-08-31",
+				"intelligenceIndex": null
+			},
+			"gpt-5.3-codex-spark": {
+				"kind": "priced",
+				"inputPerMTok": 1.75,
+				"outputPerMTok": 14,
+				"cacheReadPerMTok": 0.175,
 				"cacheWritePerMTok": null,
 				"contextTokens": 128000,
 				"maxOutputTokens": 32000,
-				"knowledge": "2024-09-30",
-				"intelligenceIndex": null
-			},
-			"gpt-5.6-terra": {
-				"kind": "priced",
-				"inputPerMTok": 2,
-				"outputPerMTok": 12,
-				"cacheReadPerMTok": 0.2,
-				"cacheWritePerMTok": 2.5,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-02-16",
-				"intelligenceIndex": null
-			},
-			"gpt-4o-mini": {
-				"kind": "priced",
-				"inputPerMTok": 0.15,
-				"outputPerMTok": 0.6,
-				"cacheReadPerMTok": 0.075,
-				"cacheWritePerMTok": null,
-				"contextTokens": 128000,
-				"maxOutputTokens": 16384,
-				"knowledge": "2023-09",
-				"intelligenceIndex": null
-			},
-			"o3-pro": {
-				"kind": "priced",
-				"inputPerMTok": 20,
-				"outputPerMTok": 80,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": 200000,
-				"maxOutputTokens": 100000,
-				"knowledge": "2024-05",
-				"intelligenceIndex": null
-			},
-			"gpt-5.5-pro": {
-				"kind": "priced",
-				"inputPerMTok": 30,
-				"outputPerMTok": 180,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2025-12-01",
-				"intelligenceIndex": null
-			},
-			"gpt-4o-2024-11-20": {
-				"kind": "priced",
-				"inputPerMTok": 2.5,
-				"outputPerMTok": 10,
-				"cacheReadPerMTok": 1.25,
-				"cacheWritePerMTok": null,
-				"contextTokens": 128000,
-				"maxOutputTokens": 16384,
-				"knowledge": "2023-09",
-				"intelligenceIndex": null
-			},
-			"gpt-4.1": {
-				"kind": "priced",
-				"inputPerMTok": 2,
-				"outputPerMTok": 8,
-				"cacheReadPerMTok": 0.5,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1047576,
-				"maxOutputTokens": 32768,
-				"knowledge": "2024-04",
+				"knowledge": "2025-08-31",
 				"intelligenceIndex": null
 			},
 			"gpt-5.4": {
@@ -392,15 +183,224 @@
 				"knowledge": "2025-08-31",
 				"intelligenceIndex": null
 			},
-			"gpt-5.2": {
+			"gpt-5.4-mini": {
 				"kind": "priced",
-				"inputPerMTok": 1.75,
-				"outputPerMTok": 14,
-				"cacheReadPerMTok": 0.175,
+				"inputPerMTok": 0.75,
+				"outputPerMTok": 4.5,
+				"cacheReadPerMTok": 0.075,
 				"cacheWritePerMTok": null,
 				"contextTokens": 400000,
 				"maxOutputTokens": 128000,
 				"knowledge": "2025-08-31",
+				"intelligenceIndex": null
+			},
+			"gpt-5.4-nano": {
+				"kind": "priced",
+				"inputPerMTok": 0.2,
+				"outputPerMTok": 1.25,
+				"cacheReadPerMTok": 0.02,
+				"cacheWritePerMTok": null,
+				"contextTokens": 400000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2025-08-31",
+				"intelligenceIndex": null
+			},
+			"gpt-5.4-pro": {
+				"kind": "priced",
+				"inputPerMTok": 30,
+				"outputPerMTok": 180,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2025-08-31",
+				"intelligenceIndex": null
+			},
+			"gpt-5.5": {
+				"kind": "priced",
+				"inputPerMTok": 5,
+				"outputPerMTok": 30,
+				"cacheReadPerMTok": 0.5,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2025-12-01",
+				"intelligenceIndex": null
+			},
+			"gpt-5.5-pro": {
+				"kind": "priced",
+				"inputPerMTok": 30,
+				"outputPerMTok": 180,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2025-12-01",
+				"intelligenceIndex": null
+			},
+			"gpt-5.6": {
+				"kind": "priced",
+				"inputPerMTok": 4,
+				"outputPerMTok": 20,
+				"cacheReadPerMTok": 0.4,
+				"cacheWritePerMTok": 5,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-02-16",
+				"intelligenceIndex": null
+			},
+			"gpt-5.6-luna": {
+				"kind": "priced",
+				"inputPerMTok": 0.2,
+				"outputPerMTok": 1.2,
+				"cacheReadPerMTok": 0.02,
+				"cacheWritePerMTok": 0.25,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-02-16",
+				"intelligenceIndex": null
+			},
+			"gpt-5.6-sol": {
+				"kind": "priced",
+				"inputPerMTok": 4,
+				"outputPerMTok": 20,
+				"cacheReadPerMTok": 0.4,
+				"cacheWritePerMTok": 5,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-02-16",
+				"intelligenceIndex": null
+			},
+			"gpt-5.6-terra": {
+				"kind": "priced",
+				"inputPerMTok": 2,
+				"outputPerMTok": 12,
+				"cacheReadPerMTok": 0.2,
+				"cacheWritePerMTok": 2.5,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-02-16",
+				"intelligenceIndex": null
+			},
+			"gpt-6-astra": {
+				"kind": "priced",
+				"inputPerMTok": 10,
+				"outputPerMTok": 50,
+				"cacheReadPerMTok": 1,
+				"cacheWritePerMTok": 12.5,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-04-30",
+				"intelligenceIndex": 56.9
+			},
+			"gpt-6-luna": {
+				"kind": "priced",
+				"inputPerMTok": 0.1,
+				"outputPerMTok": 0.5,
+				"cacheReadPerMTok": 0.01,
+				"cacheWritePerMTok": 0.125,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-05-18",
+				"intelligenceIndex": 27.8
+			},
+			"gpt-6-sol": {
+				"kind": "priced",
+				"inputPerMTok": 2,
+				"outputPerMTok": 10,
+				"cacheReadPerMTok": 0.2,
+				"cacheWritePerMTok": 2.5,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-04-20",
+				"intelligenceIndex": null
+			},
+			"gpt-6.1-sol": {
+				"kind": "priced",
+				"inputPerMTok": 2,
+				"outputPerMTok": 10,
+				"cacheReadPerMTok": 0.1,
+				"cacheWritePerMTok": 2.5,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-04-30",
+				"intelligenceIndex": 54.5
+			},
+			"gpt-6.1-terra": {
+				"kind": "priced",
+				"inputPerMTok": 1,
+				"outputPerMTok": 5,
+				"cacheReadPerMTok": 0.05,
+				"cacheWritePerMTok": 1.25,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-06-01",
+				"intelligenceIndex": 51
+			},
+			"gpt-daybreak-blue-latest": {
+				"kind": "priced",
+				"inputPerMTok": 4,
+				"outputPerMTok": 20,
+				"cacheReadPerMTok": 0.4,
+				"cacheWritePerMTok": 5,
+				"contextTokens": 1050000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-02-16",
+				"intelligenceIndex": null
+			},
+			"gpt-daybreak-red-latest": {
+				"kind": "priced",
+				"inputPerMTok": 12.5,
+				"outputPerMTok": 75,
+				"cacheReadPerMTok": 1.25,
+				"cacheWritePerMTok": 15.625,
+				"contextTokens": 400000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-02-16",
+				"intelligenceIndex": null
+			},
+			"gpt-realtime-2.1": {
+				"kind": "priced",
+				"inputPerMTok": 4,
+				"outputPerMTok": 24,
+				"cacheReadPerMTok": 0.4,
+				"cacheWritePerMTok": null,
+				"contextTokens": 128000,
+				"maxOutputTokens": 32000,
+				"knowledge": "2024-09-30",
+				"intelligenceIndex": null
+			},
+			"o3": {
+				"kind": "priced",
+				"inputPerMTok": 2,
+				"outputPerMTok": 8,
+				"cacheReadPerMTok": 0.5,
+				"cacheWritePerMTok": null,
+				"contextTokens": 200000,
+				"maxOutputTokens": 100000,
+				"knowledge": "2024-05",
+				"intelligenceIndex": null
+			},
+			"o3-pro": {
+				"kind": "priced",
+				"inputPerMTok": 20,
+				"outputPerMTok": 80,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 200000,
+				"maxOutputTokens": 100000,
+				"knowledge": "2024-05",
+				"intelligenceIndex": null
+			},
+			"text-embedding-3-large": {
+				"kind": "priced",
+				"inputPerMTok": 0.13,
+				"outputPerMTok": 0,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 8191,
+				"maxOutputTokens": 3072,
+				"knowledge": "2024-01",
 				"intelligenceIndex": null
 			},
 			"text-embedding-3-small": {
@@ -414,127 +414,28 @@
 				"knowledge": "2024-01",
 				"intelligenceIndex": null
 			},
-			"gpt-6-luna": {
+			"text-embedding-ada-002": {
 				"kind": "priced",
 				"inputPerMTok": 0.1,
-				"outputPerMTok": 0.5,
-				"cacheReadPerMTok": 0.01,
-				"cacheWritePerMTok": 0.125,
-				"contextTokens": 1050000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-05-18",
-				"intelligenceIndex": 27.8
+				"outputPerMTok": 0,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 8192,
+				"maxOutputTokens": 1536,
+				"knowledge": "2022-12",
+				"intelligenceIndex": null
 			}
 		},
 		"Anthropic": {
-			"claude-sonnet-5-5": {
+			"claude-fable-5": {
 				"kind": "priced",
-				"inputPerMTok": 2,
-				"outputPerMTok": 10,
-				"cacheReadPerMTok": 0.1,
-				"cacheWritePerMTok": 2.5,
+				"inputPerMTok": 10,
+				"outputPerMTok": 50,
+				"cacheReadPerMTok": 1,
+				"cacheWritePerMTok": 12.5,
 				"contextTokens": 1000000,
 				"maxOutputTokens": 128000,
-				"knowledge": "2026-06",
-				"intelligenceIndex": 54.2
-			},
-			"claude-opus-4-5": {
-				"kind": "priced",
-				"inputPerMTok": 5,
-				"outputPerMTok": 25,
-				"cacheReadPerMTok": 0.5,
-				"cacheWritePerMTok": 6.25,
-				"contextTokens": 200000,
-				"maxOutputTokens": 64000,
-				"knowledge": "2025-05",
-				"intelligenceIndex": null
-			},
-			"claude-opus-5": {
-				"kind": "priced",
-				"inputPerMTok": 5,
-				"outputPerMTok": 25,
-				"cacheReadPerMTok": 0.5,
-				"cacheWritePerMTok": 6.25,
-				"contextTokens": 1000000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-05",
-				"intelligenceIndex": null
-			},
-			"claude-haiku-5-5": {
-				"kind": "priced",
-				"inputPerMTok": 0.1,
-				"outputPerMTok": 0.5,
-				"cacheReadPerMTok": 0.01,
-				"cacheWritePerMTok": 0.125,
-				"contextTokens": 1000000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-06",
-				"intelligenceIndex": 36.2
-			},
-			"claude-sonnet-5": {
-				"kind": "priced",
-				"inputPerMTok": 2,
-				"outputPerMTok": 10,
-				"cacheReadPerMTok": 0.2,
-				"cacheWritePerMTok": 2.5,
-				"contextTokens": 1000000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-01-31",
-				"intelligenceIndex": null
-			},
-			"claude-sonnet-4-5-20250929": {
-				"kind": "priced",
-				"inputPerMTok": 3,
-				"outputPerMTok": 15,
-				"cacheReadPerMTok": 0.3,
-				"cacheWritePerMTok": 3.75,
-				"contextTokens": 200000,
-				"maxOutputTokens": 64000,
-				"knowledge": "2025-07-31",
-				"intelligenceIndex": null
-			},
-			"claude-sonnet-4-6": {
-				"kind": "priced",
-				"inputPerMTok": 3,
-				"outputPerMTok": 15,
-				"cacheReadPerMTok": 0.3,
-				"cacheWritePerMTok": 3.75,
-				"contextTokens": 1000000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2025-08-31",
-				"intelligenceIndex": null
-			},
-			"claude-opus-4-5-20251101": {
-				"kind": "priced",
-				"inputPerMTok": 5,
-				"outputPerMTok": 25,
-				"cacheReadPerMTok": 0.5,
-				"cacheWritePerMTok": 6.25,
-				"contextTokens": 200000,
-				"maxOutputTokens": 64000,
-				"knowledge": "2025-05",
-				"intelligenceIndex": null
-			},
-			"claude-opus-4-7": {
-				"kind": "priced",
-				"inputPerMTok": 5,
-				"outputPerMTok": 25,
-				"cacheReadPerMTok": 0.5,
-				"cacheWritePerMTok": 6.25,
-				"contextTokens": 1000000,
-				"maxOutputTokens": 128000,
-				"knowledge": "2026-01-31",
-				"intelligenceIndex": null
-			},
-			"claude-haiku-4-5-20251001": {
-				"kind": "priced",
-				"inputPerMTok": 1,
-				"outputPerMTok": 5,
-				"cacheReadPerMTok": 0.1,
-				"cacheWritePerMTok": 1.25,
-				"contextTokens": 200000,
-				"maxOutputTokens": 64000,
-				"knowledge": "2025-02-28",
+				"knowledge": null,
 				"intelligenceIndex": null
 			},
 			"claude-fable-5-1": {
@@ -559,6 +460,50 @@
 				"knowledge": "2025-02-28",
 				"intelligenceIndex": null
 			},
+			"claude-haiku-4-5-20251001": {
+				"kind": "priced",
+				"inputPerMTok": 1,
+				"outputPerMTok": 5,
+				"cacheReadPerMTok": 0.1,
+				"cacheWritePerMTok": 1.25,
+				"contextTokens": 200000,
+				"maxOutputTokens": 64000,
+				"knowledge": "2025-02-28",
+				"intelligenceIndex": null
+			},
+			"claude-haiku-5-5": {
+				"kind": "priced",
+				"inputPerMTok": 0.1,
+				"outputPerMTok": 0.5,
+				"cacheReadPerMTok": 0.01,
+				"cacheWritePerMTok": 0.125,
+				"contextTokens": 1000000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-06",
+				"intelligenceIndex": 36.2
+			},
+			"claude-opus-4-5": {
+				"kind": "priced",
+				"inputPerMTok": 5,
+				"outputPerMTok": 25,
+				"cacheReadPerMTok": 0.5,
+				"cacheWritePerMTok": 6.25,
+				"contextTokens": 200000,
+				"maxOutputTokens": 64000,
+				"knowledge": "2025-05",
+				"intelligenceIndex": null
+			},
+			"claude-opus-4-5-20251101": {
+				"kind": "priced",
+				"inputPerMTok": 5,
+				"outputPerMTok": 25,
+				"cacheReadPerMTok": 0.5,
+				"cacheWritePerMTok": 6.25,
+				"contextTokens": 200000,
+				"maxOutputTokens": 64000,
+				"knowledge": "2025-05",
+				"intelligenceIndex": null
+			},
 			"claude-opus-4-6": {
 				"kind": "priced",
 				"inputPerMTok": 5,
@@ -570,26 +515,37 @@
 				"knowledge": "2025-05-31",
 				"intelligenceIndex": null
 			},
-			"claude-fable-5": {
+			"claude-opus-4-7": {
 				"kind": "priced",
-				"inputPerMTok": 10,
-				"outputPerMTok": 50,
-				"cacheReadPerMTok": 1,
-				"cacheWritePerMTok": 12.5,
+				"inputPerMTok": 5,
+				"outputPerMTok": 25,
+				"cacheReadPerMTok": 0.5,
+				"cacheWritePerMTok": 6.25,
 				"contextTokens": 1000000,
 				"maxOutputTokens": 128000,
-				"knowledge": null,
+				"knowledge": "2026-01-31",
 				"intelligenceIndex": null
 			},
-			"claude-sonnet-4-5": {
+			"claude-opus-4-8": {
 				"kind": "priced",
-				"inputPerMTok": 3,
-				"outputPerMTok": 15,
-				"cacheReadPerMTok": 0.3,
-				"cacheWritePerMTok": 3.75,
-				"contextTokens": 200000,
-				"maxOutputTokens": 64000,
-				"knowledge": "2025-07-31",
+				"inputPerMTok": 5,
+				"outputPerMTok": 25,
+				"cacheReadPerMTok": 0.5,
+				"cacheWritePerMTok": 6.25,
+				"contextTokens": 1000000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-01",
+				"intelligenceIndex": null
+			},
+			"claude-opus-5": {
+				"kind": "priced",
+				"inputPerMTok": 5,
+				"outputPerMTok": 25,
+				"cacheReadPerMTok": 0.5,
+				"cacheWritePerMTok": 6.25,
+				"contextTokens": 1000000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-05",
 				"intelligenceIndex": null
 			},
 			"claude-opus-5-5": {
@@ -603,112 +559,101 @@
 				"knowledge": "2026-06",
 				"intelligenceIndex": 58.4
 			},
-			"claude-opus-4-8": {
+			"claude-sonnet-4-5": {
 				"kind": "priced",
-				"inputPerMTok": 5,
-				"outputPerMTok": 25,
-				"cacheReadPerMTok": 0.5,
-				"cacheWritePerMTok": 6.25,
+				"inputPerMTok": 3,
+				"outputPerMTok": 15,
+				"cacheReadPerMTok": 0.3,
+				"cacheWritePerMTok": 3.75,
+				"contextTokens": 200000,
+				"maxOutputTokens": 64000,
+				"knowledge": "2025-07-31",
+				"intelligenceIndex": null
+			},
+			"claude-sonnet-4-5-20250929": {
+				"kind": "priced",
+				"inputPerMTok": 3,
+				"outputPerMTok": 15,
+				"cacheReadPerMTok": 0.3,
+				"cacheWritePerMTok": 3.75,
+				"contextTokens": 200000,
+				"maxOutputTokens": 64000,
+				"knowledge": "2025-07-31",
+				"intelligenceIndex": null
+			},
+			"claude-sonnet-4-6": {
+				"kind": "priced",
+				"inputPerMTok": 3,
+				"outputPerMTok": 15,
+				"cacheReadPerMTok": 0.3,
+				"cacheWritePerMTok": 3.75,
 				"contextTokens": 1000000,
 				"maxOutputTokens": 128000,
-				"knowledge": "2026-01",
+				"knowledge": "2025-08-31",
 				"intelligenceIndex": null
+			},
+			"claude-sonnet-5": {
+				"kind": "priced",
+				"inputPerMTok": 2,
+				"outputPerMTok": 10,
+				"cacheReadPerMTok": 0.2,
+				"cacheWritePerMTok": 2.5,
+				"contextTokens": 1000000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-01-31",
+				"intelligenceIndex": null
+			},
+			"claude-sonnet-5-5": {
+				"kind": "priced",
+				"inputPerMTok": 2,
+				"outputPerMTok": 10,
+				"cacheReadPerMTok": 0.1,
+				"cacheWritePerMTok": 2.5,
+				"contextTokens": 1000000,
+				"maxOutputTokens": 128000,
+				"knowledge": "2026-06",
+				"intelligenceIndex": 54.2
 			}
 		},
 		"Gemini": {
-			"gemini-3.1-flash-live-preview": {
+			"deep-research-max-preview-04-2026": {
 				"kind": "priced",
-				"inputPerMTok": 0.75,
-				"outputPerMTok": 4.5,
-				"cacheReadPerMTok": null,
+				"inputPerMTok": 2,
+				"outputPerMTok": 12,
+				"cacheReadPerMTok": 0.2,
 				"cacheWritePerMTok": null,
 				"contextTokens": 131072,
 				"maxOutputTokens": 65536,
 				"knowledge": "2025-01",
 				"intelligenceIndex": null
 			},
-			"gemini-3.1-flash-lite-image": {
+			"deep-research-preview-04-2026": {
 				"kind": "priced",
-				"inputPerMTok": 0.25,
-				"outputPerMTok": 30,
-				"cacheReadPerMTok": null,
+				"inputPerMTok": 2,
+				"outputPerMTok": 12,
+				"cacheReadPerMTok": 0.2,
 				"cacheWritePerMTok": null,
-				"contextTokens": 65536,
-				"maxOutputTokens": 4096,
+				"contextTokens": 131072,
+				"maxOutputTokens": 65536,
 				"knowledge": "2025-01",
 				"intelligenceIndex": null
 			},
-			"gemini-4-argon": {
+			"gemini-2.5-computer-use-preview-10-2025": {
 				"kind": "priced",
-				"inputPerMTok": 2,
+				"inputPerMTok": 1.25,
 				"outputPerMTok": 10,
-				"cacheReadPerMTok": 0.1,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 32768,
-				"knowledge": "2026-03",
-				"intelligenceIndex": 50.4
-			},
-			"lyria-3-pro-preview": {
-				"kind": "priced",
-				"inputPerMTok": 0,
-				"outputPerMTok": 0,
 				"cacheReadPerMTok": null,
 				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 65536,
-				"knowledge": null,
+				"contextTokens": 128000,
+				"maxOutputTokens": 64000,
+				"knowledge": "2025-01",
 				"intelligenceIndex": null
 			},
-			"gemini-flash-latest": {
-				"kind": "priced",
-				"inputPerMTok": 0.75,
-				"outputPerMTok": 3.75,
-				"cacheReadPerMTok": 0.075,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 65536,
-				"knowledge": "2026-03",
-				"intelligenceIndex": null
-			},
-			"gemini-3.5-flash-lite": {
+			"gemini-2.5-flash": {
 				"kind": "priced",
 				"inputPerMTok": 0.3,
 				"outputPerMTok": 2.5,
 				"cacheReadPerMTok": 0.03,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 65536,
-				"knowledge": "2026-03",
-				"intelligenceIndex": 11.7
-			},
-			"gemini-3.6-flash": {
-				"kind": "priced",
-				"inputPerMTok": 0.75,
-				"outputPerMTok": 3.75,
-				"cacheReadPerMTok": 0.075,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 65536,
-				"knowledge": "2026-03",
-				"intelligenceIndex": null
-			},
-			"gemini-3.5-flash": {
-				"kind": "priced",
-				"inputPerMTok": 1.5,
-				"outputPerMTok": 9,
-				"cacheReadPerMTok": 0.15,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 65536,
-				"knowledge": "2025-01",
-				"intelligenceIndex": null
-			},
-			"gemini-2.5-pro": {
-				"kind": "priced",
-				"inputPerMTok": 1.25,
-				"outputPerMTok": 10,
-				"cacheReadPerMTok": 0.125,
 				"cacheWritePerMTok": null,
 				"contextTokens": 1048576,
 				"maxOutputTokens": 65536,
@@ -726,36 +671,14 @@
 				"knowledge": "2025-01",
 				"intelligenceIndex": null
 			},
-			"gemini-embedding-001": {
-				"kind": "priced",
-				"inputPerMTok": 0.15,
-				"outputPerMTok": 0,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": 2048,
-				"maxOutputTokens": 1,
-				"knowledge": "2025-05",
-				"intelligenceIndex": null
-			},
-			"gemini-3-pro-image": {
-				"kind": "priced",
-				"inputPerMTok": 2,
-				"outputPerMTok": 120,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": 65536,
-				"maxOutputTokens": 32768,
-				"knowledge": "2025-01",
-				"intelligenceIndex": null
-			},
-			"gemini-2.5-computer-use-preview-10-2025": {
+			"gemini-2.5-pro": {
 				"kind": "priced",
 				"inputPerMTok": 1.25,
 				"outputPerMTok": 10,
-				"cacheReadPerMTok": null,
+				"cacheReadPerMTok": 0.125,
 				"cacheWritePerMTok": null,
-				"contextTokens": 128000,
-				"maxOutputTokens": 64000,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 65536,
 				"knowledge": "2025-01",
 				"intelligenceIndex": null
 			},
@@ -770,35 +693,24 @@
 				"knowledge": "2025-01",
 				"intelligenceIndex": null
 			},
-			"deep-research-max-preview-04-2026": {
+			"gemini-3-pro-image": {
 				"kind": "priced",
 				"inputPerMTok": 2,
-				"outputPerMTok": 12,
-				"cacheReadPerMTok": 0.2,
-				"cacheWritePerMTok": null,
-				"contextTokens": 131072,
-				"maxOutputTokens": 65536,
-				"knowledge": "2025-01",
-				"intelligenceIndex": null
-			},
-			"gemini-pro-latest": {
-				"kind": "priced",
-				"inputPerMTok": 2,
-				"outputPerMTok": 12,
-				"cacheReadPerMTok": 0.2,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 65536,
-				"knowledge": "2025-01",
-				"intelligenceIndex": null
-			},
-			"gemini-3.5-live-translate-preview": {
-				"kind": "priced",
-				"inputPerMTok": 3.5,
-				"outputPerMTok": 21,
+				"outputPerMTok": 120,
 				"cacheReadPerMTok": null,
 				"cacheWritePerMTok": null,
-				"contextTokens": 16384,
+				"contextTokens": 65536,
+				"maxOutputTokens": 32768,
+				"knowledge": "2025-01",
+				"intelligenceIndex": null
+			},
+			"gemini-3.1-flash-image": {
+				"kind": "priced",
+				"inputPerMTok": 0.5,
+				"outputPerMTok": 60,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 131072,
 				"maxOutputTokens": 32768,
 				"knowledge": "2025-01",
 				"intelligenceIndex": null
@@ -814,60 +726,27 @@
 				"knowledge": "2025-01",
 				"intelligenceIndex": null
 			},
-			"gemini-flash-lite-latest": {
+			"gemini-3.1-flash-lite-image": {
 				"kind": "priced",
-				"inputPerMTok": 0.3,
-				"outputPerMTok": 2.5,
-				"cacheReadPerMTok": 0.03,
+				"inputPerMTok": 0.25,
+				"outputPerMTok": 30,
+				"cacheReadPerMTok": null,
 				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 65536,
-				"knowledge": "2026-03",
+				"contextTokens": 65536,
+				"maxOutputTokens": 4096,
+				"knowledge": "2025-01",
 				"intelligenceIndex": null
 			},
-			"gemini-3.1-flash-image": {
+			"gemini-3.1-flash-live-preview": {
 				"kind": "priced",
-				"inputPerMTok": 0.5,
-				"outputPerMTok": 60,
+				"inputPerMTok": 0.75,
+				"outputPerMTok": 4.5,
 				"cacheReadPerMTok": null,
 				"cacheWritePerMTok": null,
 				"contextTokens": 131072,
-				"maxOutputTokens": 32768,
-				"knowledge": "2025-01",
-				"intelligenceIndex": null
-			},
-			"lyria-3-clip-preview": {
-				"kind": "priced",
-				"inputPerMTok": 0,
-				"outputPerMTok": 0,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 65536,
-				"knowledge": null,
-				"intelligenceIndex": null
-			},
-			"gemini-2.5-flash": {
-				"kind": "priced",
-				"inputPerMTok": 0.3,
-				"outputPerMTok": 2.5,
-				"cacheReadPerMTok": 0.03,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
 				"maxOutputTokens": 65536,
 				"knowledge": "2025-01",
 				"intelligenceIndex": null
-			},
-			"gemini-3.8-flash": {
-				"kind": "priced",
-				"inputPerMTok": 0.75,
-				"outputPerMTok": 3.75,
-				"cacheReadPerMTok": 0.075,
-				"cacheWritePerMTok": null,
-				"contextTokens": 1048576,
-				"maxOutputTokens": 65536,
-				"knowledge": null,
-				"intelligenceIndex": 30.5
 			},
 			"gemini-3.1-pro-preview": {
 				"kind": "priced",
@@ -891,15 +770,48 @@
 				"knowledge": "2025-01",
 				"intelligenceIndex": null
 			},
-			"gemini-embedding-2": {
+			"gemini-3.5-flash": {
 				"kind": "priced",
-				"inputPerMTok": 0.2,
-				"outputPerMTok": 0,
+				"inputPerMTok": 1.5,
+				"outputPerMTok": 9,
+				"cacheReadPerMTok": 0.15,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 65536,
+				"knowledge": "2025-01",
+				"intelligenceIndex": null
+			},
+			"gemini-3.5-flash-lite": {
+				"kind": "priced",
+				"inputPerMTok": 0.3,
+				"outputPerMTok": 2.5,
+				"cacheReadPerMTok": 0.03,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 65536,
+				"knowledge": "2026-03",
+				"intelligenceIndex": 11.7
+			},
+			"gemini-3.5-live-translate-preview": {
+				"kind": "priced",
+				"inputPerMTok": 3.5,
+				"outputPerMTok": 21,
 				"cacheReadPerMTok": null,
 				"cacheWritePerMTok": null,
-				"contextTokens": 8192,
-				"maxOutputTokens": 1,
-				"knowledge": "2025-11",
+				"contextTokens": 16384,
+				"maxOutputTokens": 32768,
+				"knowledge": "2025-01",
+				"intelligenceIndex": null
+			},
+			"gemini-3.6-flash": {
+				"kind": "priced",
+				"inputPerMTok": 0.75,
+				"outputPerMTok": 3.75,
+				"cacheReadPerMTok": 0.075,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 65536,
+				"knowledge": "2026-03",
 				"intelligenceIndex": null
 			},
 			"gemini-3.7-flash": {
@@ -913,29 +825,117 @@
 				"knowledge": "2026-03",
 				"intelligenceIndex": null
 			},
-			"deep-research-preview-04-2026": {
+			"gemini-3.8-flash": {
+				"kind": "priced",
+				"inputPerMTok": 0.75,
+				"outputPerMTok": 3.75,
+				"cacheReadPerMTok": 0.075,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 65536,
+				"knowledge": null,
+				"intelligenceIndex": 30.5
+			},
+			"gemini-4-argon": {
+				"kind": "priced",
+				"inputPerMTok": 2,
+				"outputPerMTok": 10,
+				"cacheReadPerMTok": 0.1,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 32768,
+				"knowledge": "2026-03",
+				"intelligenceIndex": 50.4
+			},
+			"gemini-embedding-001": {
+				"kind": "priced",
+				"inputPerMTok": 0.15,
+				"outputPerMTok": 0,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 2048,
+				"maxOutputTokens": 1,
+				"knowledge": "2025-05",
+				"intelligenceIndex": null
+			},
+			"gemini-embedding-2": {
+				"kind": "priced",
+				"inputPerMTok": 0.2,
+				"outputPerMTok": 0,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 8192,
+				"maxOutputTokens": 1,
+				"knowledge": "2025-11",
+				"intelligenceIndex": null
+			},
+			"gemini-flash-latest": {
+				"kind": "priced",
+				"inputPerMTok": 0.75,
+				"outputPerMTok": 3.75,
+				"cacheReadPerMTok": 0.075,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 65536,
+				"knowledge": "2026-03",
+				"intelligenceIndex": null
+			},
+			"gemini-flash-lite-latest": {
+				"kind": "priced",
+				"inputPerMTok": 0.3,
+				"outputPerMTok": 2.5,
+				"cacheReadPerMTok": 0.03,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 65536,
+				"knowledge": "2026-03",
+				"intelligenceIndex": null
+			},
+			"gemini-pro-latest": {
 				"kind": "priced",
 				"inputPerMTok": 2,
 				"outputPerMTok": 12,
 				"cacheReadPerMTok": 0.2,
 				"cacheWritePerMTok": null,
-				"contextTokens": 131072,
+				"contextTokens": 1048576,
 				"maxOutputTokens": 65536,
 				"knowledge": "2025-01",
+				"intelligenceIndex": null
+			},
+			"lyria-3-clip-preview": {
+				"kind": "priced",
+				"inputPerMTok": 0,
+				"outputPerMTok": 0,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 65536,
+				"knowledge": null,
+				"intelligenceIndex": null
+			},
+			"lyria-3-pro-preview": {
+				"kind": "priced",
+				"inputPerMTok": 0,
+				"outputPerMTok": 0,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": 1048576,
+				"maxOutputTokens": 65536,
+				"knowledge": null,
 				"intelligenceIndex": null
 			}
 		},
 		"OpenRouter": {
-			"typesafe/jev-router": {
-				"kind": "unpriced",
-				"inputPerMTok": null,
-				"outputPerMTok": null,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
+			"anthropic/claude-haiku-5.5": {
+				"kind": "priced",
+				"inputPerMTok": 0.1,
+				"outputPerMTok": 0.5,
+				"cacheReadPerMTok": 0.01,
+				"cacheWritePerMTok": 0.125,
 				"contextTokens": 1000000,
-				"maxOutputTokens": 65536,
+				"maxOutputTokens": 128000,
 				"knowledge": null,
-				"intelligenceIndex": null
+				"intelligenceIndex": 36.2
 			},
 			"google/gemini-3.8-flash": {
 				"kind": "priced",
@@ -948,17 +948,6 @@
 				"knowledge": null,
 				"intelligenceIndex": 30.5
 			},
-			"anthropic/claude-haiku-5.5": {
-				"kind": "priced",
-				"inputPerMTok": 0.1,
-				"outputPerMTok": 0.5,
-				"cacheReadPerMTok": 0.01,
-				"cacheWritePerMTok": 0.125,
-				"contextTokens": 1000000,
-				"maxOutputTokens": 128000,
-				"knowledge": null,
-				"intelligenceIndex": 36.2
-			},
 			"openrouter/auto": {
 				"kind": "unpriced",
 				"inputPerMTok": null,
@@ -969,20 +958,20 @@
 				"maxOutputTokens": null,
 				"knowledge": null,
 				"intelligenceIndex": null
-			}
-		},
-		"Ollama": {
-			"qwen3.8:27b": {
-				"kind": "local",
+			},
+			"typesafe/jev-router": {
+				"kind": "unpriced",
 				"inputPerMTok": null,
 				"outputPerMTok": null,
 				"cacheReadPerMTok": null,
 				"cacheWritePerMTok": null,
-				"contextTokens": null,
-				"maxOutputTokens": null,
+				"contextTokens": 1000000,
+				"maxOutputTokens": 65536,
 				"knowledge": null,
 				"intelligenceIndex": null
-			},
+			}
+		},
+		"Ollama": {
 			"gemma4:12b": {
 				"kind": "local",
 				"inputPerMTok": null,
@@ -995,6 +984,17 @@
 				"intelligenceIndex": null
 			},
 			"gemma4:e4b": {
+				"kind": "local",
+				"inputPerMTok": null,
+				"outputPerMTok": null,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": null,
+				"maxOutputTokens": null,
+				"knowledge": null,
+				"intelligenceIndex": null
+			},
+			"qwen3.8:27b": {
 				"kind": "local",
 				"inputPerMTok": null,
 				"outputPerMTok": null,
@@ -1031,17 +1031,6 @@
 			}
 		},
 		"LM Studio": {
-			"qwen/qwen3.8-27b": {
-				"kind": "local",
-				"inputPerMTok": null,
-				"outputPerMTok": null,
-				"cacheReadPerMTok": null,
-				"cacheWritePerMTok": null,
-				"contextTokens": null,
-				"maxOutputTokens": null,
-				"knowledge": null,
-				"intelligenceIndex": null
-			},
 			"google/gemma-4-12b": {
 				"kind": "local",
 				"inputPerMTok": null,
@@ -1063,10 +1052,21 @@
 				"maxOutputTokens": null,
 				"knowledge": null,
 				"intelligenceIndex": null
+			},
+			"qwen/qwen3.8-27b": {
+				"kind": "local",
+				"inputPerMTok": null,
+				"outputPerMTok": null,
+				"cacheReadPerMTok": null,
+				"cacheWritePerMTok": null,
+				"contextTokens": null,
+				"maxOutputTokens": null,
+				"knowledge": null,
+				"intelligenceIndex": null
 			}
 		},
 		"Codex": {
-			"gpt-6.1-terra": {
+			"gpt-6-luna": {
 				"kind": "subscription",
 				"inputPerMTok": null,
 				"outputPerMTok": null,
@@ -1074,8 +1074,8 @@
 				"cacheWritePerMTok": null,
 				"contextTokens": 1050000,
 				"maxOutputTokens": 128000,
-				"knowledge": "2026-06-01",
-				"intelligenceIndex": 51
+				"knowledge": "2026-05-18",
+				"intelligenceIndex": 27.8
 			},
 			"gpt-6.1-sol": {
 				"kind": "subscription",
@@ -1088,7 +1088,7 @@
 				"knowledge": "2026-04-30",
 				"intelligenceIndex": 54.5
 			},
-			"gpt-6-luna": {
+			"gpt-6.1-terra": {
 				"kind": "subscription",
 				"inputPerMTok": null,
 				"outputPerMTok": null,
@@ -1096,8 +1096,8 @@
 				"cacheWritePerMTok": null,
 				"contextTokens": 1050000,
 				"maxOutputTokens": 128000,
-				"knowledge": "2026-05-18",
-				"intelligenceIndex": 27.8
+				"knowledge": "2026-06-01",
+				"intelligenceIndex": 51
 			}
 		},
 		"TypeSafe": {
