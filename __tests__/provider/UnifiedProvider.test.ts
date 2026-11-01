@@ -1,3 +1,4 @@
+import { buildTagGenerationPrompt } from '../../src/domain/tag-generation';
 import { PROVIDER_NAMES } from '../../src/utils/lib-utils';
 import type { ProviderConfig } from '../../src/types';
 import { TAG_GENERATION_SCHEMA } from '../../src/domain/constants';
@@ -308,6 +309,34 @@ describe('UnifiedProvider generated-tags contract', () => {
 			}
 		}
 	);
+
+	it('marks the stable prompt prefix for Anthropic caching and leaves other prompts plain', async () => {
+		const toolResponse = {
+			stop_reason: 'tool_use',
+			content: [{ type: 'tool_use', name: 'generate_tags', input: generated }],
+		};
+		const anthropic = config(PROVIDER_NAMES.ANTHROPIC);
+		mockSendRequest.mockResolvedValueOnce(toolResponse);
+		const prompt = buildTagGenerationPrompt({
+			body: 'note',
+			instructions: 'rules',
+			excluded: [],
+			minimum: 0,
+			maximum: 1,
+		});
+		await provider.callAPI('sys', prompt, anthropic, 'claude');
+		const body = mockSendRequest.mock.calls[0]?.[2] as { messages: Array<{ content: unknown }> };
+		const blocks = body.messages[0]?.content as Array<{ text: string; cache_control?: unknown }>;
+		expect(blocks[0]?.cache_control).toEqual({ type: 'ephemeral' });
+		expect(blocks[0]?.text).not.toContain('note');
+		expect(blocks[1]?.cache_control).toBeUndefined();
+		expect(blocks[1]?.text).toContain('note');
+
+		mockSendRequest.mockResolvedValueOnce(toolResponse);
+		await provider.callAPI('sys', 'prompt', anthropic, 'claude');
+		const plain = mockSendRequest.mock.calls[1]?.[2] as { messages: Array<{ content: unknown }> };
+		expect(plain.messages[0]?.content).toBe('prompt');
+	});
 
 	it('keeps official provider headers and endpoints', async () => {
 		mockSendRequest.mockResolvedValueOnce({

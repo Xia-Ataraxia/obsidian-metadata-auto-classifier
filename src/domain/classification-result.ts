@@ -38,7 +38,8 @@ export async function resolveClassificationValues(input: {
 	const maximum = input.mayGenerate ? Math.max(0, input.snapshot.maximum - selected.length) : 0;
 	let generated: string[] = [];
 	if (maximum > 0) {
-		const excluded = [...input.existing, ...input.candidates, ...selected].map((value) =>
+		// Candidates repeat across notes, so they lead the list to keep the cacheable prefix stable.
+		const excluded = [...input.candidates, ...input.existing, ...selected].map((value) =>
 			stripWikiLink(value, input.snapshot.linkType)
 		);
 		generated = await input.generate({
