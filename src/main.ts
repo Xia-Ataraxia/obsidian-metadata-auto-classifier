@@ -4,6 +4,7 @@ import { CommandService } from './ui/CommandService';
 import { DEFAULT_FRONTMATTER_SETTING, DEFAULT_SETTINGS, NOTICE_CATALOG } from './domain/constants';
 import { migrateStoredSettings } from './domain/settings-migration';
 import { migrateLegacyJev } from './domain/model-list';
+import { migrateRetiredModels } from './domain/model-migration';
 import type { AutoClassifierSettings } from './types';
 import { AutoClassifierSettingTab } from './ui/settings';
 import { PluginNotices } from './ui/plugin-notices';
@@ -110,6 +111,7 @@ export default class AutoClassifierPlugin extends Plugin {
 		const defaults = structuredClone(DEFAULT_SETTINGS);
 		this.settings = { ...defaults, ...(migrateStoredSettings(storedSettings) as Partial<AutoClassifierSettings>) };
 		migrateLegacyJev(this.settings);
+		const retired = migrateRetiredModels(this.settings);
 
 		// Migrate old frontmatter settings that may be missing count
 		this.settings.frontmatter = this.settings.frontmatter.map((fm) => ({
@@ -120,6 +122,11 @@ export default class AutoClassifierPlugin extends Plugin {
 
 		// Initialize notices after settings are loaded so the mute store is available
 		this.notices = this.createNotices();
+		if (retired.length > 0) {
+			this.notices.show('models_updated', {
+				message: retired.map((item) => `${item.from} → ${item.to}`).join(', '),
+			});
+		}
 
 		await this.saveSettings();
 	}
