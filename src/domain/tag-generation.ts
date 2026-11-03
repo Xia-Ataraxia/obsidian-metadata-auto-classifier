@@ -146,6 +146,8 @@ export function buildTagGenerationPrompt(input: BuildTagGenerationPromptInput): 
 	});
 	return [
 		'Generate new Obsidian tags supported by the body and user instructions.',
+		// The default classification rule says to select only from listed categories, which makes models return nothing here.
+		'No reference list applies here: where the instructions mention selecting from reference categories, create new tags instead.',
 		`Return between ${input.minimum} and ${input.maximum} tags. When minimum is 0, an empty list is allowed.`,
 		'Exclude every tag already listed in excluded. Do not include a leading #.',
 		'Return only a JSON object with exactly one key and this shape: {"tags": string[]}.',
