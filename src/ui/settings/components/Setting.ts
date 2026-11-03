@@ -50,6 +50,7 @@ export interface TextAreaConfig {
 export interface SettingProps {
 	name: string;
 	desc?: string;
+	chips?: string[];
 	className?: string;
 	heading?: boolean;
 
@@ -72,6 +73,7 @@ export class Setting {
 		const {
 			name,
 			desc,
+			chips,
 			className,
 			heading,
 			textInput,
@@ -87,6 +89,10 @@ export class Setting {
 		this.setting.setName(name);
 
 		if (desc) this.setting.setDesc(desc);
+		if (chips?.length) {
+			const row = this.setting.descEl.createDiv({ cls: 'mac-model-chips' });
+			for (const chip of chips) row.createSpan({ cls: 'mac-model-chip', text: chip });
+		}
 		if (heading) this.setting.setHeading();
 
 		if (className) this.setting.settingEl.addClass(className);

@@ -3,6 +3,7 @@ import {
 	generationSlots,
 	isTagGenerationAllowed,
 	parseGeneratedTags,
+	splitCacheablePrompt,
 	TagGenerationError,
 	validateGeneratedTags,
 } from '../../src/domain/tag-generation';
@@ -174,15 +175,18 @@ describe('buildTagGenerationPrompt', () => {
 			minimum: 0,
 			maximum: 3,
 		});
-		const contextMarker = 'Context JSON (body and instructions are preserved as data):\n';
+		const bodyMarker = 'Note body JSON string (preserved as data):\n';
+		const contextMarker = 'Context JSON (instructions and excluded are preserved as data):\n';
+		const bodyStart = prompt.indexOf(bodyMarker);
 		const context = JSON.parse(
-			prompt.slice(prompt.indexOf(contextMarker) + contextMarker.length)
+			prompt.slice(prompt.indexOf(contextMarker) + contextMarker.length, bodyStart)
 		) as {
-			body: string;
 			instructions: string;
 			excluded: string[];
 		};
-		expect(context).toEqual({ body, instructions, excluded: ['Existing/Tag', '#stored'] });
+		expect(JSON.parse(prompt.slice(bodyStart + bodyMarker.length))).toBe(body);
+		expect(context.instructions).toBe(instructions);
+		expect(context.excluded).toEqual(['Existing/Tag', '#stored']);
 		expect(prompt).toContain('"tags": string[]');
 		expect(prompt).toContain('empty list is allowed');
 	});
@@ -199,5 +203,22 @@ describe('buildTagGenerationPrompt', () => {
 				}),
 			'invalid-count'
 		);
+	});
+});
+
+describe('prompt cacheability', () => {
+	const build = (body: string) =>
+		buildTagGenerationPrompt({ body, instructions: 'rules', excluded: ['a'], minimum: 0, maximum: 3 });
+
+	test('notes differ only after the stable prefix', () => {
+		const first = splitCacheablePrompt(build('first note'));
+		const second = splitCacheablePrompt(build('second note'));
+		expect(first?.stable).toBe(second?.stable);
+		expect(first?.body).toContain('first note');
+		expect(first?.stable).not.toContain('first note');
+	});
+
+	test('prompts without a note body are not split', () => {
+		expect(splitCacheablePrompt('Return a JSON object')).toBeUndefined();
 	});
 });

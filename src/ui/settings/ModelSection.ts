@@ -7,9 +7,13 @@ import { toApiErrorNotice } from '../../utils/api-error-notice';
 import type { Model, ProviderConfig } from '../../types';
 import { ClassificationStateError } from '../../domain/classification-state';
 import { decisionTransport } from '../../domain/decision-formats';
+import { modelChips } from '../../domain/insights-model';
+import { resolveModelMeta } from '../../domain/model-catalog';
+import { classificationTarget, generationTarget } from '../../domain/model-list';
 import { findUniqueProvider, getProviderPresets } from '../../utils/lib-utils';
 import { createProviderSession } from '../provider-session';
 import { Setting } from './components/Setting';
+import { InsightsModal } from './modals/InsightsModal';
 import { ModelModal, type ModelModalProps } from './modals/ModelModal';
 
 const MODEL_TEST_TIMEOUT_MS = 60_000;
@@ -28,7 +32,15 @@ export class ModelSection {
 			.setDesc(
 				'Decision API models classify notes by scoring each existing value. Chat models only generate new tags. The selected model is used for its role; the other role uses the first model of that kind.'
 			)
-			.setHeading();
+			.setHeading()
+			.addButton((button) =>
+				button
+					.setButtonText('Insights')
+					.onClick(() => void this.openInsights())
+			);
+		void this.plugin.catalog?.load().then((replaced) => {
+			if (replaced && this.plugin.isActive()) this.onRefresh();
+		});
 
 		this.renderModelList(modelSection, providers, selectedModel);
 
@@ -72,6 +84,9 @@ export class ModelSection {
 					desc: `${provider.name} · ${
 						decisionTransport(provider.name, config) ? 'Decision API' : 'Chat'
 					}`,
+					chips: this.plugin.catalog
+						? modelChips(resolveModelMeta(this.plugin.catalog.current, provider.name, config.id))
+						: [],
 					buttons: [
 						{
 							icon: 'check',
@@ -211,6 +226,25 @@ export class ModelSection {
 				});
 			});
 		});
+	}
+
+	private async openInsights(): Promise<void> {
+		if (!this.plugin.isActive()) return;
+		const { settings, catalog } = this.plugin;
+		await catalog.load();
+		if (!this.plugin.isActive()) return;
+		const inUse = [classificationTarget(settings), generationTarget(settings)].flatMap((target) =>
+			target ? [{ provider: target.provider.name, model: target.model.id }] : []
+		);
+		const modal = new InsightsModal(this.app, {
+			providers: settings.providers,
+			inUse,
+			catalog,
+			onError: (message) => this.plugin.notices.show('validation_error', { message }),
+			onCatalogChanged: () => this.onRefresh(),
+		});
+		this.plugin.register(() => modal.close());
+		modal.open();
 	}
 
 	private openModelModal(

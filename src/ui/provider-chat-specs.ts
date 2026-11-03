@@ -1,5 +1,5 @@
 import { TAG_GENERATION_SCHEMA, COMMON_CONSTANTS } from '../domain/constants';
-import { parseGeneratedTags, TagGenerationError } from '../domain/tag-generation';
+import { parseGeneratedTags, splitCacheablePrompt, TagGenerationError } from '../domain/tag-generation';
 import { PROVIDER_NAMES } from '../utils/lib-utils';
 import type { GeneratedTags, ProviderConfig } from '../types';
 import type { SSEEvent, SSEEventOutcome } from './streaming-request';
@@ -106,6 +106,16 @@ const anthropicTool = {
 	strict: true,
 } as const;
 
+/** Anthropic caches only up to an explicit breakpoint; other providers cache matching prefixes automatically. */
+function anthropicUserContent(userPrompt: string): string | Array<Record<string, unknown>> {
+	const parts = splitCacheablePrompt(userPrompt);
+	if (!parts) return userPrompt;
+	return [
+		{ type: 'text', text: parts.stable, cache_control: { type: 'ephemeral' } },
+		{ type: 'text', text: parts.body },
+	];
+}
+
 function parseAnthropicResponse(data: unknown): GeneratedTags {
 	if (!isRecord(data) || data.stop_reason !== 'tool_use' || !Array.isArray(data.content)) {
 		throw new TagGenerationError('invalid-response');
@@ -158,7 +168,7 @@ export const chatProviderSpecs: Record<string, ProviderSpec> = {
 			model,
 			max_tokens: COMMON_CONSTANTS.DEFAULT_MAX_TOKENS,
 			system: systemRole,
-			messages: [{ role: 'user', content: userPrompt }],
+			messages: [{ role: 'user', content: anthropicUserContent(userPrompt) }],
 			temperature,
 			tools: [anthropicTool],
 			tool_choice: {

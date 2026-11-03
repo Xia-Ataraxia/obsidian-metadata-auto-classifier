@@ -1,0 +1,38 @@
+name: Update model catalog
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun scripts/update-model-catalog.ts
+      - name: Open a pull request when values changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- src/domain/model-catalog.json; then
+            echo "Catalog unchanged"
+            exit 0
+          fi
+          branch=chore/update-model-catalog
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add src/domain/model-catalog.json
+          git commit -m "chore: update model catalog"
+          git push --force origin "$branch"
+          gh pr view "$branch" --json number > /dev/null 2>&1 || gh pr create \
+            --base main \
+            --title "chore: update model catalog" \
+            --body "Scheduled refresh of prices, token limits and the intelligence index. Check the diff for prices that look wrong before merging."

@@ -125,6 +125,9 @@ export function validateGeneratedTags(
 	return [...tags];
 }
 
+// Provider prompt caches match on a stable prefix, so the per-note body always comes last.
+const TAG_PROMPT_BODY_MARKER = 'Note body JSON string (preserved as data):';
+
 /** Build the existing-provider prompt with source strings preserved in JSON context. */
 export function buildTagGenerationPrompt(input: BuildTagGenerationPromptInput): string {
 	if (
@@ -138,7 +141,6 @@ export function buildTagGenerationPrompt(input: BuildTagGenerationPromptInput): 
 	assertCount(input.maximum);
 	if (input.minimum > input.maximum) fail('invalid-count');
 	const context = JSON.stringify({
-		body: input.body,
 		instructions: input.instructions,
 		excluded: input.excluded,
 	});
@@ -147,7 +149,15 @@ export function buildTagGenerationPrompt(input: BuildTagGenerationPromptInput): 
 		`Return between ${input.minimum} and ${input.maximum} tags. When minimum is 0, an empty list is allowed.`,
 		'Exclude every tag already listed in excluded. Do not include a leading #.',
 		'Return only a JSON object with exactly one key and this shape: {"tags": string[]}.',
-		'Context JSON (body and instructions are preserved as data):',
+		'Context JSON (instructions and excluded are preserved as data):',
 		context,
+		TAG_PROMPT_BODY_MARKER,
+		JSON.stringify(input.body),
 	].join('\n');
+}
+
+/** Splits a prompt at the note body so providers with explicit caching can mark the stable prefix. */
+export function splitCacheablePrompt(prompt: string): { stable: string; body: string } | undefined {
+	const index = prompt.indexOf(`\n${TAG_PROMPT_BODY_MARKER}\n`);
+	return index === -1 ? undefined : { stable: prompt.slice(0, index), body: prompt.slice(index + 1) };
 }

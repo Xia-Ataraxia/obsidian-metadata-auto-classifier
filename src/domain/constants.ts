@@ -148,6 +148,10 @@ export const NOTICE_CATALOG: NoticeCatalog = {
 		timeout: 3000,
 		immutable: true,
 	},
+	models_updated: {
+		template: 'Replaced retired models: {{message}}',
+		timeout: 10000,
+	},
 	// Model section
 	model_test_success: {
 		template: '{{name}} is connected.',

@@ -362,3 +362,5 @@ export class Workspace {
 	on = vi.fn();
 	off = vi.fn();
 }
+
+export const normalizePath = (path: string): string => path;
