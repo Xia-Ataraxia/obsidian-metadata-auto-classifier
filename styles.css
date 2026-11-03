@@ -250,6 +250,10 @@
 }
 
 
+.vertical-tab-content .setting-item.mac-setting-empty {
+	display: none;
+}
+
 /* Provider usage */
 .mac-usage-chips {
 	display: flex;
@@ -322,11 +326,6 @@
 }
 
 /* Frontmatter rows */
-/* Tags cannot be deleted, so its edit button keeps the same column as the other rows. */
-.vertical-tab-content .tag-section .setting-item-control {
-	padding-inline-end: var(--size-4-12);
-}
-
 .vertical-tab-content .tag-section > .setting-item,
 .vertical-tab-content .frontmatter-section > .setting-item {
 	padding-inline: var(--size-4-3);

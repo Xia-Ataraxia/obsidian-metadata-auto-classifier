@@ -38,7 +38,16 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 		return [
 			{ name: 'Classification', aliases: ['API', 'provider', 'model', 'decision'], render: mount((el) => this.renderApi(el)) },
 			{ name: 'Frontmatters', aliases: ['tags'], render: mount((el) => this.renderFrontmatters(el)) },
-			{ name: 'Muted notices', aliases: ['notifications'], render: mount((el) => this.renderNotices(el)) },
+			{
+				name: 'Hidden notices',
+				aliases: ['muted', 'notifications'],
+				// Definitions are read once and Obsidian redraws the entry, so emptiness is a class set on each render.
+				render: (setting) => {
+					const isEmpty = this.plugin.notices.listMuted().length === 0;
+					setting.settingEl.toggleClass('mac-setting-empty', isEmpty);
+					if (!isEmpty) mount((el) => this.renderNotices(el))(setting);
+				},
+			},
 			{ name: 'Support Auto Classifier', render: mount((el) => this.renderSupport(el)) },
 		];
 	}
@@ -60,26 +69,32 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 		});
 	}
 
+	/** Only shown while something is hidden: with nothing muted there is nothing to read or do here. */
 	private renderNotices(containerEl: HTMLElement): void {
 		const { notices } = this.plugin;
-		const setting = new ObsidianSetting(containerEl).setName('Muted notices');
-		setting.descEl.addClass('mac-muted-count');
+		const count = notices.listMuted().length;
+		if (count === 0) return;
+		const setting = new ObsidianSetting(containerEl)
+			.setName('Hidden notices')
+			.setDesc(
+				count === 1
+					? '1 notice you muted will not appear.'
+					: `${count} notices you muted will not appear.`
+			);
 		setting.addButton((btn) => {
-			const refresh = () => {
-				const count = notices.listMuted().length;
-				setting.setDesc(count > 0 ? `${count} muted` : 'None muted');
-				btn.setDisabled(count === 0);
-			};
-			btn.setButtonText('Reset').onClick(async () => {
+			btn.setButtonText('Show again').onClick(async () => {
 				if (!this.plugin.isActive()) return;
 				try {
 					await notices.unmuteAll();
-					if (this.plugin.isActive()) refresh();
+					if (!this.plugin.isActive()) return;
+					const entryEl = containerEl.closest('.setting-item');
+					if (entryEl) entryEl.addClass('mac-setting-empty');
+					else setting.settingEl.remove();
+					notices.show('notices_restored');
 				} catch {
-					if (this.plugin.isActive()) notices.show('validation_error', { message: 'Could not reset muted notices.' });
+					if (this.plugin.isActive()) notices.show('validation_error', { message: 'Could not show muted notices again.' });
 				}
 			});
-			refresh();
 		});
 	}
 
