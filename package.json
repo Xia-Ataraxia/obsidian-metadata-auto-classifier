@@ -49,7 +49,8 @@
 	"homepage": "https://github.com/Xia-Ataraxia/obsidian-metadata-auto-classifier#readme",
 	"type": "module",
 	"overrides": {
-		"moment": "2.31.0"
+		"moment": "2.31.0",
+		"minimatch": "^11.0.1"
 	},
 	"dependencies": {
 		"yaml": "2.9.1"
