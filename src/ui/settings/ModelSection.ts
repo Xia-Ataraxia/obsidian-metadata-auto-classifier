@@ -26,7 +26,7 @@ export class ModelSection {
 		new ObsidianSetting(modelSection)
 			.setName('Models')
 			.setDesc(
-				'Decision API models classify notes by scoring each existing value. Chat models only generate new tags. The selected model is used for its role; the other role uses the first model of that kind.'
+				'The selected model is used for its role; the other role uses the first model of that kind.'
 			)
 			.setHeading();
 
@@ -39,6 +39,14 @@ export class ModelSection {
 				onClick: () => this.openModelModal('add'),
 			},
 		});
+	}
+
+	private renderModelGroup(containerEl: HTMLElement, title: string, description: string): HTMLElement {
+		const groupEl = containerEl.createDiv({ cls: 'mac-model-group' });
+		const headEl = groupEl.createDiv({ cls: 'mac-model-group-head' });
+		headEl.createDiv({ cls: 'mac-model-group-title', text: title });
+		headEl.createDiv({ cls: 'mac-model-group-desc', text: description });
+		return groupEl.createDiv({ cls: 'mac-model-group-rows' });
 	}
 
 	private renderModelList(
@@ -56,6 +64,13 @@ export class ModelSection {
 			return;
 		}
 
+		const decisionEl = this.renderModelGroup(
+			containerEl,
+			'Decision API',
+			'Classifies notes by scoring each existing value.'
+		);
+		const chatEl = this.renderModelGroup(containerEl, 'Chat', 'Generates new tags when a field allows it.');
+
 		providers.forEach((provider) => {
 			provider.models.forEach((config: Model) => {
 				const isActive =
@@ -67,11 +82,9 @@ export class ModelSection {
 					decision: config.decision,
 				};
 
-				Setting.create(containerEl, {
+				Setting.create(decisionTransport(provider.name, config) ? decisionEl : chatEl, {
 					name: config.name,
-					desc: `${provider.name} · ${
-						decisionTransport(provider.name, config) ? 'Decision API' : 'Chat'
-					}`,
+					desc: provider.name,
 					buttons: [
 						{
 							icon: 'check',
