@@ -1,5 +1,5 @@
 import type AutoClassifierPlugin from '../../main';
-import { PluginSettingTab, Setting as ObsidianSetting } from 'obsidian';
+import { PluginSettingTab, Setting as ObsidianSetting, SettingGroup } from 'obsidian';
 import type { SettingDefinitionItem } from 'obsidian';
 
 import type { FrontmatterField } from '../../types';
@@ -19,15 +19,6 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 	constructor(plugin: AutoClassifierPlugin) {
 		super(plugin.app, plugin);
 		this.plugin = plugin;
-	}
-
-	display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
-		this.renderApi(containerEl);
-		this.renderFrontmatters(containerEl);
-		this.renderNotices(containerEl);
-		this.renderSupport(containerEl);
 	}
 
 	getSettingDefinitions(): SettingDefinitionItem[] {
@@ -58,15 +49,18 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 	}
 
 	private renderFrontmatters(containerEl: HTMLElement): void {
-		new ObsidianSetting(containerEl).setName('Frontmatters').setHeading();
-		this.tagSetting = new Tag(this.plugin, containerEl.createDiv({ cls: 'tag-section' }));
+		const { listEl } = new SettingGroup(containerEl)
+			.setHeading('Frontmatters')
+			.addExtraButton((button) =>
+				button
+					.setIcon('plus')
+					.setTooltip('Add frontmatter')
+					.onClick(() => this.addNewFrontmatter())
+			);
+		this.tagSetting = new Tag(this.plugin, listEl.createDiv({ cls: 'tag-section' }));
 		this.tagSetting.display();
-		this.frontmatterSetting = new Frontmatter(this.plugin, containerEl.createDiv({ cls: 'frontmatter-section' }));
+		this.frontmatterSetting = new Frontmatter(this.plugin, listEl.createDiv({ cls: 'frontmatter-section' }));
 		this.frontmatterSetting.display();
-		Setting.create(containerEl.createDiv({ cls: 'add-button-container' }), {
-			name: '',
-			button: { text: '+ Add frontmatter', onClick: () => this.addNewFrontmatter() },
-		});
 	}
 
 	/** Only shown while something is hidden: with nothing muted there is nothing to read or do here. */

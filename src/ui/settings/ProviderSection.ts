@@ -1,6 +1,6 @@
-import { summarizeProvider, usageChips, USAGE_WINDOW_DAYS } from '../../domain/usage-ledger';
+import { summarizeProvider, usageChips } from '../../domain/usage-ledger';
 import { confirmAction } from './modals/ConfirmModal';
-import { Setting as ObsidianSetting, type App } from 'obsidian';
+import { SettingGroup, type App } from 'obsidian';
 
 import type AutoClassifierPlugin from '../../main';
 import { copyProvider, providerHasAuth, sameProvider } from '../../domain/classification-state';
@@ -47,16 +47,18 @@ export class ProviderSection {
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[]): void {
 		const providerSection = containerEl.createDiv({ cls: 'provider-section' });
-		new ObsidianSetting(providerSection)
-			.setName('Providers')
-			.setDesc(
-				`Credentials for the models that classify notes and generate new tags. Usage counts this plugin's requests over the last ${USAGE_WINDOW_DAYS} days.`
-			)
-			.setHeading();
+		const group = new SettingGroup(providerSection)
+			.setHeading('Providers')
+			.addExtraButton((button) =>
+				button
+					.setIcon('plus')
+					.setTooltip('Add provider')
+					.onClick(() => this.openProviderModal('add'))
+			);
 
 		providers.forEach((provider) => {
 			const displayInfo = this.getProviderDisplayInfo(provider);
-			Setting.create(providerSection, {
+			Setting.create(group.listEl, {
 				name: displayInfo.name,
 				desc: displayInfo.desc,
 				chips: this.plugin.usage
@@ -137,13 +139,6 @@ export class ProviderSection {
 			});
 		});
 
-		Setting.create(providerSection, {
-			name: '',
-			button: {
-				text: '+ Add provider',
-				onClick: () => this.openProviderModal('add'),
-			},
-		});
 	}
 
 	private openProviderModal(type: 'add' | 'edit', providerToEdit?: ProviderConfig): void {

@@ -94,7 +94,7 @@ export function usageChips(summary: ProviderUsageSummary): string[] {
 		return [`No requests in ${USAGE_WINDOW_DAYS} days`];
 	}
 	const chips = [
-		`${formatTokens(summary.tokens)} tokens`,
+		`${formatTokens(summary.tokens)} tokens in ${USAGE_WINDOW_DAYS} days`,
 		`${summary.requests} ${summary.requests === 1 ? 'request' : 'requests'}`,
 	];
 	if (summary.recentLatencyMs !== null) chips.push(`${formatLatency(summary.recentLatencyMs)} recent`);

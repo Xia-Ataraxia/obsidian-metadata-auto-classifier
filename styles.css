@@ -278,58 +278,13 @@
 	}
 }
 
-/* Model groups */
-.mac-model-group {
-	margin-top: var(--size-4-3);
-	border: var(--border-width) solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	overflow: hidden;
+/* Tags and custom fields are separate components sharing one setting group's list. */
+.tag-section,
+.frontmatter-section {
+	display: contents;
 }
 
-.mac-model-group-head {
-	padding: var(--size-4-2) var(--size-4-3);
-	background: var(--background-secondary);
-	border-bottom: var(--border-width) solid var(--background-modifier-border);
-}
-
-.mac-model-group-title {
-	font-size: var(--font-ui-small);
-	font-weight: var(--font-semibold);
-}
-
-.mac-model-group-desc {
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-}
-
-.mac-model-group-rows:empty::after {
-	content: "No models yet";
-	display: block;
-	padding: var(--size-4-3);
-	color: var(--text-faint);
-	font-size: var(--font-ui-small);
-}
-
-.mac-model-group-rows .setting-item {
-	align-items: center;
-	padding-inline: var(--size-4-3);
-	border-top: none;
-}
-
-.mac-model-group-rows .setting-item + .setting-item {
+/* The group's own row divider cannot cross the two wrappers. */
+.frontmatter-section > .setting-item {
 	border-top: var(--border-width) solid var(--background-modifier-border);
-}
-
-/* Provider rows: usage chips make these taller, so the buttons stay centered on the whole row. */
-.vertical-tab-content .provider-section > .setting-item {
-	align-items: center;
-}
-
-/* Frontmatter rows */
-.vertical-tab-content .tag-section > .setting-item,
-.vertical-tab-content .frontmatter-section > .setting-item {
-	padding-inline: var(--size-4-3);
-	border: var(--border-width) solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	margin-bottom: var(--size-4-2);
 }

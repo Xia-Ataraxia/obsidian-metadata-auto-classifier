@@ -83,12 +83,7 @@ describe('settings error privacy', () => {
 			''
 		);
 		const section = container.children[0];
-		const heading = section?.children[0];
 		expect(section?.className).toBe('model-section');
-		expect(heading).toMatchObject({
-			settingName: 'Models',
-			className: 'setting-item setting-item-heading',
-		});
 		const action = vi
 			.mocked(Setting.create)
 			.mock.calls.flatMap((call) => call[1].buttons ?? [])
