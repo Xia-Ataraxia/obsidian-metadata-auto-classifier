@@ -7,6 +7,7 @@ import { toApiErrorNotice } from '../../utils/api-error-notice';
 import type { Model, ProviderConfig } from '../../types';
 import { ClassificationStateError } from '../../domain/classification-state';
 import { decisionTransport } from '../../domain/decision-formats';
+import { classificationTarget, generationTarget } from '../../domain/model-list';
 import { findUniqueProvider, getProviderPresets } from '../../utils/lib-utils';
 import { createProviderSession } from '../provider-session';
 import { Setting } from './components/Setting';
@@ -64,6 +65,10 @@ export class ModelSection {
 			return;
 		}
 
+		const inUse = [
+			classificationTarget(this.plugin.settings),
+			generationTarget(this.plugin.settings),
+		];
 		const decisionEl = this.renderModelGroup(
 			containerEl,
 			'Decision API',
@@ -85,6 +90,11 @@ export class ModelSection {
 				Setting.create(decisionTransport(provider.name, config) ? decisionEl : chatEl, {
 					name: config.name,
 					desc: provider.name,
+					chips: inUse.some(
+						(target) => target?.provider.name === provider.name && target.model.id === config.id
+					)
+						? Promise.resolve(['In use'])
+						: undefined,
 					buttons: [
 						{
 							icon: 'check',

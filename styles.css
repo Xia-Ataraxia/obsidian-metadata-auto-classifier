@@ -260,7 +260,7 @@
 
 .mac-usage-chip {
 	animation: mac-usage-in 180ms ease-out;
-	padding: 1px var(--size-4-2);
+	padding: var(--size-2-1) var(--size-4-2);
 	border-radius: var(--radius-s);
 	background: var(--background-modifier-hover);
 	color: var(--text-muted);
@@ -307,6 +307,7 @@
 }
 
 .mac-model-group-rows .setting-item {
+	align-items: center;
 	padding-inline: var(--size-4-3);
 	border-top: none;
 }
@@ -315,7 +316,17 @@
 	border-top: var(--border-width) solid var(--background-modifier-border);
 }
 
+/* Provider rows: usage chips make these taller, so the buttons stay centered on the whole row. */
+.vertical-tab-content .provider-section > .setting-item {
+	align-items: center;
+}
+
 /* Frontmatter rows */
+/* Tags cannot be deleted, so its edit button keeps the same column as the other rows. */
+.vertical-tab-content .tag-section .setting-item-control {
+	padding-inline-end: var(--size-4-12);
+}
+
 .vertical-tab-content .tag-section > .setting-item,
 .vertical-tab-content .frontmatter-section > .setting-item {
 	padding-inline: var(--size-4-3);
