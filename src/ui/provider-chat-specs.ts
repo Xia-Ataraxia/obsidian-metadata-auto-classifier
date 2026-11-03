@@ -99,13 +99,6 @@ function deepSeekRequestBody(
 	};
 }
 
-const anthropicTool = {
-	name: 'generate_tags',
-	description: 'Return only newly generated Obsidian tags.',
-	input_schema: TAG_GENERATION_SCHEMA,
-	strict: true,
-} as const;
-
 /** Anthropic caches only up to an explicit breakpoint; other providers cache matching prefixes automatically. */
 function anthropicUserContent(userPrompt: string): string | Array<Record<string, unknown>> {
 	const parts = splitCacheablePrompt(userPrompt);
@@ -117,19 +110,17 @@ function anthropicUserContent(userPrompt: string): string | Array<Record<string,
 }
 
 function parseAnthropicResponse(data: unknown): GeneratedTags {
-	if (!isRecord(data) || data.stop_reason !== 'tool_use' || !Array.isArray(data.content)) {
+	if (!isRecord(data) || data.stop_reason !== 'end_turn' || !Array.isArray(data.content)) {
 		throw new TagGenerationError('invalid-response');
 	}
 	if (data.content.some((part) => isRecord(part) && part.type === 'refusal')) {
 		throw new TagGenerationError('invalid-response');
 	}
-	const tools: unknown[] = data.content.filter(
-		(part) => isRecord(part) && part.type === 'tool_use'
-	);
-	const tool = tools[0];
-	if (tools.length !== 1 || !isRecord(tool) || tool.name !== anthropicTool.name)
-		throw new TagGenerationError('invalid-response');
-	return parseGeneratedTags(tool.input);
+	// Current models may put thinking blocks before the answer.
+	const texts: unknown[] = data.content.filter((part) => isRecord(part) && part.type === 'text');
+	const text = texts[0];
+	if (texts.length !== 1 || !isRecord(text)) throw new TagGenerationError('invalid-response');
+	return parseTagsJson(text.text);
 }
 
 const openAICompatible = (): ProviderSpec => ({
@@ -140,7 +131,12 @@ const openAICompatible = (): ProviderSpec => ({
 });
 
 export const chatProviderSpecs: Record<string, ProviderSpec> = {
-	[PROVIDER_NAMES.OPENAI]: openAICompatible(),
+	// Current OpenAI models reject any temperature other than the default.
+	[PROVIDER_NAMES.OPENAI]: {
+		...openAICompatible(),
+		buildRequestBody: (systemRole, userPrompt, model) =>
+			openAIRequestBody(systemRole, userPrompt, model),
+	},
 	[PROVIDER_NAMES.DEEPSEEK]: {
 		...openAICompatible(),
 		buildRequestBody: deepSeekRequestBody,
@@ -149,8 +145,9 @@ export const chatProviderSpecs: Record<string, ProviderSpec> = {
 	[PROVIDER_NAMES.CUSTOM]: openAICompatible(),
 	[PROVIDER_NAMES.OPENROUTER]: {
 		...openAICompatible(),
-		buildRequestBody: (systemRole, userPrompt, model, temperature) => ({
-			...openAIRequestBody(systemRole, userPrompt, model, temperature),
+		// require_parameters would drop routes for models without temperature support, such as Claude.
+		buildRequestBody: (systemRole, userPrompt, model) => ({
+			...openAIRequestBody(systemRole, userPrompt, model),
 			provider: { require_parameters: true },
 		}),
 		buildHeaders: (apiKey) => ({
@@ -164,18 +161,14 @@ export const chatProviderSpecs: Record<string, ProviderSpec> = {
 			'x-api-key': apiKey,
 			'anthropic-version': '2023-06-01',
 		}),
-		buildRequestBody: (systemRole, userPrompt, model, temperature) => ({
+		// Current Claude models reject `temperature`, and Opus and Sonnet reject a forced tool_choice.
+		// Structured output returned valid JSON on every model; tool_choice auto let Haiku answer in plain text.
+		buildRequestBody: (systemRole, userPrompt, model) => ({
 			model,
 			max_tokens: COMMON_CONSTANTS.DEFAULT_MAX_TOKENS,
 			system: systemRole,
 			messages: [{ role: 'user', content: anthropicUserContent(userPrompt) }],
-			temperature,
-			tools: [anthropicTool],
-			tool_choice: {
-				type: 'tool',
-				name: anthropicTool.name,
-				disable_parallel_tool_use: true,
-			},
+			output_config: { format: { type: 'json_schema', schema: TAG_GENERATION_SCHEMA } },
 		}),
 		buildUrl: (baseUrl) => baseUrl,
 		parseResponse: parseAnthropicResponse,

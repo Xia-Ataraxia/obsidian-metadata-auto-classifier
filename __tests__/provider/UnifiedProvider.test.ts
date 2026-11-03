@@ -76,13 +76,19 @@ function chatResponse(content: string): unknown {
 	return { choices: [{ finish_reason: 'stop', message: { content, refusal: null } }] };
 }
 
+const TEMPERATURE_REJECTED: string[] = [
+	PROVIDER_NAMES.OPENAI,
+	PROVIDER_NAMES.ANTHROPIC,
+	PROVIDER_NAMES.OPENROUTER,
+];
+
 const providerCases: Array<{ name: string; response: unknown; mode: string }> = [
 	{ name: PROVIDER_NAMES.OPENAI, response: chatResponse(generatedJson), mode: 'openai' },
 	{
 		name: PROVIDER_NAMES.ANTHROPIC,
 		response: {
-			stop_reason: 'tool_use',
-			content: [{ type: 'tool_use', name: 'generate_tags', input: generated }],
+			stop_reason: 'end_turn',
+			content: [{ type: 'thinking', thinking: 'plan' }, { type: 'text', text: generatedJson }],
 		},
 		mode: 'anthropic',
 	},
@@ -134,45 +140,20 @@ describe('UnifiedProvider generated-tags contract', () => {
 		}
 	});
 
-	it('requires one named completed Anthropic tool result', () => {
-		for (const [stop_reason, name] of [
-			['max_tokens', 'generate_tags'],
-			['tool_use', 'unrequested_tool'],
-			[undefined, 'generate_tags'],
+	it('requires one completed Anthropic JSON answer', () => {
+		const text = { type: 'text', text: generatedJson };
+		for (const response of [
+			{ stop_reason: 'max_tokens', content: [text] },
+			{ stop_reason: 'refusal', content: [text] },
+			{ stop_reason: undefined, content: [text] },
+			{ stop_reason: 'end_turn', content: [] },
+			{ stop_reason: 'end_turn', content: [text, text] },
+			{ stop_reason: 'end_turn', content: [{ type: 'text', text: 'Here are your tags' }] },
+			{ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"tags":[1]}' }] },
+			{ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"tags":[],"extra":true}' }] },
 		]) {
-			expect(() =>
-				provider.processApiResponse(
-					{
-						stop_reason,
-						content: [{ type: 'tool_use', name, input: generated }],
-					},
-					PROVIDER_NAMES.ANTHROPIC
-				)
-			).toThrow();
+			expect(() => provider.processApiResponse(response, PROVIDER_NAMES.ANTHROPIC)).toThrow();
 		}
-		for (const input of [{ tags: ['new/tag'], extra: true }, { tags: [1] }]) {
-			expect(() =>
-				provider.processApiResponse(
-					{
-						stop_reason: 'tool_use',
-						content: [{ type: 'tool_use', name: 'generate_tags', input }],
-					},
-					PROVIDER_NAMES.ANTHROPIC
-				)
-			).toThrow();
-		}
-		expect(() =>
-			provider.processApiResponse(
-				{
-					stop_reason: 'tool_use',
-					content: [
-						{ type: 'tool_use', name: 'generate_tags', input: generated },
-						{ type: 'tool_use', name: 'generate_tags', input: generated },
-					],
-				},
-				PROVIDER_NAMES.ANTHROPIC
-			)
-		).toThrow();
 	});
 
 	it('keeps DeepSeek JSON mode strict at the local acceptance boundary', () => {
@@ -234,6 +215,9 @@ describe('UnifiedProvider generated-tags contract', () => {
 		async ({ name, response, mode }) => {
 			const providerConfig = config(name);
 			if (name === PROVIDER_NAMES.OLLAMA) providerConfig.temperature = 0.23;
+			if (TEMPERATURE_REJECTED.includes(name)) {
+				providerConfig.temperature = 0.7;
+			}
 			if (name === PROVIDER_NAMES.CODEX) {
 				mockSendStreamingRequest.mockResolvedValueOnce(response as string);
 			} else {
@@ -257,6 +241,9 @@ describe('UnifiedProvider generated-tags contract', () => {
 					? mockSendStreamingRequest.mock.calls[0]
 					: mockSendRequest.mock.calls[0];
 			const requestBody = call?.[2] as Record<string, unknown>;
+			if (TEMPERATURE_REJECTED.includes(name)) {
+				expect(requestBody.temperature).toBeUndefined();
+			}
 			if (mode === 'openai' || mode === 'openrouter') {
 				const responseFormat = requestBody.response_format as Record<string, unknown>;
 				const schemaConfig = responseFormat.json_schema as Record<string, unknown>;
@@ -275,14 +262,11 @@ describe('UnifiedProvider generated-tags contract', () => {
 					{ role: 'user', content: 'tag prompt' },
 				]);
 			} else if (mode === 'anthropic') {
-				const tools = requestBody.tools as Array<Record<string, unknown>>;
-				expect(tools).toHaveLength(1);
-				expect(tools[0]).toMatchObject({ input_schema: TAG_GENERATION_SCHEMA, strict: true });
-				expect(requestBody.tool_choice).toEqual({
-					type: 'tool',
-					name: 'generate_tags',
-					disable_parallel_tool_use: true,
+				expect(requestBody.output_config).toEqual({
+					format: { type: 'json_schema', schema: TAG_GENERATION_SCHEMA },
 				});
+				expect(requestBody).not.toHaveProperty('tools');
+				expect(requestBody).not.toHaveProperty('tool_choice');
 			} else if (mode === 'gemini') {
 				const generationConfig = requestBody.generationConfig as Record<string, unknown>;
 				expect(generationConfig.responseMimeType).toBe('application/json');
@@ -311,12 +295,9 @@ describe('UnifiedProvider generated-tags contract', () => {
 	);
 
 	it('marks the stable prompt prefix for Anthropic caching and leaves other prompts plain', async () => {
-		const toolResponse = {
-			stop_reason: 'tool_use',
-			content: [{ type: 'tool_use', name: 'generate_tags', input: generated }],
-		};
+		const anthropicResponse = { stop_reason: 'end_turn', content: [{ type: 'text', text: generatedJson }] };
 		const anthropic = config(PROVIDER_NAMES.ANTHROPIC);
-		mockSendRequest.mockResolvedValueOnce(toolResponse);
+		mockSendRequest.mockResolvedValueOnce(anthropicResponse);
 		const prompt = buildTagGenerationPrompt({
 			body: 'note',
 			instructions: 'rules',
@@ -332,7 +313,7 @@ describe('UnifiedProvider generated-tags contract', () => {
 		expect(blocks[1]?.cache_control).toBeUndefined();
 		expect(blocks[1]?.text).toContain('note');
 
-		mockSendRequest.mockResolvedValueOnce(toolResponse);
+		mockSendRequest.mockResolvedValueOnce(anthropicResponse);
 		await provider.callAPI('sys', 'prompt', anthropic, 'claude');
 		const plain = mockSendRequest.mock.calls[1]?.[2] as { messages: Array<{ content: unknown }> };
 		expect(plain.messages[0]?.content).toBe('prompt');
@@ -340,8 +321,8 @@ describe('UnifiedProvider generated-tags contract', () => {
 
 	it('keeps official provider headers and endpoints', async () => {
 		mockSendRequest.mockResolvedValueOnce({
-			stop_reason: 'tool_use',
-			content: [{ type: 'tool_use', name: 'generate_tags', input: generated }],
+			stop_reason: 'end_turn',
+			content: [{ type: 'text', text: generatedJson }],
 		});
 		const anthropic = config(PROVIDER_NAMES.ANTHROPIC);
 		await provider.callAPI('sys', 'prompt', anthropic, 'claude');
@@ -453,10 +434,10 @@ describe('UnifiedProvider generated-tags contract', () => {
 			],
 			[
 				{
-					stop_reason: 'tool_use',
+					stop_reason: 'end_turn',
 					content: [
 						{ type: 'refusal', refusal: 'private refusal' },
-						{ type: 'tool_use', name: 'generate_tags', input: generated },
+						{ type: 'text', text: generatedJson },
 					],
 				},
 				PROVIDER_NAMES.ANTHROPIC,
