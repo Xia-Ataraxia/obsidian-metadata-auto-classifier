@@ -1,5 +1,5 @@
 import { confirmAction } from './modals/ConfirmModal';
-import { Setting as ObsidianSetting, type App } from 'obsidian';
+import { SettingGroup, type App } from 'obsidian';
 
 import type AutoClassifierPlugin from '../../main';
 import { testModel } from '../provider-api';
@@ -24,30 +24,18 @@ export class ModelSection {
 
 	render(containerEl: HTMLElement, providers: ProviderConfig[], selectedModel: string): void {
 		const modelSection = containerEl.createDiv({ cls: 'model-section' });
-		new ObsidianSetting(modelSection)
-			.setName('Models')
-			.setDesc(
-				'The selected model is used for its role; the other role uses the first model of that kind.'
-			)
-			.setHeading();
-
 		this.renderModelList(modelSection, providers, selectedModel);
-
-		Setting.create(modelSection, {
-			name: '',
-			button: {
-				text: '+ Add model',
-				onClick: () => this.openModelModal('add'),
-			},
-		});
 	}
 
-	private renderModelGroup(containerEl: HTMLElement, title: string, description: string): HTMLElement {
-		const groupEl = containerEl.createDiv({ cls: 'mac-model-group' });
-		const headEl = groupEl.createDiv({ cls: 'mac-model-group-head' });
-		headEl.createDiv({ cls: 'mac-model-group-title', text: title });
-		headEl.createDiv({ cls: 'mac-model-group-desc', text: description });
-		return groupEl.createDiv({ cls: 'mac-model-group-rows' });
+	private renderModelGroup(containerEl: HTMLElement, heading: string, decision: boolean): HTMLElement {
+		return new SettingGroup(containerEl)
+			.setHeading(heading)
+			.addExtraButton((button) =>
+				button
+					.setIcon('plus')
+					.setTooltip('Add model')
+					.onClick(() => this.openModelModal('add', undefined, undefined, undefined, decision))
+			).listEl;
 	}
 
 	private renderModelList(
@@ -55,26 +43,12 @@ export class ModelSection {
 		providers: ProviderConfig[],
 		selectedModel: string
 	): void {
-		const hasModels = providers.some((p) => p.models.length > 0);
-
-		if (!hasModels) {
-			Setting.create(containerEl, {
-				name: 'No models configured',
-				desc: 'Add a model to get started.',
-			});
-			return;
-		}
-
 		const inUse = [
 			classificationTarget(this.plugin.settings),
 			generationTarget(this.plugin.settings),
 		];
-		const decisionEl = this.renderModelGroup(
-			containerEl,
-			'Decision API',
-			'Classifies notes by scoring each existing value.'
-		);
-		const chatEl = this.renderModelGroup(containerEl, 'Chat', 'Generates new tags when a field allows it.');
+		const decisionEl = this.renderModelGroup(containerEl, 'Decision API: classifies notes', true);
+		const chatEl = this.renderModelGroup(containerEl, 'Chat: generates new tags', false);
 
 		providers.forEach((provider) => {
 			provider.models.forEach((config: Model) => {
@@ -236,18 +210,23 @@ export class ModelSection {
 				});
 			});
 		});
+		for (const listEl of [decisionEl, chatEl]) {
+			if (listEl.childElementCount === 0) Setting.create(listEl, { name: 'No models yet' });
+		}
 	}
 
 	private openModelModal(
 		type: 'add' | 'edit',
 		editTarget?: { model: string; name: string; provider: string; decision?: boolean },
 		capturedSource?: ProviderConfig,
-		capturedModel?: Model
+		capturedModel?: Model,
+		decision?: boolean
 	): void {
 		if (!this.plugin.isActive()) return;
 		const modalProviders = [...this.plugin.settings.providers];
 		const modalProps: ModelModalProps = {
 			providers: modalProviders,
+			decision,
 			notices: this.plugin.notices,
 			onSave: async (result) => {
 				if (!this.plugin.isActive()) return;

@@ -56,12 +56,12 @@ describe('usage ledger', () => {
 			'No requests in 30 days',
 		]);
 		expect(usageChips({ requests: 1, tokens: 900, recentLatencyMs: 640 })).toEqual([
-			'900 tokens',
+			'900 tokens in 30 days',
 			'1 request',
 			'640 ms recent',
 		]);
 		expect(usageChips({ requests: 42, tokens: 1_250_000, recentLatencyMs: 1234 })).toEqual([
-			'1.3M tokens',
+			'1.3M tokens in 30 days',
 			'42 requests',
 			'1.2 s recent',
 		]);

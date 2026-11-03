@@ -18,6 +18,8 @@ export interface ModelModalProps {
 		oldModel?: { model: string; provider: string };
 	}) => void | Promise<void>;
 	editTarget?: { model: string; name: string; provider: string; decision?: boolean };
+	/** Starting value of the decision toggle when adding a model. */
+	decision?: boolean;
 	notices: PluginNotices;
 }
 
@@ -43,6 +45,7 @@ export class ModelModal extends Modal {
 			this.modelId = props.editTarget.model;
 			this.decision = props.editTarget.decision === true;
 		} else {
+			this.decision = props.decision === true;
 			// Set default provider for new models
 			if (props.providers.length > 0) {
 				this.selectedProvider = props.providers[0]!.name;

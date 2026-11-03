@@ -90,6 +90,7 @@ export const DEFAULT_TAG_SETTING: FrontmatterField = {
 // ==========================================
 
 export const NOTICE_CATALOG: NoticeCatalog = {
+	notices_restored: { template: 'Muted notices will appear again.', timeout: 2500, immutable: true },
 	classification_status: {
 		template: '{{message}}',
 		timeout: 5000,

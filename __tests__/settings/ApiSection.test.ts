@@ -21,7 +21,13 @@ vi.mock('obsidian', async (importOriginal) => {
 		}
 	}
 
-	return { ...original, Setting: ChainableSetting };
+	class RecordingGroup extends original.SettingGroup {
+		setHeading(heading: string): this {
+			settingsHarness.headings.push(heading);
+			return this;
+		}
+	}
+	return { ...original, SettingGroup: RecordingGroup, Setting: ChainableSetting };
 });
 
 vi.mock('../../src/ui/provider-api', () => ({
@@ -107,7 +113,8 @@ describe('Api Container - Regression Tests', () => {
 			expect(mockContainer.empty).toHaveBeenCalled();
 			expect(settingsHarness.headings).toEqual([
 				'Providers',
-				'Models',
+				'Decision API: classifies notes',
+				'Chat: generates new tags',
 			]);
 			expect(mockContainer.createDiv).toHaveBeenCalledWith({ cls: 'provider-section' });
 			expect(mockContainer.createDiv).toHaveBeenCalledWith({ cls: 'model-section' });

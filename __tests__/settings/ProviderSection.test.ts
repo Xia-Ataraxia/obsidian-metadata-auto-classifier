@@ -11,6 +11,7 @@ const confirmationHarness = vi.hoisted(() => ({
 	buttons: [] as Array<{ label: string; click: () => void }>,
 }));
 
+import { SettingGroup } from 'obsidian';
 vi.mock('obsidian', async (importOriginal) => {
 	const original = await importOriginal<typeof import('obsidian')>();
 	class InteractiveSetting extends original.Setting {
@@ -398,8 +399,7 @@ describe('ProviderSection', () => {
 			// Should create a div with class 'provider-section'
 			expect(mockContainer.createDiv).toHaveBeenCalledWith({ cls: 'provider-section' });
 
-			// Should call Setting.create for each provider + 1 for "Add provider" button
-			expect(mockSettingCreate).toHaveBeenCalledTimes(3);
+			expect(mockSettingCreate).toHaveBeenCalledTimes(2);
 		});
 
 		it('should render OAuth status in provider description', () => {
@@ -438,23 +438,11 @@ describe('ProviderSection', () => {
 			);
 		});
 
-		it('should add "Add provider" button at the end', () => {
-			const providers: ProviderConfig[] = [];
-
-			const mockContainer = createProviderContainer();
-
-			providerSection.render(mockContainer as unknown as HTMLElement, providers);
-
-			// Should call Setting.create once for "Add provider" button
-			expect(mockSettingCreate).toHaveBeenCalledWith(
-				expect.anything(),
-				expect.objectContaining({
-					name: '',
-					button: expect.objectContaining({
-						text: '+ Add provider',
-					}),
-				})
-			);
+		it('offers adding a provider from the group header', () => {
+			const addExtraButton = vi.spyOn(SettingGroup.prototype, 'addExtraButton');
+			providerSection.render(createProviderContainer() as unknown as HTMLElement, []);
+			expect(addExtraButton).toHaveBeenCalledTimes(1);
+			expect(mockSettingCreate).not.toHaveBeenCalled();
 		});
 	});
 

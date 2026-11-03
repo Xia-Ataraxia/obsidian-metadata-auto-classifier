@@ -216,6 +216,22 @@ export const Notice = vi.fn().mockImplementation(function (
 	return this;
 });
 
+export class SettingGroup {
+	listEl: HTMLElement;
+	constructor(containerEl: HTMLElement) {
+		this.listEl = containerEl;
+	}
+	setHeading(): this {
+		return this;
+	}
+	addClass(): this {
+		return this;
+	}
+	addExtraButton(): this {
+		return this;
+	}
+}
+
 export class Setting {
 	settingEl = { addClass: vi.fn(), createSpan: vi.fn() } as any;
 	controlEl = { createSpan: vi.fn() } as any;

@@ -1,4 +1,4 @@
-import { App } from 'obsidian';
+import { App, SettingGroup } from 'obsidian';
 import type { OAuthTokens, ProviderConfig } from '../../src/types';
 import { COMMON_CONSTANTS } from '../../src/domain/constants';
 import { ClassificationStateError, copyProvider } from '../../src/domain/classification-state';
@@ -891,5 +891,32 @@ describe('model test session', () => {
 		await completion;
 		expect(fixture.show).not.toHaveBeenCalled();
 		expect(provider.auth?.type === 'oauth' && provider.auth.oauth).toEqual(initialTokens);
+	});
+});
+
+describe('adding a model from a group', () => {
+	it('starts the decision toggle from the group it was opened in', () => {
+		const clicks: Array<() => void> = [];
+		const addExtraButton = vi.spyOn(SettingGroup.prototype, 'addExtraButton').mockImplementation(function (
+			this: SettingGroup,
+			callback: (button: never) => unknown
+		) {
+			const button = {
+				setIcon: () => button,
+				setTooltip: () => button,
+				onClick: (handler: () => void) => {
+					clicks.push(handler);
+					return button;
+				},
+			};
+			callback(button as never);
+			return this;
+		} as never);
+
+		renderModelSection(modelPlugin(oauthProvider()).plugin);
+		clicks.forEach((click) => click());
+		addExtraButton.mockRestore();
+
+		expect(modelModalProps.map((props) => props.decision)).toEqual([true, false]);
 	});
 });
