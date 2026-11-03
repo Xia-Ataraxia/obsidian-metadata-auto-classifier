@@ -61,6 +61,13 @@ export class InsightsModal extends Modal {
 		this.render();
 	}
 
+	open(): void {
+		super.open();
+		// Modal.open focuses the first button, and a stray Enter or Space there would fetch prices.
+		this.bodyEl.setAttr('tabindex', '-1');
+		this.bodyEl.focus({ preventScroll: true });
+	}
+
 	onClose(): void {
 		this.contentEl.empty();
 	}

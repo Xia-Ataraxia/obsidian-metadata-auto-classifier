@@ -273,6 +273,10 @@
 	max-width: 94vw;
 }
 
+.mac-insights-body:focus {
+	outline: none;
+}
+
 .mac-insights-panel {
 	animation: mac-panel-in 220ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }

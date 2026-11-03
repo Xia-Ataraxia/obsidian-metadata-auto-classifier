@@ -75,7 +75,7 @@ export interface LabelBounds {
 
 const CHAR_WIDTH = 6.4;
 const LABEL_HEIGHT = 14;
-const LABEL_GAP = 10;
+const LABEL_GAP = 13;
 const DOT_CLEARANCE = 8;
 
 /** Tries each side of a dot and keeps the first spot clear of other dots, placed labels and the plot edge. */
