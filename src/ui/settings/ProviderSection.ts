@@ -1,3 +1,4 @@
+import { summarizeProvider, usageChips, USAGE_WINDOW_DAYS } from '../../domain/usage-ledger';
 import { confirmAction } from './modals/ConfirmModal';
 import { Setting as ObsidianSetting, type App } from 'obsidian';
 
@@ -48,7 +49,9 @@ export class ProviderSection {
 		const providerSection = containerEl.createDiv({ cls: 'provider-section' });
 		new ObsidianSetting(providerSection)
 			.setName('Providers')
-			.setDesc('Credentials for the models that classify notes and generate new tags.')
+			.setDesc(
+				`Credentials for the models that classify notes and generate new tags. Usage counts this plugin's requests over the last ${USAGE_WINDOW_DAYS} days.`
+			)
 			.setHeading();
 
 		providers.forEach((provider) => {
@@ -56,6 +59,9 @@ export class ProviderSection {
 			Setting.create(providerSection, {
 				name: displayInfo.name,
 				desc: displayInfo.desc,
+				chips: this.plugin.usage
+					?.load()
+					.then((ledger) => usageChips(summarizeProvider(ledger, new Date(), provider.name))),
 				buttons: [
 					{
 						icon: 'pencil',

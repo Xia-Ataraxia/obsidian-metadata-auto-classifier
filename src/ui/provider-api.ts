@@ -7,6 +7,7 @@ import {
 } from '../domain/tag-generation';
 import { HttpError } from './request';
 import type { OnTokenRefreshCallback, ProviderConfig } from '../types';
+import type { UsageCallback } from '../types/usage';
 import { DecisionClassifier } from './DecisionClassifier';
 import { UnifiedProvider } from './UnifiedProvider';
 import type { HttpRequestOptions } from './request';
@@ -21,6 +22,7 @@ export interface GenerateTagsInput {
 	maximum: number;
 	deadline: number;
 	assertCurrent: () => void;
+	onUsage?: UsageCallback;
 }
 
 const TAG_GENERATION_SYSTEM_ROLE =
@@ -50,6 +52,7 @@ export const testModel = async (
 				deadline: requestOptions?.deadline ?? Date.now() + 30_000,
 				assertCurrent: requestOptions?.assertCurrent ?? (() => {}),
 				onTokenRefresh,
+				onUsage: requestOptions?.onUsage,
 			}
 		);
 		return;
@@ -94,7 +97,11 @@ export async function generateTags(
 		model,
 		undefined,
 		onTokenRefresh,
-		{ deadline: input.deadline, assertCurrent: input.assertCurrent }
+		{
+			deadline: input.deadline,
+			assertCurrent: input.assertCurrent,
+			...(input.onUsage ? { onUsage: input.onUsage } : {}),
+		}
 	);
 	assertGenerationCurrent(input);
 	return validateGeneratedTags(response.tags, input.excluded, input.maximum);
