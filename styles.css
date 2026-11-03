@@ -250,15 +250,16 @@
 }
 
 
-/* Settings model rows */
-.mac-model-chips {
+/* Provider usage */
+.mac-usage-chips {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--size-4-1);
 	margin-top: var(--size-4-1);
 }
 
-.mac-model-chip {
+.mac-usage-chip {
+	animation: mac-usage-in 180ms ease-out;
 	padding: 1px var(--size-4-2);
 	border-radius: var(--radius-s);
 	background: var(--background-modifier-hover);
@@ -267,234 +268,8 @@
 	font-variant-numeric: tabular-nums;
 }
 
-/* Model insights */
-.modal.mac-insights-modal {
-	width: min(880px, 94vw);
-	max-width: 94vw;
-}
-
-.mac-insights-body:focus {
-	outline: none;
-}
-
-.mac-insights-panel {
-	animation: mac-panel-in 220ms cubic-bezier(0.2, 0.8, 0.3, 1);
-}
-
-@keyframes mac-panel-in {
+@keyframes mac-usage-in {
 	from {
 		opacity: 0;
-		transform: translateY(6px);
-	}
-}
-
-.mac-insights-note {
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-}
-
-.mac-section-heading {
-	margin: var(--size-4-5) 0 var(--size-4-2);
-}
-
-.mac-insights-panel > .mac-section-heading:first-child {
-	margin-top: 0;
-}
-
-.mac-section-title {
-	font-size: var(--font-ui-medium);
-	font-weight: var(--font-semibold);
-}
-
-.mac-chart {
-	display: block;
-	width: 100%;
-	height: auto;
-	margin-bottom: var(--size-4-2);
-	overflow: visible;
-}
-
-.mac-chart-grid {
-	stroke: var(--background-modifier-border);
-	stroke-width: 1;
-}
-
-.mac-chart-tick {
-	fill: var(--text-faint);
-	font-size: 10.5px;
-	font-variant-numeric: tabular-nums;
-}
-
-.mac-chart-axis-title {
-	fill: var(--text-muted);
-	font-size: 11.5px;
-}
-
-.mac-chart-label {
-	fill: var(--text-muted);
-	font-size: 11.5px;
-	paint-order: stroke;
-	stroke: var(--background-primary);
-	stroke-width: 3px;
-	stroke-linejoin: round;
-}
-
-.mac-chart-label.is-selected {
-	fill: var(--text-normal);
-	font-weight: var(--font-semibold);
-}
-
-.mac-chart-frontier {
-	fill: none;
-	stroke: var(--text-faint);
-	stroke-dasharray: 4 4;
-	stroke-width: 1.25;
-}
-
-.mac-chart-dot {
-	stroke: var(--background-primary);
-	stroke-width: 2;
-	cursor: pointer;
-	transform-box: fill-box;
-	transform-origin: center;
-	transition: transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1.3), stroke 120ms ease-out;
-	animation: mac-dot-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.3);
-}
-
-.mac-chart-dot:hover,
-.mac-chart-dot.is-highlighted {
-	transform: scale(1.45);
-}
-
-.mac-chart-dot.is-selected {
-	stroke: var(--text-normal);
-}
-
-@keyframes mac-dot-in {
-	from {
-		opacity: 0;
-		transform: scale(0.4);
-	}
-}
-
-.mac-provider-openai { fill: var(--color-blue); }
-.mac-provider-anthropic { fill: var(--color-orange); }
-.mac-provider-gemini { fill: var(--color-cyan); }
-.mac-provider-deepseek { fill: var(--color-purple); }
-.mac-provider-openrouter { fill: var(--color-pink); }
-.mac-provider-typesafe { fill: var(--color-green); }
-.mac-provider-other { fill: var(--text-faint); }
-
-.mac-legend-swatch {
-	flex: none;
-	width: 9px;
-	height: 9px;
-}
-
-.mac-table-wrap {
-	overflow-x: auto;
-}
-
-.mac-table {
-	width: 100%;
-	border-collapse: collapse;
-	font-size: var(--font-ui-small);
-}
-
-.mac-table th {
-	padding: var(--size-2-3) var(--size-4-2);
-	border-bottom: var(--border-width) solid var(--background-modifier-border);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	font-weight: var(--font-medium);
-	text-align: left;
-}
-
-.mac-table td {
-	padding: var(--size-4-2);
-	border-bottom: var(--border-width) solid var(--background-modifier-border-hover);
-	vertical-align: top;
-	transition: background-color 120ms ease-out;
-}
-
-.mac-table tbody tr:hover td {
-	background: var(--background-modifier-hover);
-}
-
-.mac-table tr.is-selected td {
-	background: var(--background-modifier-active-hover);
-}
-
-.mac-table tr.is-highlighted td {
-	background: var(--background-modifier-active-hover);
-	animation: mac-row-flash 900ms ease-out;
-}
-
-@keyframes mac-row-flash {
-	from { background: var(--text-selection); }
-}
-
-.mac-table .mac-num {
-	font-variant-numeric: tabular-nums;
-	text-align: right;
-	white-space: nowrap;
-}
-
-.mac-strong {
-	font-weight: var(--font-semibold);
-}
-
-.mac-model-title {
-	display: flex;
-	align-items: center;
-	gap: var(--size-2-3);
-}
-
-.mac-model-name {
-	font-weight: var(--font-medium);
-}
-
-.mac-pill {
-	padding: 0 var(--size-2-3);
-	border-radius: var(--radius-l);
-	background: var(--background-modifier-hover);
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	white-space: nowrap;
-}
-
-.mac-insights-footer {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--size-4-3);
-	margin-top: var(--size-4-4);
-	padding-top: var(--size-4-3);
-	border-top: var(--border-width) solid var(--background-modifier-border);
-}
-
-.mac-insights-footer button {
-	flex: none;
-}
-
-@media (max-width: 640px) {
-	.mac-col-cache,
-	.mac-col-limits,
-	.mac-col-index {
-		display: none;
-	}
-}
-
-/* Reduced motion keeps feedback as a soft fade instead of movement. */
-@media (prefers-reduced-motion: reduce) {
-	.mac-insights-panel,
-	.mac-chart-dot {
-		animation: mac-fade-in 220ms ease-out;
-	}
-
-	.mac-chart-dot:hover,
-	.mac-chart-dot.is-highlighted {
-		transform: none;
-		stroke: var(--text-normal);
 	}
 }

@@ -50,7 +50,8 @@ export interface TextAreaConfig {
 export interface SettingProps {
 	name: string;
 	desc?: string;
-	chips?: string[];
+	/** Filled in once resolved, so a slow read never delays the settings tab. */
+	chips?: Promise<string[]>;
 	className?: string;
 	heading?: boolean;
 
@@ -89,10 +90,11 @@ export class Setting {
 		this.setting.setName(name);
 
 		if (desc) this.setting.setDesc(desc);
-		if (chips?.length) {
-			const row = this.setting.descEl.createDiv({ cls: 'mac-model-chips' });
-			for (const chip of chips) row.createSpan({ cls: 'mac-model-chip', text: chip });
-		}
+		void chips?.then((values) => {
+			if (values.length === 0) return;
+			const row = this.setting.descEl.createDiv({ cls: 'mac-usage-chips' });
+			for (const chip of values) row.createSpan({ cls: 'mac-usage-chip', text: chip });
+		});
 		if (heading) this.setting.setHeading();
 
 		if (className) this.setting.settingEl.addClass(className);

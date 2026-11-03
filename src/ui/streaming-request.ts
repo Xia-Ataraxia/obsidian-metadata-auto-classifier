@@ -1,3 +1,4 @@
+import { parseUsage } from '../domain/usage-parsers';
 import { HttpError, sendHttpRequest } from './request';
 import type { HttpRequestOptions } from './request';
 
@@ -92,11 +93,18 @@ export async function sendStreamingRequest(
 	parseEvent: (event: SSEEvent) => SSEEventOutcome,
 	options?: HttpRequestOptions
 ): Promise<string> {
-	const deadline = Math.min(options?.deadline ?? Infinity, Date.now() + 60_000);
+	const startedAt = Date.now();
+	const deadline = Math.min(options?.deadline ?? Infinity, startedAt + 60_000);
 	const response = await sendHttpRequest(url, headers, body, { ...options, deadline });
 	if (Date.now() >= deadline) throw new HttpError('TIMEOUT');
 	if (typeof response.text !== 'string') throw new HttpError('PROTOCOL_ERROR');
-	const text = parseSSE(response.text, parseEvent);
+	const text = parseSSE(response.text, (event) => {
+		const outcome = parseEvent(event);
+		const usage =
+			options?.onUsage && outcome.type === 'complete' ? parseUsage(event.response) : undefined;
+		if (usage) options?.onUsage?.(usage, Date.now() - startedAt);
+		return outcome;
+	});
 	if (Date.now() >= deadline) throw new HttpError('TIMEOUT');
 	return text;
 }
