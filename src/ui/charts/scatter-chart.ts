@@ -1,4 +1,3 @@
-import { setTooltip } from 'obsidian';
 import {
 	efficiencyFrontier,
 	linearScale,
@@ -102,7 +101,8 @@ export function renderScatter(containerEl: HTMLElement, options: ScatterOptions)
 			attr: { cx: px, cy: py, r: point.inUse ? 7 : 5.5 },
 		});
 		if (point.inUse) dot.addClass('is-selected');
-		setTooltip(dot as unknown as HTMLElement, `${point.name} · ${point.provider}`);
+		// Obsidian's setTooltip calls HTMLElement-only helpers on hover, which SVG elements lack.
+		dot.createSvg('title').textContent = `${point.name} · ${point.provider}`;
 		dot.addEventListener('click', () => options.onPointClick(id));
 		dots.set(id, dot);
 	}

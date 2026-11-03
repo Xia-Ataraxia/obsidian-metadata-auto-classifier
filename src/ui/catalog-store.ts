@@ -43,7 +43,8 @@ export class CatalogStore {
 		try {
 			if (!(await this.adapter.exists(this.path))) return false;
 			const cached = parseCatalog(JSON.parse(await this.adapter.read(this.path)) as unknown);
-			if (!cached) return false;
+			// A release ships newer prices than a copy refreshed under an older version.
+			if (!cached || cached.generatedAt < this.catalog.generatedAt) return false;
 			this.catalog = cached;
 			return true;
 		} catch {
