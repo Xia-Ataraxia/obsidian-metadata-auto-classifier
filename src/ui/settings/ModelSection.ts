@@ -27,14 +27,14 @@ export class ModelSection {
 		this.renderModelList(modelSection, providers, selectedModel);
 	}
 
-	private renderModelGroup(containerEl: HTMLElement, heading: string): HTMLElement {
+	private renderModelGroup(containerEl: HTMLElement, heading: string, decision: boolean): HTMLElement {
 		return new SettingGroup(containerEl)
 			.setHeading(heading)
 			.addExtraButton((button) =>
 				button
 					.setIcon('plus')
 					.setTooltip('Add model')
-					.onClick(() => this.openModelModal('add'))
+					.onClick(() => this.openModelModal('add', undefined, undefined, undefined, decision))
 			).listEl;
 	}
 
@@ -47,8 +47,8 @@ export class ModelSection {
 			classificationTarget(this.plugin.settings),
 			generationTarget(this.plugin.settings),
 		];
-		const decisionEl = this.renderModelGroup(containerEl, 'Decision API: classifies notes');
-		const chatEl = this.renderModelGroup(containerEl, 'Chat: generates new tags');
+		const decisionEl = this.renderModelGroup(containerEl, 'Decision API: classifies notes', true);
+		const chatEl = this.renderModelGroup(containerEl, 'Chat: generates new tags', false);
 
 		providers.forEach((provider) => {
 			provider.models.forEach((config: Model) => {
@@ -219,12 +219,14 @@ export class ModelSection {
 		type: 'add' | 'edit',
 		editTarget?: { model: string; name: string; provider: string; decision?: boolean },
 		capturedSource?: ProviderConfig,
-		capturedModel?: Model
+		capturedModel?: Model,
+		decision?: boolean
 	): void {
 		if (!this.plugin.isActive()) return;
 		const modalProviders = [...this.plugin.settings.providers];
 		const modalProps: ModelModalProps = {
 			providers: modalProviders,
+			decision,
 			notices: this.plugin.notices,
 			onSave: async (result) => {
 				if (!this.plugin.isActive()) return;
