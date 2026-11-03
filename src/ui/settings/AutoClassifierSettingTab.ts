@@ -57,9 +57,9 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 					.setTooltip('Add frontmatter')
 					.onClick(() => this.addNewFrontmatter())
 			);
-		this.tagSetting = new Tag(this.plugin, listEl.createDiv({ cls: 'tag-section' }));
+		this.tagSetting = new Tag(this.plugin, listEl);
 		this.tagSetting.display();
-		this.frontmatterSetting = new Frontmatter(this.plugin, listEl.createDiv({ cls: 'frontmatter-section' }));
+		this.frontmatterSetting = new Frontmatter(this.plugin, new SettingGroup(containerEl).listEl);
 		this.frontmatterSetting.display();
 	}
 

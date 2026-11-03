@@ -277,14 +277,3 @@
 		opacity: 0;
 	}
 }
-
-/* Tags and custom fields are separate components sharing one setting group's list. */
-.tag-section,
-.frontmatter-section {
-	display: contents;
-}
-
-/* The group's own row divider cannot cross the two wrappers. */
-.setting-group .frontmatter-section > .setting-item {
-	border-top: var(--border-width) solid var(--background-modifier-border);
-}
