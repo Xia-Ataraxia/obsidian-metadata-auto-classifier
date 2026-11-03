@@ -285,6 +285,6 @@
 }
 
 /* The group's own row divider cannot cross the two wrappers. */
-.frontmatter-section > .setting-item {
+.setting-group .frontmatter-section > .setting-item {
 	border-top: var(--border-width) solid var(--background-modifier-border);
 }
