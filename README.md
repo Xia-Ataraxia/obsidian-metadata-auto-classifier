@@ -2,7 +2,7 @@
 
 Automatically classifies and applies metadata to your notes.
 
-![The Auto Classifier settings: the classification rule, the provider editor with an empty API key field, the model list and the tags frontmatter rule. No API key is entered, so no classification result is shown.](https://raw.githubusercontent.com/Xia-Ataraxia/obsidian-metadata-auto-classifier/main/docs/assets/demo.webp)
+![The Auto Classifier settings: the classification rule, the provider editor with an empty API key field, the model list and the tags frontmatter rule. No API key is entered, so no classification result is shown.](https://raw.githubusercontent.com/GoBeromsu/obsidian-metadata-auto-classifier/main/docs/assets/demo.webp)
 
 ## Features
 
@@ -25,7 +25,7 @@ Ordinary fields never generate new values. Ambiguous selection or a failed requi
 
 **Community plugins**: open Settings, Community plugins, Browse, search for "Metadata Auto Classifier", then Install and Enable.
 
-**Manual**: download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/Xia-Ataraxia/obsidian-metadata-auto-classifier/releases/latest) into `<vault>/<configDir>/plugins/metadata-auto-classifier/`, then enable the plugin. `<configDir>` is your vault's configuration folder (`.obsidian` by default).
+**Manual**: download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/GoBeromsu/obsidian-metadata-auto-classifier/releases/latest) into `<vault>/<configDir>/plugins/metadata-auto-classifier/`, then enable the plugin. `<configDir>` is your vault's configuration folder (`.obsidian` by default).
 
 ## Disclosures
 
