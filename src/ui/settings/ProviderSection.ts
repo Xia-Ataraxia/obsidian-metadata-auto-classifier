@@ -56,6 +56,8 @@ export class ProviderSection {
 					.onClick(() => this.openProviderModal('add'))
 			);
 
+		if (providers.length === 0) Setting.create(group.listEl, { name: '', desc: 'No providers yet' });
+
 		providers.forEach((provider) => {
 			const displayInfo = this.getProviderDisplayInfo(provider);
 			Setting.create(group.listEl, {

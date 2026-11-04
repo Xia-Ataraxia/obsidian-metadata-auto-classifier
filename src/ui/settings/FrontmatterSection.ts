@@ -1,3 +1,4 @@
+import { SettingGroup } from 'obsidian';
 import { replaceFrontmatterById } from '../../utils/lib-utils';
 import { confirmAction } from './modals/ConfirmModal';
 import type { FrontmatterActions, FrontmatterField, SettingsComponentOptions } from '../../types';
@@ -15,13 +16,15 @@ export class Frontmatter extends BaseSettingsComponent {
 		const filteredFrontmatter = frontmatter.filter((frontmatter) => frontmatter.id !== 0);
 
 		this.containerEl.empty();
+		if (filteredFrontmatter.length === 0) return;
+		const { listEl } = new SettingGroup(this.containerEl);
 		filteredFrontmatter.forEach((frontmatter: FrontmatterField) => {
 			const actions: FrontmatterActions = {
 				onEdit: (setting: FrontmatterField) => this.handleEdit(setting),
 				onDelete: (setting: FrontmatterField) => void this.handleDelete(setting),
 			};
 
-			this.createFrontmatterSetting(this.containerEl, frontmatter, actions, true);
+			this.createFrontmatterSetting(listEl, frontmatter, actions, true);
 		});
 	}
 
