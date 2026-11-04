@@ -59,7 +59,7 @@ export class AutoClassifierSettingTab extends PluginSettingTab {
 			);
 		this.tagSetting = new Tag(this.plugin, listEl);
 		this.tagSetting.display();
-		this.frontmatterSetting = new Frontmatter(this.plugin, new SettingGroup(containerEl).listEl);
+		this.frontmatterSetting = new Frontmatter(this.plugin, containerEl.createDiv());
 		this.frontmatterSetting.display();
 	}
 

@@ -211,7 +211,7 @@ export class ModelSection {
 			});
 		});
 		for (const listEl of [decisionEl, chatEl]) {
-			if (listEl.childElementCount === 0) Setting.create(listEl, { name: 'No models yet' });
+			if (listEl.childElementCount === 0) Setting.create(listEl, { name: '', desc: 'No models yet' });
 		}
 	}
 

@@ -442,7 +442,11 @@ describe('ProviderSection', () => {
 			const addExtraButton = vi.spyOn(SettingGroup.prototype, 'addExtraButton');
 			providerSection.render(createProviderContainer() as unknown as HTMLElement, []);
 			expect(addExtraButton).toHaveBeenCalledTimes(1);
-			expect(mockSettingCreate).not.toHaveBeenCalled();
+			expect(mockSettingCreate).toHaveBeenCalledTimes(1);
+			expect(mockSettingCreate).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({ desc: 'No providers yet' })
+			);
 		});
 	});
 
